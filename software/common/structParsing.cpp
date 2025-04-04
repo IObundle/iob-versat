@@ -10,6 +10,8 @@
 
 #define UNNAMED_ENUM_TEMPLATE "unnamed_enum_%d"
 
+static Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out);
+
 void SkipQualifiers(Tokenizer* tok){
   while(1){
     Token peek = tok->PeekToken();
@@ -322,7 +324,7 @@ MemberDef* ParseMember(Tokenizer* tok,Arena* out){
   return mem;
 }
 
-Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out){
+static Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out){
   auto mark = tok->Mark();
 
   Token token = tok->NextToken();

@@ -17,6 +17,8 @@
 // TODO: Embed file could just become part of the embed data approach. No point in having two different approaches. Altought the embed data approach would need to become more generic
 //       in order to do what the embed file approach does in a data oriented manner.
 
+// TODO: We are currently doing everything manually in terms of instantiating C auxiliary arrays and that kinda sucks. I should be able to make it more automatic, I should be able to generalize it somewhat.
+
 void ReportError(String content,Token faultyToken,const char* error){
   TEMP_REGION(temp,nullptr);
 
@@ -94,8 +96,13 @@ bool _ExpectError(Tokenizer* tok,const char* str){
   } while(0)
 
 struct EnumDef{
-  String name;
+  Token name;
   Array<Pair<String,String>> valuesNamesWithValuesIfExist;
+};
+
+struct StructDef{
+  Token name;
+  Array<Pair<String,String>> typeAndName;
 };
 
 struct TypeDef{
@@ -105,7 +112,13 @@ struct TypeDef{
 
 enum DataValueType{
   DataValueType_SINGLE,
-  DataValueType_ARRAY
+  DataValueType_ARRAY,
+  DataValueType_FUNCTION
+};
+
+struct FunctionValue{
+  Token name;
+  Array<Token> parameters;
 };
 
 struct DataValue{
@@ -113,6 +126,7 @@ struct DataValue{
   union{
     String asStr;
     Array<DataValue*> asArray;
+    FunctionValue asFunc;
   };
 };
 
@@ -138,14 +152,72 @@ struct MapDef{
 
 struct Defs{
   Array<EnumDef*> enums;
+  Array<StructDef*> structs;
   Array<TableDef*> tables;
   Array<MapDef*> maps;
 };
 
-Pool<EnumDef> globalEnums = {};
+enum DefType{
+  DefType_ENUM,
+  DefType_STRUCT,
+  DefType_TABLE,
+  DefType_MAP
+};
+
+struct GenericDef{
+  DefType type;
+
+  union{
+    void* asGenericPointer;
+    EnumDef* asEnum;
+    StructDef* asStruct;
+    TableDef* asTable;
+    MapDef* asMap;
+  };
+};
+
+Pool<EnumDef> enums = {};
+Pool<StructDef> structs = {};
+Pool<TableDef> tables = {};
+Pool<MapDef> maps = {};
+
+// TODO: Weird way of doing things but works for now.
+GenericDef GetDefinition(Token name){
+  GenericDef res = {};
+  for(EnumDef* def : enums){
+    if(CompareString(def->name,name)){
+      res.type = DefType_ENUM;
+      res.asGenericPointer = def;
+      return res;
+    }
+  }
+  for(StructDef* def : structs){
+    if(CompareString(def->name,name)){
+      res.type = DefType_STRUCT;
+      res.asGenericPointer = def;
+      return res;
+    }
+  }
+  for(TableDef* def : tables){
+    if(CompareString(def->structTypename,name)){
+      res.type = DefType_TABLE;
+      res.asGenericPointer = def;
+      return res;
+    }
+  }
+  for(MapDef* def : maps){
+    if(CompareString(def->name,name)){
+      res.type = DefType_MAP;
+      res.asGenericPointer = def;
+      return res;
+    }
+  }
+  
+  printf("Type '%.*s' does not exist\n",UNPACK_SS(name));
+}
 
 static bool IsEnum(String name){
-  for(EnumDef* def : globalEnums){
+  for(EnumDef* def : enums){
     if(def->name == name){
       return true;
     }
@@ -193,10 +265,45 @@ EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
   AssertToken(tok,"}");
   AssertToken(tok,";");
 
-  EnumDef* res = globalEnums.Alloc();
-  //EnumDef* res = PushStruct<EnumDef>(out);
+  EnumDef* res = enums.Alloc();
   res->name = enumTypeName;
   res->valuesNamesWithValuesIfExist = PushArrayFromList(out,memberList);
+
+  return res;
+}
+
+StructDef* ParseStruct(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  AssertToken(tok,"struct");
+
+  Token structTypeName = tok->NextToken();
+  CheckIdentifier(structTypeName);
+
+  AssertToken(tok,"{");
+
+  auto memberList = PushArenaList<Pair<String,String>>(temp);
+  while(!tok->Done()){
+    Token type = tok->NextToken();
+    CheckIdentifier(type);
+    
+    Token name = tok->NextToken();
+    CheckIdentifier(name);
+
+    *memberList->PushElem() = {type,name};
+
+    tok->IfNextToken(";");
+
+    if(tok->IfPeekToken("}")){
+      break;
+    }
+  }
+
+  AssertToken(tok,"}");
+  AssertToken(tok,";");
+
+  StructDef* res = structs.Alloc();
+  res->name = structTypeName;
+  res->typeAndName = PushArrayFromList(out,memberList);
 
   return res;
 }
@@ -218,34 +325,27 @@ TypeDef* ParseTypeDef(Tokenizer* tok,Arena* out){
   return def;
 }
 
-DataValue* ParseValue(Tokenizer* tok,Arena* out){
+Array<Token> ParseList(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
+  AssertToken(tok,"(");
 
-  if(!tok->IfNextToken("{")){
-    DataValue* val = PushStruct<DataValue>(out);
-    val->type = DataValueType_SINGLE;
-    val->asStr = tok->NextToken();
-    return val;
-  }
-
-  // Parsing an array here.
-  auto valueList = PushArenaList<DataValue*>(temp);
+  auto typeList = PushArenaList<Token>(temp);
   while(!tok->Done()){
-    DataValue* val = ParseValue(tok,out);
-    *valueList->PushElem() = val;
-    
-    bool seenComma = tok->IfNextToken(",");
+    Token name = tok->NextToken();
+    CheckIdentifier(name);
 
-    if(tok->IfPeekToken("}")){
+    *typeList->PushElem() = name;
+    
+    if(tok->IfPeekToken(")")){
       break;
     }
-  }
-  AssertToken(tok,"}");
 
-  DataValue* val = PushStruct<DataValue>(out);
-  val->type = DataValueType_ARRAY;
-  val->asArray = PushArrayFromList(out,valueList);
-  return val;
+    bool seenComma = tok->IfNextToken(",");
+  }
+  AssertToken(tok,")");
+
+  Array<Token> defs = PushArrayFromList(out,typeList);
+  return defs;
 }
 
 Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
@@ -271,6 +371,48 @@ Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
 
   Array<Parameter> defs = PushArrayFromList(out,typeList);
   return defs;
+}
+
+DataValue* ParseValue(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+
+  if(tok->IfNextToken("@")){
+    Token functionName = tok->NextToken();
+
+    Array<Token> parameters = ParseList(tok,out);
+
+    DataValue* val = PushStruct<DataValue>(out);
+    val->type = DataValueType_FUNCTION;
+    val->asFunc.name = functionName;
+    val->asFunc.parameters = parameters;
+    return val;
+  }
+  
+  if(!tok->IfNextToken("{")){
+    DataValue* val = PushStruct<DataValue>(out);
+    val->type = DataValueType_SINGLE;
+    val->asStr = tok->NextToken();
+    return val;
+  }
+
+  // Parsing an array here.
+  auto valueList = PushArenaList<DataValue*>(temp);
+  while(!tok->Done()){
+    DataValue* val = ParseValue(tok,out);
+    *valueList->PushElem() = val;
+    
+    bool seenComma = tok->IfNextToken(",");
+
+    if(tok->IfPeekToken("}")){
+      break;
+    }
+  }
+  AssertToken(tok,"}");
+
+  DataValue* val = PushStruct<DataValue>(out);
+  val->type = DataValueType_ARRAY;
+  val->asArray = PushArrayFromList(out,valueList);
+  return val;
 }
 
 Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena* out){
@@ -318,7 +460,7 @@ TableDef* ParseTable(Tokenizer* tok,Arena* out){
   AssertToken(tok,"}");
   AssertToken(tok,";");
   
-  TableDef* def = PushStruct<TableDef>(out);
+  TableDef* def = tables.Alloc();
   def->structTypename = tableStructName;
   def->parameterList = defs;
   def->dataTable = table;
@@ -355,7 +497,7 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
     AssertToken(tok,"}");
     AssertToken(tok,";");
 
-    MapDef* res = PushStruct<MapDef>(out);
+    MapDef* res = maps.Alloc();
     res->parameterList = parameters;
     res->name = mapName;
     res->dataTable = table;
@@ -380,7 +522,7 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
     AssertToken(tok,"}");
     AssertToken(tok,";");
 
-    MapDef* res = PushStruct<MapDef>(out);
+    MapDef* res = maps.Alloc();
     res->name = mapName;
     res->dataTable = table;
     res->isDefineMap = isDefineMap;
@@ -392,39 +534,27 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
   return nullptr;
 }
 
-Defs* ParseContent(String content,Arena* out){
+void ParseContent(String content,Arena* out){
   TEMP_REGION(temp,out);
   Tokenizer tokInst(content,"!@#$%^&*()-+={[}]\\|~`;:'\",./?",{"//","/*","*/"});
   Tokenizer* tok = &tokInst;
   
-  auto enumList = PushArenaList<EnumDef*>(temp);
-  auto tableList = PushArenaList<TableDef*>(temp);
-  auto mapList = PushArenaList<MapDef*>(temp);
-
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"enum")){
       EnumDef* def = ParseEnum(tok,out);
-      *enumList->PushElem() = def;
+    } else if(CompareString(peek,"struct")){
+      StructDef* def = ParseStruct(tok,out);
     } else if(CompareString(peek,"table")){
       TableDef* def = ParseTable(tok,out);
-      *tableList->PushElem() = def;
     } else if(CompareString(peek,"map") || CompareString(peek,"define_map")){
       MapDef* def = ParseMap(tok,out);
-      *mapList->PushElem() = def;
     } else {
       ReportError(tok,peek,"Unexpected token at global scope");
       tok->AdvancePeek();
     }
   }
-
-  Defs* defs = PushStruct<Defs>(out);
-  defs->enums = PushArrayFromList(out,enumList);
-  defs->tables = PushArrayFromList(out,tableList);
-  defs->maps = PushArrayFromList(out,mapList);
-  
-  return defs;
 }
 
 String DefaultRepr(DataValue* val,TypeDef* type,Arena* out){
@@ -436,6 +566,50 @@ String DefaultRepr(DataValue* val,TypeDef* type,Arena* out){
 
   NOT_IMPLEMENTED("yet");
   return {};
+}
+
+DataValue* EncodeStringAsData(String str,Arena* out){
+  DataValue* result = PushStruct<DataValue>(out);
+
+  result->type = DataValueType_SINGLE;
+  result->asStr = PushString(out,str);
+  return result;
+}
+
+DataValue* EncodeArrayAsData(Array<String> strings,Arena* out){
+  int size = strings.size;
+
+  Array<DataValue*> individual = PushArray<DataValue*>(out,size);
+  for(int i = 0; i < size; i++){
+    individual[i] = EncodeStringAsData(strings[i],out);
+  }
+
+  DataValue* result = PushStruct<DataValue>(out);
+  result->type = DataValueType_ARRAY;
+  result->asArray = individual;
+  
+  return result;
+}
+
+static DataValue* EvaluateFunction(FunctionValue func,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  if(CompareString(func.name,"Members")){
+    Token type = func.parameters[0];
+    
+    GenericDef def = GetDefinition(type);
+
+    switch(def.type){
+    case DefType_STRUCT: {
+      Array<String> names = Extract(def.asStruct->typeAndName,temp,&Pair<String,String>::second);
+      
+      return EncodeArrayAsData(names,out);
+    } break;
+    default: NOT_IMPLEMENTED("yet");
+    }
+  } else {
+    printf("Did not find a function named %.*s\n",UNPACK_SS(func.name));
+  }
 }
 
 // 0 - exe name
@@ -457,13 +631,14 @@ int main(int argc,const char* argv[]){
   contextArenas[0] = &inst1;
   Arena inst2 = InitArena(Megabyte(64));
   contextArenas[1] = &inst2;
-  
-  TEMP_REGION(temp,nullptr);
+
+  TEMP_REGION(permanent,nullptr);
+  TEMP_REGION(temp,permanent);
 
   String content = PushFile(temp,defFilePath);
 
-  Defs* defs = ParseContent(content,temp);
-
+  ParseContent(content,permanent);
+  
   String headerName = PushString(temp,"%s.hpp",outputPath);
   String sourceName = PushString(temp,"%s.cpp",outputPath);
 
@@ -482,9 +657,27 @@ int main(int argc,const char* argv[]){
   
     fprintf(header,"#include \"utilsCore.hpp\"\n");
 
+    fprintf(header,"\n// Structs definition\n\n");
+
+    for(StructDef* def : structs){
+      fprintf(header,"struct %.*s {\n",UNPACK_SS(def->name));
+
+      bool first = true;
+      for(Pair<String,String> p : def->typeAndName){
+        if(!first){
+          fprintf(header,",\n");
+        }
+
+        fprintf(header,"  %.*s %.*s;\n",UNPACK_SS(p.first),UNPACK_SS(p.second));
+      }
+      fprintf(header,"};\n");
+
+      fprintf(header,"extern Array<String> META_%.*s_Members;\n",UNPACK_SS(def->name));
+    }
+      
     fprintf(header,"\n// Enum definition\n\n");
 
-    for(EnumDef* def : defs->enums){
+    for(EnumDef* def : enums){
       fprintf(header,"enum %.*s {\n",UNPACK_SS(def->name));
 
       bool first = true;
@@ -504,9 +697,9 @@ int main(int argc,const char* argv[]){
       fprintf(header,"\n};\n");
     }
 
-    fprintf(header,"\n// Struct definition\n\n");
+    fprintf(header,"\n// Table definition\n\n");
 
-    for(TableDef* def : defs->tables){
+    for(TableDef* def : tables){
       fprintf(header,"struct %.*s_GenType {\n",UNPACK_SS(def->structTypename));
       for(Parameter p : def->parameterList){
         TypeDef* typeDef = p.type;
@@ -521,7 +714,7 @@ int main(int argc,const char* argv[]){
 
       fprintf(header,"};\n");
     }
-
+      
     fprintf(header,"\n// Tables\n\n");
 
     auto ToUpper = [](char ch) -> char{
@@ -537,15 +730,15 @@ int main(int argc,const char* argv[]){
       return ch;
     };
     
-    for(TableDef* def : defs->tables){
+    for(TableDef* def : tables){
       String name = def->structTypename;
 
       fprintf(header,"extern Array<%.*s_GenType> %.*s;\n",UNPACK_SS(name),UNPACK_SS(name));
     }
-
+    
     fprintf(header,"\n// Define Maps (the arrays store the data, not the keys)\n\n");
 
-    for(MapDef* def : defs->maps){
+    for(MapDef* def : maps){
       if(!def->isDefineMap){
         continue;
       }
@@ -559,10 +752,9 @@ int main(int argc,const char* argv[]){
 
       fprintf(header,"\nextern Array<String> %.*s;\n\n",UNPACK_SS(def->name));
     }
-
     fprintf(header,"// Normal Maps\n\n");
 
-    for(MapDef* def : defs->maps){
+    for(MapDef* def : maps){
       // TODO: All these exist because we are just trying to implement something quickly right now, but when the time comes implement this.
       if(def->isDefineMap){
         continue;
@@ -608,11 +800,33 @@ int main(int argc,const char* argv[]){
     String headerFilenameOnly = ExtractFilenameOnly(headerName);
     fprintf(source,"#include \"%.*s\"\n",UNPACK_SS(headerFilenameOnly));
 
+    fprintf(source,"\n// RaW c array auxiliary to Struct data\n\n");
+    for(StructDef* def : structs){
+      fprintf(source,"static String %.*s_MemberNames[] = {\n",UNPACK_SS(def->name));
+
+      bool first = true;
+      for(auto p : def->typeAndName){
+        if(first){
+          first = false;
+        } else {
+          fprintf(source,",\n");
+        }
+        fprintf(source,"  STRING(\"%.*s\")",UNPACK_SS(p.second));
+      }
+      fprintf(source,"\n};\n");
+    }
+
+    fprintf(source,"\n// Struct data\n\n");
+
+    for(StructDef* def : structs){
+      fprintf(source,"Array<String> META_%.*s_Members = {%.*s_MemberNames,ARRAY_SIZE(%.*s_MemberNames)};\n",UNPACK_SS(def->name),UNPACK_SS(def->name),UNPACK_SS(def->name));
+    }
+    
     fprintf(source,"\n// Raw C array auxiliary to tables\n\n");
   
     // TODO: We only handle 2 levels currently. Either data is simple or an array of simple.
     // TODO: Also only strings. We might want numbers, but strings are the main complication currently.
-    for(TableDef* def : defs->tables){
+    for(TableDef* def : tables){
       for(int i = 0; i <  def->dataTable.size; i++){
         Array<DataValue*> row  =  def->dataTable[i];
 
@@ -622,6 +836,11 @@ int main(int argc,const char* argv[]){
           TypeDef* typeDef = p.type;
           String name = p.name;
 
+          if(val->type == DataValueType_FUNCTION){
+            DataValue* data = EvaluateFunction(val->asFunc,temp);
+            val = data;
+          }
+          
           if(val->type == DataValueType_ARRAY){
             fprintf(source,"static %.*s %.*s_%.*s_aux%d[] = {\n",UNPACK_SS(typeDef->name),UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
 
@@ -642,7 +861,7 @@ int main(int argc,const char* argv[]){
 
     fprintf(source,"\n// Raw C array Tables\n\n");
     
-    for(TableDef* def : defs->tables){
+    for(TableDef* def : tables){
       fprintf(source,"static %.*s_GenType %.*s_Raw[] = {\n",UNPACK_SS(def->structTypename),UNPACK_SS(def->structTypename));
  
       bool firstOuter = true;
@@ -683,15 +902,15 @@ int main(int argc,const char* argv[]){
     }
 
     fprintf(source,"\n// Tables\n\n");
-    
-    for(TableDef* def : defs->tables){
+
+    for(TableDef* def : tables){
       String n = def->structTypename;
       fprintf(source,"Array<%.*s_GenType> %.*s = {%.*s_Raw,ARRAY_SIZE(%.*s_Raw)};\n",UNPACK_SS(n),UNPACK_SS(n),UNPACK_SS(n),UNPACK_SS(n));
     }
-
+    
     fprintf(source,"\n// Define Maps arrays\n\n");
 
-    for(MapDef* def : defs->maps){
+    for(MapDef* def : maps){
       if(!def->isDefineMap){
         continue;
       }
@@ -714,7 +933,7 @@ int main(int argc,const char* argv[]){
 
     fprintf(source,"\n// Normal Maps\n\n");
 
-    for(MapDef* def : defs->maps){
+    for(MapDef* def : maps){
       // TODO: All these exist because we are just trying to implement something quickly right now, but when the time comes implement this.
       if(def->isDefineMap){
         continue;

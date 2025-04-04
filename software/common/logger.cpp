@@ -35,3 +35,16 @@ void Log_(LogModule module,LogLevel level,int line,const char* filename,const ch
      Assert(false);
    }
 }
+
+void Error_(int line,const char* filename,const char* funcName,const char* format, ...){
+   va_list args;
+   va_start(args,format);
+
+   printf("[%s:%d] %s\n\t",filename,line,funcName);
+
+   printf("[Error] ");
+   vprintf(format,args);
+   printf("\n");
+
+   va_end(args);
+}

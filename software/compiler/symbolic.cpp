@@ -185,7 +185,6 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
     }
 
     return value;
-    
   } break;
   }
 
@@ -239,7 +238,7 @@ SymbolicExpression* PushAddBase(Arena* out,bool negate = false){
   return expr;
 }
 
-static int GetLiteralValue(SymbolicExpression* expr){
+int GetLiteralValue(SymbolicExpression* expr){
   Assert(expr->type == SymbolicExpressionType_LITERAL);
   Assert(expr->literal >= 0);
   
@@ -591,8 +590,7 @@ SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out){
     SymbolicExpression* res = CopyExpression(expr,out);
     res->sum = PushArray<SymbolicExpression*>(out,expr->sum.size);
     for(int i = 0; i <  expr->sum.size; i++){
-      SymbolicExpression* s  =  expr->sum[i];
-      res->sum[i] = SymbolicDeepCopy(s,out);
+      res->sum[i] = SymbolicDeepCopy(expr->sum[i],out);
     }
     
     return res;
@@ -896,10 +894,13 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
     }
 
     if(isMul){
-      if(finalResult == 0){
+      if(Empty(childs)){
+        return PushLiteral(out,finalResult,negate);
+      } else if(finalResult == 0){
         return PushLiteral(out,0);
       } else {
         SymbolicExpression* res = CopyExpression(expr,out);
+        // No point appending a literal 1 in a multiplication.
         if(finalResult != 1){
           SymbolicExpression* finalLiteral = PushLiteral(out,finalResult,negate);
 
@@ -908,6 +909,16 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
 
         res->sum = PushArrayFromList(out,childs);
         SortTerms(res,out);
+
+        // Kinda on an hack, no point returning a sum/mult of a single term
+        // Extremely good hack, in the sense that it does not even work.
+        // Something related to the negation not being good.
+        // TODO: Eventually fix this. The logic must return simple terms if possible, a sum/mult of 1 element is not good.
+#if 0
+        if(res->sum.size == 1){
+          return ApplyNegation(res->sum[0],negate);
+        }
+#endif
         
         return res;
       }
@@ -920,6 +931,15 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
       }
 
       res->sum = PushArrayFromList(out,childs);
+
+      // Kinda on an hack, no point returning a sum/mult of a single term
+      // TODO: We can probably simplify the logic in here. Remember, if only 1 term then we want to return it, not make a sum/mult of 1 term.
+#if 0
+      if(res->sum.size == 1){
+        return ApplyNegation(res->sum[0],negate);
+      }
+#endif
+      
       return res;
     }
   } break;
@@ -1626,7 +1646,8 @@ void TestSymbolic(){
     {STRING("(a-b)*(a-b)"),STRING("a*a-2*a*b+b*b")},
     {STRING("a*b + a*b + 2*a*b"),STRING("4*a*b")},
     {STRING("1+2+3+1*20*30"),STRING("606")},
-    {STRING("a * (x + y)"),STRING("a*x+a*y")}
+    {STRING("a * (x + y)"),STRING("a*x+a*y")},
+    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-y")}
   };
 
   bool printNormalizeProcess = false;
@@ -1646,9 +1667,9 @@ void TestSymbolic(){
 
       printf("Start:");
       Print(sym);
-      printf("End  :");
+      printf("\nEnd  :");
       Print(normalized);
-      printf("Expec:%.*s\n",UNPACK_SS(c.expectedNormalized));
+      printf("\nExpec:%.*s\n",UNPACK_SS(c.expectedNormalized));
       PrintAST(normalized);
 
       if(printNormalizeProcess){
@@ -1993,17 +2014,57 @@ LoopLinearSum* RemoveLoop(LoopLinearSum* in,int index,Arena* out){
 SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* out){
   TEMP_REGION(temp,out);
 
-  SymbolicExpression* expr = sum->freeTerm;
-
   int size = sum->terms.size;
-  for(LoopLinearSumTerm term : sum->terms){
-    SymbolicExpression* fullTerm = SymbolicMult(term.term,PushVariable(temp,term.var),temp);
+  Array<SymbolicExpression*> individualTermsArray = PushArray<SymbolicExpression*>(temp,size + 1);
 
-    expr = SymbolicAdd(expr,fullTerm,temp);
+  // The expression is carefully constructed in order to avoid the normalization process removing the grouping of variables. Easier than changing the normalization process to preserve groupings in some situations and not in others.
+  int inserted = 0;
+  for(LoopLinearSumTerm term : sum->terms){
+    SymbolicExpression* normalized = Normalize(term.term,temp);
+    SymbolicExpression* fullTerm = nullptr;
+
+    // NOTE: Since no normalization, need to take into account identity of multiplication. Similar to NOTE below
+    if(normalized->type == SymbolicExpressionType_LITERAL && GetLiteralValue(normalized) == 1){
+      fullTerm = PushVariable(temp,term.var);
+    } else {
+      fullTerm = SymbolicMult(normalized,PushVariable(temp,term.var),temp);
+    }
+
+    individualTermsArray[inserted++] = fullTerm; 
   }
 
-  SymbolicExpression* res = Normalize(expr,out);
+  // NOTE: Since we do not normalize the final expression, need to take into account the identity of addition, so that we do not end up with an extra +0 for no reason
+  if(sum->freeTerm->type == SymbolicExpressionType_LITERAL && GetLiteralValue(sum->freeTerm) == 0){
+    individualTermsArray.size -= 1;
+  } else {
+    individualTermsArray[inserted++] = SymbolicDeepCopy(sum->freeTerm,temp);
+  }
+    
+  // We do not normalize this expression in order to keep all the variables inside the same
+  SymbolicExpression* res = SymbolicAdd(individualTermsArray,temp);
+
+  // Everything is in temp arena, final copy to out arena.
+  res = SymbolicDeepCopy(res,out);
+  
   return res;
+}
+
+SymbolicExpression* LoopLinearSumTermSize(LoopLinearSumTerm* term,Arena* out){
+  SymbolicExpression* expr = SymbolicSub(term->loopEnd,term->loopStart,out);
+  return expr;
+}
+
+SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out){
+  TEMP_REGION(temp,out);
+
+  SymbolicExpression* expr = PushLiteral(temp,1); 
+  for(LoopLinearSumTerm term : in->terms){
+    SymbolicExpression* loopSize = LoopLinearSumTermSize(&term,temp);
+    expr = SymbolicMult(expr,loopSize,temp);
+  }
+  
+  SymbolicExpression* result = Normalize(expr,out);
+  return result;
 }
 
 void Print(LoopLinearSum* sum){

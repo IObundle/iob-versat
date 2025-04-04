@@ -4,6 +4,8 @@
 
 // TODO: We might have to implement a way of grouping variables, so we can group the loop variables for an address access. This might simplify things somewhat. Need to see further how the code turns out for the address access
 
+// TODO: A lot of places are normalizing when there is no need. The more normalizations we perform on the lower levels the worse performance and memory penalties we incur. Normalization only needs to be performed if needed, otherwise try to keep whatever format we have
+
 struct Tokenizer;
 struct Arena;
 
@@ -58,6 +60,9 @@ SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);
 
 SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out);
+
+// Use this function to get the literal value of a literal type expression, takes into account negation.
+int GetLiteralValue(SymbolicExpression* expr);
 
 // Must call normalizeLiteral before calling this.
 // Furthermore, the negative is removed from leftovers and pushed onto the literal (base)
@@ -131,5 +136,7 @@ LoopLinearSum* Copy(LoopLinearSum* in,Arena* out);
 LoopLinearSum* AddLoopLinearSum(LoopLinearSum* inner,LoopLinearSum* outer,Arena* out);
 LoopLinearSum* RemoveLoop(LoopLinearSum* in,int index,Arena* out);
 SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* out);
+
+SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
 void Print(LoopLinearSum* sum);

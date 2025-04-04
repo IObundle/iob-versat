@@ -1547,9 +1547,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
 
         initial.internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,temp);
-
-        Print(initial.internal);
-        printf("\n");
         
         SymbolicExpression* normalized = Normalize(def->symbolic,temp);
 
@@ -1578,20 +1575,139 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
           LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loopStart,loopEnd,temp);
           expr = AddLoopLinearSum(sum,expr,temp);
         }
-        
-        printf("\nUsing loop linear sum\n");
-        Print(expr);
-        printf("\n");
+        SymbolicExpression* toCalcConst = normalized;
+        SymbolicExpression* zero = PushLiteral(temp,0);
+        for(String str : loopVars){
+          toCalcConst = SymbolicReplace(toCalcConst,str,zero,temp);
+        }
+        toCalcConst = Normalize(toCalcConst,temp);
 
+        expr->freeTerm = toCalcConst;
         initial.external = expr;
 
-        AddressAccess* final = ShiftExternalToInternal(&initial,6,2,temp);
+        LoopLinearSum* external = expr;
+        
+        auto Recurse = [&initial,external](auto Recurse,int loopIndex,Arena* out) -> void{
+          int totalSize = external->terms.size;
+          int leftOverSize = totalSize - loopIndex;
+
+          auto PrintSpace = [loopIndex](int offset = 0){
+            for(int i = 0; i < loopIndex + offset; i++){
+              printf("  ");
+            }
+          };
+          
+          // Not the last
+          if(leftOverSize > 1){
+            PrintSpace();
+            printf("if(");
+            SymbolicExpression* currentDecider = GetLoopHighestDecider(&external->terms[loopIndex]);
+            bool first = true;
+            for(int i = loopIndex + 1; i < totalSize; i++){
+              SymbolicExpression* otherDecider = GetLoopHighestDecider(&external->terms[i]);
+
+              if(first){
+                first = false;
+              } else {
+                printf(" && ");
+              }
+              
+              printf("(a%d > a%d)",loopIndex,i);
+            }
+
+            printf("){\n");
+            PrintSpace(1);
+            printf("// Loop where var %.*s is the biggest\n",UNPACK_SS(external->terms[loopIndex].var));
+            
+            AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
+
+            PrintSpace(1);
+            printf("int doubleLoop = ");
+            Print(GetLoopLinearSumTotalSize(doubleLoop->external,out));
+            printf(";\n");
+
+            AddressAccess* singleLoop = ConvertAccessSingleLoop(&initial,out);
+
+            PrintSpace(1);
+            printf("int singleLoop = ");
+            Print(GetLoopLinearSumTotalSize(singleLoop->external,out));
+            printf(";\n");
+
+            PrintSpace(1);
+            printf("if(doubleLoop > singleLoop){\n");
+
+            {
+              TEMP_REGION(temp,out);
+              ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
+              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
+              
+              String res = InstantiateAccess(ext,internal,temp);
+              AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
+
+              String* view = (String*) &parameters;
+              for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
+                String str = META_AddressReadParameters_Members[i];
+                printf(" config->%.*s = %.*s\n",UNPACK_SS(str),UNPACK_SS(view[i]));
+              }
+              
+              //printf("%.*s\n",UNPACK_SS(res));
+            }
+            
+            Print(doubleLoop);
+            PrintSpace(1);
+            printf("} else {\n");
+
+            {
+              TEMP_REGION(temp,out);
+              ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
+              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
+              
+              String res = InstantiateAccess(ext,internal,temp);
+              printf("%.*s\n",UNPACK_SS(res));
+            }
+
+            Print(singleLoop);
+            PrintSpace(1);
+            printf("}\n");
+            
+            PrintSpace();
+            printf("} else {\n");
+
+            PrintSpace(1);
+            printf("// Loop where var %.*s is not the biggest\n",UNPACK_SS(external->terms[loopIndex].var));
+
+            if(leftOverSize > 0){
+              Recurse(Recurse,loopIndex + 1,out);
+              PrintSpace();
+              printf("}\n");
+            }
+          } else {
+            PrintSpace();
+            printf("// Loop where var %.*s is the biggest by default\n",UNPACK_SS(external->terms[loopIndex].var));
+            AddressAccess* access = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
+            Print(access);
+            
+          }
+        };
+
+        for(int i = 0; i <  initial.external->terms.size; i++){
+          LoopLinearSumTerm term  =  initial.external->terms[i];
+          printf("  int a%d = ",i);
+          Print(GetLoopHighestDecider(&term));
+          printf("; // %.*s\n",UNPACK_SS(term.var));
+        }
+
+        Recurse(Recurse,0,temp);
+        
+#if 0
+        AddressAccess* final = ShiftExternalToInternal(&initial,6,1,temp);
         ExternalMemoryAccess ext = CompileExternalMemoryAccess(final->external,temp);
         Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(final->internal,temp);
         
         String res = InstantiateAccess(ext,internal,temp);
 
         *builder.PushElem() = res;
+#endif
       } else {
         AddressGen gen = CompileAddressGenDef(*def,temp);
 

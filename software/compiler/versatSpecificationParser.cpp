@@ -8,6 +8,7 @@
 
 #include "configurations.hpp"
 #include "declaration.hpp"
+#include "embeddedData.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "symbolic.hpp"
@@ -2278,6 +2279,50 @@ String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* 
   return EndString(out,builder);
 }
 
+AddressReadParameters InstantiateAccess2(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out){
+  AddressReadParameters res = {};
+
+  res.ext_addr = STRING("ext");
+  res.read_per = PushString(out,external.totalTransferSize);
+  res.read_duty = PushString(out,external.totalTransferSize);
+  res.read_incr = STRING("1");
+
+  res.read_iter = STRING("0");
+  res.read_shift = STRING("0");
+
+  res.read_length = PushString(out,"(%.*s) * sizeof(float);",UNPACK_SS(external.length));
+  res.read_amount_minus_one = PushString(out,external.amountMinusOne);
+  res.read_addr_shift = PushString(out,"(%.*s) * sizeof(float);",UNPACK_SS(external.addrShift));
+
+  res.pingPong = STRING("1");
+
+  res.output_start = STRING("0");
+
+  {
+    AddressGenLoopSpecificatonSym l = internal[0]; 
+    res.output_per = PushString(out,l.periodExpression);
+    res.output_incr = PushString(out,l.incrementExpression);
+    res.output_duty = PushString(out,l.dutyExpression);
+    res.output_iter = PushString(out,l.iterationExpression);
+    res.output_shift = PushString(out,l.shiftExpression);
+  }
+    
+  if(internal.size > 1){
+    AddressGenLoopSpecificatonSym l = internal[0]; 
+    res.output_per2 = PushString(out,l.periodExpression);
+    res.output_incr2 = PushString(out,l.incrementExpression);
+    res.output_iter2 = PushString(out,l.iterationExpression);
+    res.output_shift2 = PushString(out,l.shiftExpression);
+  } else {
+    res.output_per2 = STRING("0");
+    res.output_incr2 = STRING("0");
+    res.output_iter2 = STRING("0");
+    res.output_shift2 = STRING("0");
+  }
+
+  return res;
+}
+
 String InstantiateAccess(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -2803,63 +2848,6 @@ ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Arena* ou
   return result;
 }
 
-// TODO: REMOVE THIS
-ExternalMemoryAccess CompileExternalMemoryAccess(SingleAddressAccess* access,Arena* out){
-  TEMP_REGION(temp,out);
-
-  int size = access->loops.size;
-
-  Assert(size <= 2);
-  // Maybe add some assert to check if the innermost loop contains a constant of 1.
-  //Assert(Constant(access) == 1);
-
-  ExternalMemoryAccess result = {};
-
-  LoopDefinition inner = access->loops[access->loops.size - 1];
-  LoopDefinition outer = access->loops[0];
-
-  auto GetLoopSize = [](LoopDefinition def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
-    TEMP_REGION(temp,out);
-
-    SymbolicExpression* diff = SymbolicSub(def.end,def.start,temp);
-    
-    if(removeOne){
-      diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
-    }
-
-    SymbolicExpression* final = Normalize(diff,out);
-    return final;
-  };
-  
-  auto GetLoopSizeRepr = [GetLoopSize](LoopDefinition def,Arena* out,bool removeOne = false){
-    TEMP_REGION(temp,out);
-    return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
-  };
-
-  if(size == 1){
-    result.length = GetLoopSizeRepr(inner,out);
-    result.totalTransferSize = result.length;
-    result.amountMinusOne = STRING("0");
-    result.addrShift = STRING("0");
-  } else {
-    // TODO: A bit repetitive, could use some cleanup
-    SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
-    
-    result.length = GetLoopSizeRepr(inner,out);
-    result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
-
-    SymbolicExpression* derived = Normalize(Derivate(access->address,outer.loopVariableName,temp),temp);
-
-    result.addrShift = PushRepresentation(derived,out);
-
-    SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
-
-    result.totalTransferSize = PushRepresentation(all,out);
-  }
-  
-  return result;
-}
-
 Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(LoopLinearSum* access,Arena* out){
   TEMP_REGION(temp,out);
   
@@ -2967,133 +2955,9 @@ Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(LoopLinearSum* access,
 
     return result;
   };
-  
-  //auto copy = CopyArray(access->loops,temp);
-  
-  //Reverse(copy);
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
   Array<AddressGenLoopSpecificatonSym> res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,true,out);
-  
-  return res;
-}
-
-// TODO: REMOVE
-Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(SingleAddressAccess* access,Arena* out){
-  TEMP_REGION(temp,out);
-  
-  auto GetLoopSize = [](LoopDefinition def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
-    TEMP_REGION(temp,out);
-
-    SymbolicExpression* diff = SymbolicSub(def.end,def.start,temp);
-    
-    if(removeOne){
-      diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
-    }
-
-    SymbolicExpression* final = Normalize(diff,temp);
-    return final;
-  };
-  
-  auto GetLoopSizeRepr = [GetLoopSize](LoopDefinition def,Arena* out,bool removeOne = false){
-    TEMP_REGION(temp,out);
-    return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
-  };
-  
-  auto GenerateLoopExpressionPairSymbolic = [GetLoopSizeRepr](Array<LoopDefinition> loops,
-                                                              SymbolicExpression* expr,bool ext,Arena* out) -> Array<AddressGenLoopSpecificatonSym>{
-    TEMP_REGION(temp,out);
-
-    int loopSize = (loops.size + 1) / 2;
-    Array<AddressGenLoopSpecificatonSym> result = PushArray<AddressGenLoopSpecificatonSym>(out,loopSize);
-
-    // TODO: Need to normalize and push the entire expression into a division.
-    //       So we can then always extract a duty
-    SymbolicExpression* duty = nullptr;
-    if(expr->type == SymbolicExpressionType_DIV){
-      duty = expr->bottom;
-      expr = expr->top;
-    }
-    
-    for(int i = 0; i < loopSize; i++){
-      LoopDefinition l0 = loops[i*2];
-
-      AddressGenLoopSpecificatonSym& res = result[i];
-      res = {};
-
-      String loopSizeRepr = GetLoopSizeRepr(l0,out);
-      
-      SymbolicExpression* derived = Derivate(expr,l0.loopVariableName,temp);
-      SymbolicExpression* firstDerived = Normalize(derived,temp);
-      SymbolicExpression* periodSym = ParseSymbolicExpression(loopSizeRepr,temp);
-        
-      res.periodExpression = loopSizeRepr;
-      res.incrementExpression = PushRepresentation(firstDerived,out);
-
-      if(i == 0){
-        if(duty){
-          // For an expression where increment is something like 1/4.
-          // That means that we want 4 * period with a duty of 1.
-          // Basically have to reorder the division.
-
-#if 0
-          SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("period / duty"),temp);
-          SymbolicExpression* dutyExpression = SymbolicReplace(templateSym,STRING("period"),periodSym,temp);
-
-          dutyExpression = SymbolicReplace(dutyExpression,STRING("duty"),duty,temp);
-#endif
-          
-          SymbolicExpression* dutyExpression = SymbolicDiv(periodSym,duty,temp);
-
-          result[0].dutyExpression = PushRepresentation(dutyExpression,out);
-        } else {
-          result[0].dutyExpression = PushString(out,PushRepresentation(loops[0].end,temp)); // For now, do not care too much about duty. Use a full duty
-        }
-      }
-      
-      String firstEnd = PushRepresentation(l0.end,out);
-      SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp);
-
-      res.shiftWithoutRemovingIncrement = STRING("0"); // By default
-      if(i * 2 + 1 < loops.size){
-        LoopDefinition l1 = loops[i*2 + 1];
-
-        res.iterationExpression = GetLoopSizeRepr(l1,out);
-        SymbolicExpression* derived = Normalize(Derivate(expr,l1.loopVariableName,temp),temp);
-
-        res.shiftWithoutRemovingIncrement = PushRepresentation(derived,out);
-        
-        // We handle shifts very easily. We just remove the effects of all the previous period increments and then apply the shift.
-        // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
-        // We need to subtract 1 because the period increment is only applied (period - 1) times.
-        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp);
-        
-        SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp);
-        replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp);
-        replaced = SymbolicReplace(replaced,STRING("term"),derived,temp);
-        replaced = Normalize(replaced,temp);
-        
-        res.shiftExpression = PushRepresentation(replaced,out);
-      } else {
-        if(ext){
-          res.iterationExpression = STRING("1");
-        } else {
-          res.iterationExpression = STRING("0");
-        }
-        res.shiftExpression = STRING("0");
-      }
-    }
-
-    return result;
-  };
-  
-  auto copy = CopyArray(access->loops,temp);
-  
-  Reverse(copy);
-
-  Array<AddressGenLoopSpecificatonSym> res = GenerateLoopExpressionPairSymbolic(copy,access->address,true,out);
-
-  //DEBUG_BREAK();
   
   return res;
 }

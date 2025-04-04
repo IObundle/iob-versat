@@ -5,13 +5,6 @@
 struct Tokenizer;
 
 // Only support one inheritance for now
-#if 0
-struct InheritanceDef{
-   String name;
-   enum {PUBLIC,PRIVATE} type;
-   InheritanceDef* next;
-};
-#endif
 
 struct TemplateParamDef{
    String name;
@@ -66,10 +59,12 @@ struct MemberDef{
    MemberDef* next;
 };
 
-void SkipQualifiers(Tokenizer* tok);
 String ParseSimpleType(Tokenizer* tok);
 String ParseSimpleFullType(Tokenizer* tok);
+
+#if 0
+void SkipQualifiers(Tokenizer* tok);
 EnumDef ParseEnum(Tokenizer* tok);
 MemberDef* ParseMember(Tokenizer* tok,Arena* out);
-Result<StructDef,String> ParseStruct(Tokenizer* tok,Arena* out);
 StructDef ParseTemplatedStructDefinition(Tokenizer* tok,Arena* out);
+#endif
