@@ -669,6 +669,8 @@ int main(int argc,char* argv[]){
 
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
 
+In fact, need to start checking every keyword used by C,C++ and Verilog and make sure that the names that are passed in the versat spec file never conflict with any special keyword.
+
 BUG: An empty accelerator is crashing versat. We do not need to do anything special, generate an empty accelerator or just give an error (an empty accelerator would just be the dma at that point, right?).
      - Regardless, generating an empty accelerator might be a good way of testing whether the generated code is capable of handling empty structs (empty config, empty state, empty static, empty mem, etc.) because other accelerators might have one of these interfaces empty and in theory the empty accelerator would have all of them empty and as such we could test everything here.
 
@@ -690,6 +692,10 @@ Debugability:
 - We kinda lost the .dot files generated in order to help debug graph algorithms. Its not a big deal now but eventually would like to have them back, as the .dot files are the only proper way we currently have of debugging graph operations (which I do not think we will be doing much soon, but eventually need to address this).
 
 Features:
+
+- I'm considering removing the usage of the template engine for the generation of code and instead replace it with an "emitter" based approach. Templates work for a good amount of static and low amount of dynamic data but for a lot of dynamic data they kinda fall apart. Furthermore, the amount of complexity required to implement them is kinda not worth it.
+
+-- I'm considering writting an emitter for Verilog that should be useful for a lot of situations.
 
 - The template engine could be updated to compile at build time, offer compile time checks instead of runtime and simplify data management since we could pass and use C code to access and iterate the data. This means that passing large structures is preferebly instead of doing what we do now where we want to minimize data passing this way. Read the NOTEs that are contained inside the OutputTopLevelFiles.
 

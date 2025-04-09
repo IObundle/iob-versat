@@ -103,3 +103,4 @@ define_map possibleAttributes{
    VERSAT_STATIC  : versat_static,
    VERSAT_STAGE   : versat_stage
 };
+

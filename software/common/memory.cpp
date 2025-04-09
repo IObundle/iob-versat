@@ -182,6 +182,10 @@ StringBuilder* StartString(Arena* out){
 
 void StringBuilder::PushString(String string){
   StringNode* ptr = this->tail;
+
+  if(debugPrint){
+    printf("%.*s",UNPACK_SS(string));
+  }
   
   String str = string;
   while(1){
@@ -218,6 +222,12 @@ void StringBuilder::vPushString(const char* format,va_list args){
   TEMP_REGION(temp,arena);
   String toPush = ::vPushString(temp,format,args);
   PushString(toPush);
+}
+
+void StringBuilder::PushSpaces(int amount){
+  for(int i = 0; i < amount; i++){
+    this->PushChar(' ');
+  }
 }
 
 void StringBuilder::PushString(const char* format,...){

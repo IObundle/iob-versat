@@ -201,7 +201,6 @@ private:
   
 public:
   Opt():val{},hasVal(false){};
-  Opt(std::nullopt_t):val{},hasVal(false){};
   Opt(T t):val(t),hasVal(true){};
   
   Opt<T>& operator=(T& t){
@@ -215,6 +214,7 @@ public:
     return *this;
   };
 
+  explicit operator bool(){return hasVal;}
   bool operator!(){return !hasVal;};
 
   // Match the std interface to make it easier to replace if needed
@@ -245,6 +245,7 @@ public:
     return *this;
   };
 
+  explicit operator bool(){return (val != nullptr);}
   bool operator!(){return !val;};
 
   // Match the std interface to make it easier to replace if needed
@@ -254,11 +255,11 @@ public:
   T* value_or(T* other){return this->has_value() ? val : other;};
 };
 
-//template<typename T>
-//using Opt = std::optional<T>;
-#define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
-#define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (nullptr);}
-#define PROPAGATE_POINTER_OPT(PTR) if((PTR) == nullptr){return {};}
+template<typename T>
+inline bool ShouldPropagate_(Opt<T> val){return !val.has_value();}
+inline bool ShouldPropagate_(void* val){return val == nullptr;}
+
+#define PROPAGATE(OPTIONAL) if(ShouldPropagate_(OPTIONAL)){return {};}
 
 template<typename T>
 using BracketList = std::initializer_list<T>;

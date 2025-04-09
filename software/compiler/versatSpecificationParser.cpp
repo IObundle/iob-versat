@@ -1995,7 +1995,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
       EXPECT(tok,"=");
 
       auto symbolicExpression = ParseSymbolicExpression(tok,out);
-      PROPAGATE_POINTER_OPT(symbolicExpression);
+      PROPAGATE(symbolicExpression);
       symbolic = symbolicExpression;
       
       EXPECT(tok,";");
@@ -2005,7 +2005,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
       auto symbolicExpression = ParseSymbolicExpression(tok,out);
       EXPECT(tok,"]");
       
-      PROPAGATE_POINTER_OPT(symbolicExpression);
+      PROPAGATE(symbolicExpression);
       
       EXPECT(tok,"=");
       Token other = tok->NextToken();
@@ -2016,7 +2016,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
 
       EXPECT(tok,";");
 
-      PROPAGATE_POINTER_OPT(symbolicExpression2);
+      PROPAGATE(symbolicExpression2);
       
       if(CompareString(construct,"mem")){
         internalSymbolic = symbolicExpression;
@@ -2290,10 +2290,11 @@ AddressReadParameters InstantiateAccess2(ExternalMemoryAccess external,Array<Add
   res.read_iter = STRING("0");
   res.read_shift = STRING("0");
 
-  res.read_length = PushString(out,"(%.*s) * sizeof(float);",UNPACK_SS(external.length));
+  res.read_length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
   res.read_amount_minus_one = PushString(out,external.amountMinusOne);
-  res.read_addr_shift = PushString(out,"(%.*s) * sizeof(float);",UNPACK_SS(external.addrShift));
+  res.read_addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
 
+  res.read_enabled = STRING("1");
   res.pingPong = STRING("1");
 
   res.output_start = STRING("0");
@@ -2839,7 +2840,7 @@ ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Arena* ou
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
 
     result.addrShift = PushRepresentation(derived,out);
-
+    
     SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
 
     result.totalTransferSize = PushRepresentation(all,out);
@@ -2936,13 +2937,17 @@ Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(LoopLinearSum* access,
         // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
         // We need to subtract 1 because the period increment is only applied (period - 1) times.
         SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp);
-        
+
         SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp);
         replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp);
         replaced = SymbolicReplace(replaced,STRING("term"),derived,temp);
-        replaced = Normalize(replaced,temp);
+        //Print(replaced);
+        replaced = Normalize(replaced,temp,false);
+        //printf("\n");
+        //Print(replaced);
         
         res.shiftExpression = PushRepresentation(replaced,out);
+        //DEBUG_BREAK();
       } else {
         if(ext){
           res.iterationExpression = STRING("1");
@@ -2957,6 +2962,7 @@ Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(LoopLinearSum* access,
   };
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
+
   Array<AddressGenLoopSpecificatonSym> res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,true,out);
   
   return res;

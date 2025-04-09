@@ -207,12 +207,15 @@ struct StringBuilder{
   Arena* arena;
   StringNode* head;
   StringNode* tail;
-
+  bool debugPrint;
+    
   // Allocates using the arena provided. EndString joins all these into one final string in the out arena
   void PushChar(char ch);
   void PushString(String str);
   void PushString(const char* format,...) __attribute__ ((format (printf, 2, 3)));
   void vPushString(const char* format,va_list args);
+
+  void PushSpaces(int amount);
 };
 
 StringBuilder* StartString(Arena* arena);

@@ -836,7 +836,15 @@ SymbolicExpression* SortTerms(SymbolicExpression* expr,Arena* out){
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
   TEMP_REGION(temp,out);
   switch(expr->type){
-  case SymbolicExpressionType_LITERAL: // fallthrough
+  case SymbolicExpressionType_LITERAL: {
+    // NOTE: Literals are always positive and negation of the expr is the normal form to represent negatives.
+    SymbolicExpression* copy = SymbolicDeepCopy(expr,out);
+    if(copy->literal < 0){
+      copy->literal = -copy->literal;
+      copy->negative = !copy->negative;
+    }
+    return copy;
+  } break;
   case SymbolicExpressionType_VARIABLE: {
     return SymbolicDeepCopy(expr,out);
   } break;
@@ -1056,7 +1064,7 @@ MultPartition CollectTermsWithLiteralMultiplier(SymbolicExpression* expr,Arena* 
     auto builder = StartArray<SymbolicExpression*>(out); 
     for(SymbolicExpression* s : expr->sum){
       if(s->type == SymbolicExpressionType_LITERAL){
-        Assert(literal == nullptr);
+        Assert(literal == nullptr); // This function is only intended to handle 1 literal.
         literal = s;
       } else {
         *builder.PushElem() = s;
@@ -1229,8 +1237,16 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
   } break;
     
   case SymbolicExpressionType_SUM:{
-    SymbolicExpression* normalized = NormalizeLiterals(expr,out);
+    // TODO: Bad, normalize cannot be called inside these functions.
+    //SymbolicExpression* normalized = NormalizeLiterals(expr,out);
+    //printf("here\n");
+    //Print(expr);
+    //printf("\n");
 
+    SymbolicExpression* normalized = NormalizeLiterals(expr,out); //SymbolicDeepCopy(expr,out);
+    //Print(normalized);
+    //printf("\n");
+    
     if(normalized->type != SymbolicExpressionType_SUM){
       return normalized;
     }
@@ -1587,30 +1603,35 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("Normalize Literals:\n");
+    if(debugPrint) {Print(current); printf("\n");}
     if(debugPrint) PrintAST(current);
 
     next = ApplyDistributivity(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("Apply distributivity:\n");
+    if(debugPrint) {Print(current); printf("\n");}
     if(debugPrint) PrintAST(current);
 
     next = RemoveParenthesis(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("Remove paran:\n");
+    if(debugPrint) {Print(current); printf("\n");}
     if(debugPrint) PrintAST(current);
 
     next = ApplySimilarTermsAddition(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("SimilarTerms:\n");
+    if(debugPrint) {Print(current); printf("\n");}
     if(debugPrint) PrintAST(current);
 
     next = RemoveParenthesis(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next); 
     current = next;
     if(debugPrint) printf("Remove paran:\n");
+    if(debugPrint) {Print(current); printf("\n");}
     if(debugPrint) PrintAST(current);
 
     // Logic inside similar term might add superflouous constants, so we normalize literals again
@@ -1618,6 +1639,7 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("Normalize Literals:\n");
+    if(debugPrint) {Print(current); printf("\n");}
     if(debugPrint) PrintAST(current);
   }
 
@@ -1647,7 +1669,8 @@ void TestSymbolic(){
     {STRING("a*b + a*b + 2*a*b"),STRING("4*a*b")},
     {STRING("1+2+3+1*20*30"),STRING("606")},
     {STRING("a * (x + y)"),STRING("a*x+a*y")},
-    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-y")}
+    //{STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-y")},
+    {STRING("-6*(4-1)+5"),STRING("-13")}
   };
 
   bool printNormalizeProcess = false;
