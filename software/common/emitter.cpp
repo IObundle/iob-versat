@@ -6,6 +6,7 @@ String Repr(CASTType type){
   case CASTType_FUNCTION: return STRING("CASTType_FUNCTION");
   case CASTType_ASSIGNMENT: return STRING("CASTType_ASSIGNMENT");
   case CASTType_COMMENT: return STRING("CASTType_COMMENT");
+  case CASTType_STATEMENT: return STRING("CASTType_STATEMENT");
   case CASTType_VAR_DECL: return STRING("VAR_DECL");
   case CASTType_VAR_DECL_STMT: return STRING("VAR_DECL_STMT"); 
   case CASTType_IF: return STRING("IF");
@@ -19,6 +20,7 @@ bool IsBlockType(CASTType type){
   case CASTType_VAR_DECL:; 
   case CASTType_VAR_DECL_STMT:; 
   case CASTType_ASSIGNMENT:;
+  case CASTType_STATEMENT:;
   case CASTType_COMMENT:;
   case CASTType_TOP_LEVEL: return false;
 
@@ -82,6 +84,7 @@ void CEmitter::InsertStatement(CAST* statementCAST){
     case CASTType_COMMENT:;
     case CASTType_ASSIGNMENT:;  
     case CASTType_VAR_DECL_STMT:; 
+    case CASTType_STATEMENT:;
     case CASTType_VAR_DECL: continue; 
 
     // All the "block" types
@@ -136,13 +139,6 @@ void CEmitter::Declare(String type,String name,String initialValue){
   declaration->defaultValue = PushString(arena,initialValue);
 
   InsertStatement(declaration);
-}
-
-void CEmitter::Comment(String comment){
-  CAST* commentAst = PushCAST(CASTType_COMMENT,arena);
-  commentAst->comment = PushString(arena,comment);
-
-  InsertStatement(commentAst);
 }
 
 void CEmitter::If(String expression){
@@ -218,6 +214,20 @@ void CEmitter::EndBlock(){
   if(top < 0){
     top = 0;
   }
+}
+
+void CEmitter::Comment(String comment){
+  CAST* commentAst = PushCAST(CASTType_COMMENT,arena);
+  commentAst->comment = PushString(arena,comment);
+
+  InsertStatement(commentAst);
+}
+
+void CEmitter::Statement(String statement){
+  CAST* stmt = PushCAST(CASTType_STATEMENT,arena);
+
+  stmt->statement = PushString(arena,statement);
+  InsertStatement(stmt);
 }
 
 void CEmitter::Assignment(String lhs,String rhs){
@@ -362,11 +372,14 @@ void Repr(CAST* top,StringBuilder* b,int level){
     //b->PushString("\n");
 
   } break;
+  case CASTType_STATEMENT:{
+    b->PushSpaces(level * 2);
+    b->PushString("%.*s;",UNPACK_SS(top->statement));
+  } break;
   case CASTType_ASSIGNMENT:{
     b->PushSpaces(level * 2);
     b->PushString("%.*s = %.*s;",UNPACK_SS(top->lhs),UNPACK_SS(top->rhs));
   } break;
   }
-  
 }
 

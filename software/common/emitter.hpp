@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils.hpp"
-#include "embeddedData.hpp"
 
 // TODO: We are probably gonna go the route of also creating a Verilog emitter. Templates seem fine at the start but honestly they are more trouble than they are worth.
 
@@ -15,6 +14,7 @@ enum CASTType{
   CASTType_COMMENT,
   CASTType_VAR_DECL,
   CASTType_VAR_DECL_STMT,
+  CASTType_STATEMENT,
   CASTType_ASSIGNMENT
 };
 
@@ -34,6 +34,7 @@ struct CAST{
 
   union{
     String comment;
+    String statement;
     
     // Top level
     struct{
@@ -87,8 +88,6 @@ struct CEmitter{
   void Argument(String type,String name);
   void Declare(String type,String name,String initialValue = {});
 
-  void Comment(String expression);
-  
   void If(String expression);
   void ElseIf(String expression);
   void Else();
@@ -96,6 +95,8 @@ struct CEmitter{
   
   void EndBlock(); // Any expression that starts a block is terminated by this function, (Function, If, Else, ...)
   
+  void Comment(String expression);
+  void Statement(String statement); // Generic statement, mostly to bypass any other logic and insert stuff directly.
   void Assignment(String lhs,String rhs);
 };
 

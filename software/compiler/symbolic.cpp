@@ -895,22 +895,22 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
       }
     }
 
-    bool negate = false;
-    if(finalResult < 0){
+#if 0 
+    if(expr->negative){
       finalResult = -finalResult;
-      negate = true;
     }
-
+#endif    
+    
     if(isMul){
       if(Empty(childs)){
-        return PushLiteral(out,finalResult,negate);
+        return PushLiteral(out,finalResult,expr->negative);
       } else if(finalResult == 0){
         return PushLiteral(out,0);
       } else {
         SymbolicExpression* res = CopyExpression(expr,out);
         // No point appending a literal 1 in a multiplication.
         if(finalResult != 1){
-          SymbolicExpression* finalLiteral = PushLiteral(out,finalResult,negate);
+          SymbolicExpression* finalLiteral = PushLiteral(out,finalResult);
 
           *childs->PushElem() = finalLiteral;
         }
@@ -933,7 +933,7 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
     } else {
       SymbolicExpression* res = CopyExpression(expr,out);
       if(finalResult != 0){
-        SymbolicExpression* finalLiteral = PushLiteral(out,finalResult,negate);
+        SymbolicExpression* finalLiteral = PushLiteral(out,finalResult);
 
         *childs->PushElem() = finalLiteral;
       }
@@ -1237,15 +1237,7 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
   } break;
     
   case SymbolicExpressionType_SUM:{
-    // TODO: Bad, normalize cannot be called inside these functions.
-    //SymbolicExpression* normalized = NormalizeLiterals(expr,out);
-    //printf("here\n");
-    //Print(expr);
-    //printf("\n");
-
-    SymbolicExpression* normalized = NormalizeLiterals(expr,out); //SymbolicDeepCopy(expr,out);
-    //Print(normalized);
-    //printf("\n");
+    SymbolicExpression* normalized = NormalizeLiterals(expr,out);
     
     if(normalized->type != SymbolicExpressionType_SUM){
       return normalized;
@@ -1669,11 +1661,11 @@ void TestSymbolic(){
     {STRING("a*b + a*b + 2*a*b"),STRING("4*a*b")},
     {STRING("1+2+3+1*20*30"),STRING("606")},
     {STRING("a * (x + y)"),STRING("a*x+a*y")},
-    //{STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-y")},
+    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-y")},
     {STRING("-6*(4-1)+5"),STRING("-13")}
   };
 
-  bool printNormalizeProcess = false;
+  bool printNormalizeProcess = true;
  
   printf("\n");
   for(TestCase c : cases){

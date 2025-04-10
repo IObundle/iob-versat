@@ -5,7 +5,7 @@
 #include <new>
 
 #include <cstdint>
-
+#include <cstdio>
 #include <cassert>
 #define Assert(x) assert(x)
 

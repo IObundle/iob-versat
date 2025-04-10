@@ -1621,6 +1621,13 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
               c->ElseIf(expr);
             }
 
+            {
+            String repr = PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var));
+            c->Comment(repr);
+            String r = PushString(temp,"printf(\"LoopIndex: %d\\n\")",loopIndex); 
+            c->Statement(r);
+            }
+            
             AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
             String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp);
             c->Declare(STRING("int"),STRING("doubleLoop"),repr);
@@ -1628,10 +1635,13 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
             AddressAccess* singleLoop = ConvertAccessSingleLoop(&initial,out);
             String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp);
             c->Declare(STRING("int"),STRING("singleLoop"),repr2);
-
+            
             c->If(STRING("doubleLoop > singleLoop"));
             c->Comment(STRING("Single is better"));
             {
+              String r = PushString(temp,"printf(\"Single loop\\n\")"); 
+              c->Statement(r);
+              
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
               Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
@@ -1650,6 +1660,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
             c->Else();
             c->Comment(STRING("DoubleLoop is better"));
             {
+              String r = PushString(temp,"printf(\"Double loop\\n\")"); 
+              c->Statement(r);
+
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
               Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
@@ -1668,12 +1681,13 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
             c->EndIf();
 
-            if(leftOverSize > 0){
-              Recurse(Recurse,loopIndex + 1,c,out);
-            }
+            Recurse(Recurse,loopIndex + 1,c,out);
           } else {
             c->Else();
 
+            String r = PushString(temp,"printf(\"LoopIndex: %d\\n\")",totalSize - 1); 
+            c->Statement(r);
+            
             AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
             String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp);
 
@@ -1686,6 +1700,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
             
             c->If(STRING("doubleLoop > singleLoop"));
             {
+              String r = PushString(temp,"printf(\"Single loop\\n\")"); 
+              c->Statement(r);
+
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
               Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
@@ -1699,9 +1716,11 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
                 c->Assignment(t,view[i]);
               }
             }
-
             c->Else();
             {
+              String r = PushString(temp,"printf(\"Double loop\\n\")"); 
+              c->Statement(r);
+
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
               Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
@@ -1717,6 +1736,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
                 c->Assignment(t,view[i]);
               }
             }
+            c->EndIf();
           }
         };
 
@@ -1735,6 +1755,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
           LoopLinearSumTerm term  =  initial.external->terms[i];
           String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
           String name = PushString(temp2,"a%d",i);
+          String comment = PushString(temp2,"Loop var: %.*s",UNPACK_SS(term.var));
+          m->Comment(comment);
           m->Declare(STRING("int"),name,repr);
         }
 
@@ -1752,8 +1774,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         Repr(ast,b);
         String data = EndString(temp2,b);
         *builder.PushElem() = data;
-
-        printf("%.*s\n",UNPACK_SS(data));
       } else {
         AddressGen gen = CompileAddressGenDef(*def,temp);
 
