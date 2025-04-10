@@ -12,7 +12,9 @@ enum CASTType{
   CASTType_TOP_LEVEL,
   CASTType_IF,
   CASTType_FUNCTION,
+  CASTType_COMMENT,
   CASTType_VAR_DECL,
+  CASTType_VAR_DECL_STMT,
   CASTType_ASSIGNMENT
 };
 
@@ -31,6 +33,8 @@ struct CAST{
   CASTType type;
 
   union{
+    String comment;
+    
     // Top level
     struct{
       ArenaList<CAST*>* functions;
@@ -60,6 +64,7 @@ struct CAST{
     struct {
       String typeName;
       String varName;
+      String defaultValue;
     };
   };
 };
@@ -79,11 +84,16 @@ struct CEmitter{
   void InsertStatement(CAST* statementCAST);
 
   void Function(String returnType,String functionName);
+  void Argument(String type,String name);
+  void Declare(String type,String name,String initialValue = {});
 
+  void Comment(String expression);
+  
   void If(String expression);
   void ElseIf(String expression);
   void Else();
-
+  void EndIf();
+  
   void EndBlock(); // Any expression that starts a block is terminated by this function, (Function, If, Else, ...)
   
   void Assignment(String lhs,String rhs);

@@ -4,7 +4,10 @@ String Repr(CASTType type){
   switch(type){
   case CASTType_TOP_LEVEL: return STRING("CASTType_TOP_LEVEL");
   case CASTType_FUNCTION: return STRING("CASTType_FUNCTION");
+  case CASTType_ASSIGNMENT: return STRING("CASTType_ASSIGNMENT");
+  case CASTType_COMMENT: return STRING("CASTType_COMMENT");
   case CASTType_VAR_DECL: return STRING("VAR_DECL");
+  case CASTType_VAR_DECL_STMT: return STRING("VAR_DECL_STMT"); 
   case CASTType_IF: return STRING("IF");
   }
 
@@ -14,9 +17,11 @@ String Repr(CASTType type){
 bool IsBlockType(CASTType type){
   switch(type){
   case CASTType_VAR_DECL:; 
+  case CASTType_VAR_DECL_STMT:; 
+  case CASTType_ASSIGNMENT:;
+  case CASTType_COMMENT:;
   case CASTType_TOP_LEVEL: return false;
 
-    
     
   case CASTType_FUNCTION:
   case CASTType_IF: return true;
@@ -74,6 +79,9 @@ void CEmitter::InsertStatement(CAST* statementCAST){
     case CASTType_TOP_LEVEL: Assert(false); // Cannot find top level inside this 
 
     // Non block types
+    case CASTType_COMMENT:;
+    case CASTType_ASSIGNMENT:;  
+    case CASTType_VAR_DECL_STMT:; 
     case CASTType_VAR_DECL: continue; 
 
     // All the "block" types
@@ -107,6 +115,34 @@ void CEmitter::Function(String returnType,String functionName){
   PushLevel(function);
 
   *top->functions->PushElem() = function;    
+}
+
+void CEmitter::Argument(String type,String name){
+  CAST* function = FindFirstCASTType(CASTType_FUNCTION);
+  
+  CAST* argument = PushCAST(CASTType_VAR_DECL,arena);
+
+  argument->typeName = PushString(arena,type);
+  argument->varName = PushString(arena,name);
+  
+  *function->arguments->PushElem() = argument;
+}
+
+void CEmitter::Declare(String type,String name,String initialValue){
+  CAST* declaration = PushCAST(CASTType_VAR_DECL_STMT,arena);
+
+  declaration->typeName = PushString(arena,type);
+  declaration->varName = PushString(arena,name);
+  declaration->defaultValue = PushString(arena,initialValue);
+
+  InsertStatement(declaration);
+}
+
+void CEmitter::Comment(String comment){
+  CAST* commentAst = PushCAST(CASTType_COMMENT,arena);
+  commentAst->comment = PushString(arena,comment);
+
+  InsertStatement(commentAst);
 }
 
 void CEmitter::If(String expression){
@@ -143,19 +179,37 @@ void CEmitter::ElseIf(String expression){
 
 void CEmitter::Else(){
   // NOTE: Kinda expect this to work but not sure. 
+  //       It might just be better to force user to call EndBlock everytime
   while(buffer[top-1]->type != CASTType_IF){
     EndBlock();
   }
-
+  
   CAST* ifAst = buffer[top-1];
 
+  // If the top 'if' already has an else, then we must look further up the chain
+  if(ifAst->elseStatements){
+    EndBlock();
+    while(buffer[top-1]->type != CASTType_IF){
+      EndBlock();
+    }
+    ifAst = buffer[top-1];
+  }
+  
   ifAst->elseStatements = PushArenaList<CAST*>(arena);
+}
+
+void CEmitter::EndIf(){
+  while(buffer[top-1]->type != CASTType_IF){
+    EndBlock();
+  }
+  
+  EndBlock();
 }
 
 void CEmitter::EndBlock(){
   for(int i = top - 1; i >= 0; i--){
     if(IsBlockType(buffer[i]->type)){
-      top = i - 1;
+      top = i;
       break;
     }
   }
@@ -232,6 +286,7 @@ void Repr(CAST* top,StringBuilder* b,int level){
       CAST* elem = iter->elem;
 
       Repr(elem,b,level + 1);
+      b->PushString("\n");
     }
 
     b->PushString("}");
@@ -239,6 +294,18 @@ void Repr(CAST* top,StringBuilder* b,int level){
   } break;
   case CASTType_VAR_DECL: {
     b->PushString("%.*s %.*s",UNPACK_SS(top->typeName),UNPACK_SS(top->varName));
+  } break;
+  case CASTType_VAR_DECL_STMT: {
+    b->PushSpaces(level * 2);
+    if(Empty(top->defaultValue)){
+      b->PushString("%.*s %.*s;",UNPACK_SS(top->typeName),UNPACK_SS(top->varName));
+    } else {
+      b->PushString("%.*s %.*s = %.*s;",UNPACK_SS(top->typeName),UNPACK_SS(top->varName),UNPACK_SS(top->defaultValue));
+    }
+  } break;
+  case CASTType_COMMENT:{
+    b->PushSpaces(level * 2);
+    b->PushString("// %.*s",UNPACK_SS(top->comment));
   } break;
   case CASTType_IF: {
     SingleLink<CASTIf>* iter = top->ifExpressions->head;
@@ -292,7 +359,7 @@ void Repr(CAST* top,StringBuilder* b,int level){
       b->PushString("}");
     }
 
-    b->PushString("\n");
+    //b->PushString("\n");
 
   } break;
   case CASTType_ASSIGNMENT:{

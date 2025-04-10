@@ -1588,23 +1588,16 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
         LoopLinearSum* external = expr;
         
-        auto Recurse = [&initial,external](auto Recurse,int loopIndex,StringBuilder* builder,Arena* out) -> void{
+        auto Recurse = [&initial,external](auto Recurse,int loopIndex,CEmitter* c,Arena* out) -> void{
           TEMP_REGION(temp,out);
 
           int totalSize = external->terms.size;
           int leftOverSize = totalSize - loopIndex;
-
-          auto PrintSpace = [builder,loopIndex](int offset = 0){
-            for(int i = 0; i < loopIndex + offset; i++){
-              builder->PushString("  ");
-              //printf("  ");
-            }
-          };
-          
+  
           // Not the last
           if(leftOverSize > 1){
-            PrintSpace();
-            builder->PushString("if(");
+            auto other = StartString(temp);
+            
             SymbolicExpression* currentDecider = GetLoopHighestDecider(&external->terms[loopIndex]);
             bool first = true;
             for(int i = loopIndex + 1; i < totalSize; i++){
@@ -1613,33 +1606,31 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
               if(first){
                 first = false;
               } else {
-                builder->PushString(" && ");
+                other->PushString(" && ");
               }
-              
-              builder->PushString("(a%d > a%d)",loopIndex,i);
+
+              other->PushString("(a%d > a%d)",loopIndex,i);
             }
 
-            builder->PushString("){\n");
-            PrintSpace(1);
-            builder->PushString("// Loop where var %.*s is the biggest\n",UNPACK_SS(external->terms[loopIndex].var));
-            
-            AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
+            String expr = EndString(temp,other);
 
-            PrintSpace(1);
-            builder->PushString("int doubleLoop = ");
-            builder->PushString(PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp));
-            builder->PushString(";\n");
+            if(loopIndex == 0){
+              c->If(expr);
+            } else {
+              // The other ifs are elseifs of the first if done.
+              c->ElseIf(expr);
+            }
+
+            AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
+            String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp);
+            c->Declare(STRING("int"),STRING("doubleLoop"),repr);
 
             AddressAccess* singleLoop = ConvertAccessSingleLoop(&initial,out);
+            String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp);
+            c->Declare(STRING("int"),STRING("singleLoop"),repr2);
 
-            PrintSpace(1);
-            builder->PushString("int singleLoop = ");
-            builder->PushString(PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp));
-            builder->PushString(";\n");
-
-            PrintSpace(1);
-            builder->PushString("if(doubleLoop > singleLoop){\n");
-
+            c->If(STRING("doubleLoop > singleLoop"));
+            c->Comment(STRING("Single is better"));
             {
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
@@ -1650,15 +1641,14 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
               String* view = (String*) &parameters;
               for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
                 String str = META_AddressReadParameters_Members[i];
-                builder->PushString(" config->%.*s = %.*s;\n",UNPACK_SS(str),UNPACK_SS(view[i]));
+
+                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
+                c->Assignment(t,view[i]);
               }
             }
 
-            printf("\n");
-            Print(doubleLoop);
-            PrintSpace(1);
-            builder->PushString("} else {\n");
-
+            c->Else();
+            c->Comment(STRING("DoubleLoop is better"));
             {
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
@@ -1670,47 +1660,31 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
               String* view = (String*) &parameters;
               for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
                 String str = META_AddressReadParameters_Members[i];
-                builder->PushString(" config->%.*s = %.*s;\n",UNPACK_SS(str),UNPACK_SS(view[i]));
+
+                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
+                c->Assignment(t,view[i]);
               }
             }
 
-            printf("\n");
-            Print(singleLoop);
-            PrintSpace(1);
-            builder->PushString("}\n");
-            
-            PrintSpace();
-            builder->PushString("} else {\n");
-
-            PrintSpace(1);
-            builder->PushString("// Loop where var %.*s is not the biggest\n",UNPACK_SS(external->terms[loopIndex].var));
+            c->EndIf();
 
             if(leftOverSize > 0){
-              Recurse(Recurse,loopIndex + 1,builder,out);
-              PrintSpace();
-              builder->PushString("}\n");
+              Recurse(Recurse,loopIndex + 1,c,out);
             }
           } else {
-            PrintSpace();
-            builder->PushString("// Loop where var %.*s is the biggest by default\n",UNPACK_SS(external->terms[loopIndex].var));
+            c->Else();
 
             AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
+            String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp);
 
-            PrintSpace(1);
-            builder->PushString("int doubleLoop = ");
-            builder->PushString(PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp));
-            builder->PushString(";\n");
+            c->Declare(STRING("int"),STRING("doubleLoop"),repr);
 
             AddressAccess* singleLoop = ConvertAccessSingleLoop(&initial,out);
+            String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp);
 
-            PrintSpace(1);
-            builder->PushString("int singleLoop = ");
-            builder->PushString(PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp));
-            builder->PushString(";\n");
-
-            PrintSpace(1);
-            builder->PushString("if(doubleLoop > singleLoop){\n");
-
+            c->Declare(STRING("int"),STRING("singleLoop"),repr2);
+            
+            c->If(STRING("doubleLoop > singleLoop"));
             {
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
@@ -1721,15 +1695,12 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
               String* view = (String*) &parameters;
               for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
                 String str = META_AddressReadParameters_Members[i];
-                builder->PushString(" config->%.*s = %.*s;\n",UNPACK_SS(str),UNPACK_SS(view[i]));
+                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
+                c->Assignment(t,view[i]);
               }
             }
 
-            printf("\n");
-            Print(doubleLoop);
-            PrintSpace(1);
-            builder->PushString("} else {\n");
-
+            c->Else();
             {
               TEMP_REGION(temp,out);
               ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
@@ -1741,84 +1712,48 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
               String* view = (String*) &parameters;
               for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
                 String str = META_AddressReadParameters_Members[i];
-                builder->PushString(" config->%.*s = %.*s;\n",UNPACK_SS(str),UNPACK_SS(view[i]));
+
+                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
+                c->Assignment(t,view[i]);
               }
             }
-
-            printf("\n");
-            Print(singleLoop);
-            PrintSpace(1);
-            builder->PushString("}\n");
-
-#if 1
-            CEmitter* m = StartCCode(temp);
-            
-            m->Function(STRING("void"),STRING("Configure"));
-            m->If(STRING("Test"));
-            m->Assignment(STRING("a"),STRING("0"));
-            m->ElseIf(STRING("Test2"));
-            m->Assignment(STRING("a"),STRING("1"));
-            m->Else();
-            m->Assignment(STRING("a"),STRING("2"));
-            m->EndBlock();
-            
-            CAST* ast = EndCCode(m);
-
-            auto builder = StartString(temp);
-            Repr(ast,builder);
-            String result = EndString(temp,builder);
-            printf("%.*s\n",UNPACK_SS(result));
-#endif
-            
-#if 0
-            AddressAccess* access = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
-            //Print(access);
-            //printf("\n");
-
-            {
-              TEMP_REGION(temp,out);
-              ExternalMemoryAccess ext = CompileExternalMemoryAccess(access->external,temp);
-              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(access->internal,temp);
-              
-              AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
-
-              String* view = (String*) &parameters;
-              for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-                String str = META_AddressReadParameters_Members[i];
-                builder->PushString(" config->%.*s = %.*s;\n",UNPACK_SS(str),UNPACK_SS(view[i]));
-              }
-            }
-#endif
-            
-            
           }
         };
 
-        auto strBuilder = StartString(temp);
-        
-        //strBuilder->debugPrint = true;
-        strBuilder->PushString("static void Configure(volatile VReadMultipleConfig* config,iptr ext");
+        CEmitter* m = StartCCode(temp);
+      
+        m->Function(STRING("static void"),STRING("Configure"));
+
+        m->Argument(STRING("volatile VReadMultipleConfig*"),STRING("config"));
+        m->Argument(STRING("iptr"),STRING("ext"));
 
         for(Token input : def->inputs){
-          strBuilder->PushString(",int %.*s",UNPACK_SS(input));
+          m->Argument(STRING("int"),input);
         }
-        strBuilder->PushString("){\n");
+        
+        for(int i = 0; i <  initial.external->terms.size; i++){
+          LoopLinearSumTerm term  =  initial.external->terms[i];
+          String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
+          String name = PushString(temp2,"a%d",i);
+          m->Declare(STRING("int"),name,repr);
+        }
 
         for(int i = 0; i <  initial.external->terms.size; i++){
           LoopLinearSumTerm term  =  initial.external->terms[i];
-          strBuilder->PushString("  int a%d = ",i);
           
           String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
-          strBuilder->PushString(repr);
-          strBuilder->PushString("; // %.*s\n",UNPACK_SS(term.var));
         }
 
-        Recurse(Recurse,0,strBuilder,temp);
-
-        strBuilder->PushString("}\n");
+        Recurse(Recurse,0,m,temp);
         
-        String result = EndString(temp2,strBuilder);
-        *builder.PushElem() = result;
+        CAST* ast = EndCCode(m);
+
+        StringBuilder* b = StartString(temp);
+        Repr(ast,b);
+        String data = EndString(temp2,b);
+        *builder.PushElem() = data;
+
+        printf("%.*s\n",UNPACK_SS(data));
       } else {
         AddressGen gen = CompileAddressGenDef(*def,temp);
 
