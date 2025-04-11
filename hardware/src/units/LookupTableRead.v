@@ -217,6 +217,8 @@ module LookupTableRead #(
       .result_first_data_o(write_addr),
       .result_second_data_o(write_data),
 
+      .forceReset(!running),
+
       .clk_i(clk),
       .rst_i(rst)
    );

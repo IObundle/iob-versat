@@ -667,6 +667,7 @@ int main(int argc,char* argv[]){
 
 /*
 
+
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
 
 In fact, need to start checking every keyword used by C,C++ and Verilog and make sure that the names that are passed in the versat spec file never conflict with any special keyword.
@@ -684,12 +685,35 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 
 /*
 
+Code Generation:
+
+- Templates VS Emitter
+
+Templates are good for static data and very simple dynamic data but troublesome for dynamic data.
+Emitters are good for very complex dynamic data but painful for static data.
+
+Maybe I'm gonna start using a mixed approach where templates are mostly static data and dynamic data is handled by emitters. It's kinda already what we are doing because some code on the codeGeneration file is just creating strings to pass directly to the template.
+
+- Header file generating code that should depend on embedded Data.
+
+Mainly the structs for the AddressGen arguments.
+
+AddressGen:
+
+- If we eventually have to handle non zero start loops, need to figure out how we do it. We can shift loops around so they start at zero, but do not know if we should do this when converting an addressGenDef into an AddressAccess, or if we convert first and then have a function that does this shift, etc... Mostly depends on how easy this transformation is when using SymbolicExpressions vs using LinearLoopSum. 
+
+Misc:
+
 Generated code does not take into account parameters when it should.
 - Some wires are given fixed sizes when they depend on verilog parameters. 
 
 Debugability:
 
 - We kinda lost the .dot files generated in order to help debug graph algorithms. Its not a big deal now but eventually would like to have them back, as the .dot files are the only proper way we currently have of debugging graph operations (which I do not think we will be doing much soon, but eventually need to address this).
+
+Blindness:
+
+- We currently do not keep track of memory usage. Which functions use the most memory, which file uses the most memory, etc. This can easily be accomplished by adding code to the ARENA macros used.
 
 Features:
 

@@ -165,6 +165,25 @@ void ConfigEnableDMA(bool value);
 void ConfigCreateVCD(bool value);
 void ConfigSimulateDatabus(bool value); 
 
+typedef struct{
+   iptr ext_addr;
+   iptr read_length;
+   iptr read_amount_minus_one;
+   iptr read_addr_shift;
+   iptr read_enabled;
+   iptr pingPong;
+   iptr output_start;
+   iptr output_per;
+   iptr output_incr;
+   iptr output_duty;
+   iptr output_iter;
+   iptr output_shift;
+   iptr output_per2;
+   iptr output_incr2;
+   iptr output_iter2;
+   iptr output_shift2;
+} AddressVReadArguments;
+
 // PC-Emul side function only that allow us to simulate what addresses a V unit would access, instead of having to run the accelerator and having to inspect the VCD file, we can simulate it at pc-emul.
 #{if simulateLoops}
 typedef struct{
@@ -183,7 +202,13 @@ typedef struct{
    iptr length; 
 } AddressGenArguments;
 
+typedef struct{
+  int amountOfExternalValuesRead;
+  int amountOfInternalValuesUsed; // Repeated values are only counted once. The VRead is simulated in order to calculate this.
+} SimulateVReadResult;
+
 int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args);
+SimulateVReadResult SimulateVRead(AddressVReadArguments args);
 
 #ifdef __cplusplus
 } // extern "C"

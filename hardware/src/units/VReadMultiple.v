@@ -41,15 +41,6 @@ module VReadMultiple #(
    (* versat_stage="Read" *) input [AXI_ADDR_W-1:0] ext_addr,
    (* versat_stage="Read" *) input                  pingPong,
 
-   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_start,
-
-   (* versat_stage="Read" *) input [  PERIOD_W-1:0] read_per,
-   (* versat_stage="Read" *) input [    ADDR_W-1:0] read_incr,
-   (* versat_stage="Read" *) input [PERIOD_W-1:0]   read_duty,
-
-   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_iter,
-   (* versat_stage="Read" *) input [  ADDR_W-1:0] read_shift,
-
    (* versat_stage="Read" *) input [    ADDR_W-1:0] read_amount_minus_one,
    (* versat_stage="Read" *) input [     LEN_W-1:0] read_length,
    (* versat_stage="Read" *) input [AXI_ADDR_W-1:0] read_addr_shift,
@@ -113,15 +104,33 @@ module VReadMultiple #(
       else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
-   wire [ADDR_W-1:0] gen_addr_temp;
-   wire gen_valid, gen_ready;
-
-//   always @(posedge clk, posedge rst) begin
-//      if (rst) databus_addr_0 <= 0;
-//      else if (run && read_enabled) databus_addr_0 <= ext_addr;
-//   end
-
    wire [ADDR_W-1:0] constant1 = 1;
+   
+   //wire [ADDR_W-1:0] gen_addr_temp;
+   //wire gen_valid, gen_ready;
+
+   reg [ADDR_W-1:0] gen_addr_temp;
+   reg gen_valid;
+   wire gen_ready;
+
+   localparam SIZE_W_TEMP = (SIZE_W / 8);
+   localparam [ADDR_W-1:0] OFFSET_W = SIZE_W_TEMP[ADDR_W-1:0];
+
+   always @(posedge clk,posedge rst) begin
+      if(rst) begin
+         gen_addr_temp <= 0;
+      end else if(run && read_enabled) begin
+         gen_addr_temp <= 0;
+         gen_valid <= 1'b1;
+      end else begin
+         if(gen_valid && gen_ready) begin
+            gen_addr_temp <= gen_addr_temp + OFFSET_W;
+         end
+         if(!running) begin
+            gen_valid <= 0;
+         end
+      end
+   end
 
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
@@ -141,14 +150,23 @@ module VReadMultiple #(
       .ignore_first_i(1'b0),
 
       //configurations 
-      .period_i(read_per),
-      .delay_i (1'b0),
-      .start_i (read_start),
-      .incr_i  (read_incr),
+      //.period_i(read_per),
+      //.delay_i (1'b0),
+      //.start_i (read_start),
+      //.incr_i  (read_incr),
 
-      .iterations_i(read_iter),
-      .duty_i      (read_duty),
-      .shift_i     (read_shift),
+      //.iterations_i(read_iter),
+      //.duty_i      (read_duty),
+      //.shift_i     (read_shift),
+
+      .period_i({PERIOD_W{1'b0}}),
+      .delay_i (1'b0),
+      .start_i ({ADDR_W{1'b0}}),
+      .incr_i  ({ADDR_W{1'b0}}),
+
+      .iterations_i({ADDR_W{1'b0}}),
+      .duty_i      ({PERIOD_W{1'b0}}),
+      .shift_i     ({ADDR_W{1'b0}}),
 
       .period2_i({PERIOD_W{1'b0}}),
       .incr2_i({ADDR_W{1'b0}}),
@@ -164,9 +182,14 @@ module VReadMultiple #(
       .doneAddress(),
 
       //outputs 
-      .valid_o(gen_valid),
-      .ready_i(gen_ready),
-      .addr_o (gen_addr_temp),
+      //.valid_o(gen_valid), // gen_valid
+      //.ready_i(gen_ready), // gen_ready
+      //.addr_o (gen_addr_temp), // gen_addr_temp
+
+      .valid_o(),
+      .ready_i(1'b1),
+      .addr_o (),
+
       .store_o(),
 
       .databus_ready(databus_ready_0),
@@ -278,6 +301,8 @@ assign data_data = databus_rdata_0;
       .result_ready_i(1'b1),
       .result_first_data_o(write_addr),
       .result_second_data_o(write_data),
+
+      .forceReset(!running),
 
       .clk_i(clk),
       .rst_i(rst)

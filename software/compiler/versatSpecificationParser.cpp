@@ -2282,14 +2282,7 @@ String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* 
 AddressReadParameters InstantiateAccess2(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out){
   AddressReadParameters res = {};
 
-  res.ext_addr = STRING("ext");
-  res.read_per = PushString(out,external.totalTransferSize);
-  res.read_duty = PushString(out,external.totalTransferSize);
-  res.read_incr = STRING("1");
-
-  res.read_iter = STRING("0");
-  res.read_shift = STRING("0");
-
+  res.ext_addr = STRING("ext"); // TODO: Should be a parameter or something, not randomly hardcoded here
   res.read_length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
   res.read_amount_minus_one = PushString(out,external.amountMinusOne);
   res.read_addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));

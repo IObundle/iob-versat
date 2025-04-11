@@ -44,11 +44,6 @@ map addressGenType(AddressGenType t,String name){
 
 struct AddressReadParameters{
    String ext_addr;
-   String read_per;
-   String read_duty;
-   String read_incr;
-   String read_iter;
-   String read_shift;
    String read_length;
    String read_amount_minus_one;
    String read_addr_shift;
@@ -64,6 +59,28 @@ struct AddressReadParameters{
    String output_incr2;
    String output_iter2;
    String output_shift2;
+};
+
+struct AddressGenParameters{
+   String ext_addr;
+   String start;
+   String duty;
+   String period;
+   String incr;
+   String iterations;
+   String shift;
+   String period2;
+   String incr2;
+   String iterations2;
+   String shift2;
+   String period3;
+   String incr3;
+   String iterations3;
+   String shift3;
+   String amount_minus_one;
+   String start_address;
+   String addr_shift;
+   String length;
 };
 
 // Maybe change to map, although not sure how to do the reverse map from String[] to enum.

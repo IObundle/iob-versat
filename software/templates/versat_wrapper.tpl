@@ -648,6 +648,142 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   return 0;
 }
 
+SimulateVReadResult SimulateVRead(AddressVReadArguments args){
+   SimulateVReadResult result = {};
+
+   result.amountOfExternalValuesRead = ((args.read_length) / sizeof(float)) * (args.read_amount_minus_one + 1);
+
+   // TODO: Bitfield to save memory?
+   bool* seen = (bool*) malloc(result.amountOfExternalValuesRead);
+   memset(seen,false,result.amountOfExternalValuesRead);
+
+   static VSuperAddress* self = nullptr;
+
+   Verilated::traceEverOn(true);
+
+   // Could also create and destroy everytime to make sure that we start fresh.
+   if(self == nullptr){
+      self = new VSuperAddress();
+   }
+   
+   VerilatedVcdC* tfp = new VerilatedVcdC;
+   self->trace(tfp, 99);
+   tfp->open("simulate.vcd");
+
+   bool doTrace = false;
+   
+#define TRACE() self->eval(); \
+   if(doTrace) {tfp->dump(contextp->time());} \
+   contextp->timeInc(2);
+
+#define UP() self->clk_i = 1; \
+    TRACE(); \
+    self->clk_i = 0; \
+    TRACE();
+
+   // These wires can always be set to these value.
+   self->delay_i = 0;
+   self->ignore_first_i = 0;
+   self->data_ready_i = 1;
+   self->data_valid_i = 1;
+   self->reading = 1; // TODO: Does this make a difference? Also not like this existing in hardware either
+   self->databus_ready = 1;
+   self->ready_i = 1;
+
+   self->run_i = 0;
+   self->clk_i = 0;
+   self->rst_i = 0;
+
+   self->start_i = 0;
+   self->duty_i = args.output_duty;
+   self->period_i = args.output_per;
+   self->incr_i = args.output_incr;
+   self->iterations_i = args.output_iter;
+   self->shift_i = args.output_shift;
+   self->period2_i = args.output_per2;
+   self->incr2_i = args.output_incr2;
+   self->iterations2_i = args.output_iter2;
+   self->shift2_i = args.output_shift2;
+   self->period3_i = 0;
+   self->incr3_i = 0;
+   self->iterations3_i = 0;
+   self->shift3_i = 0;
+
+#if 0
+   self->databus_length = args.length;
+   self->start_address_i = args.start_address;
+   self->address_shift_i = args.addr_shift;
+   self->count_i = args.amount_minus_one + 1;
+#endif
+
+   self->databus_length = 0;
+   self->start_address_i = 0;
+   self->address_shift_i = 0;
+   self->count_i = 0;
+
+   TRACE();
+
+   self->clk_i = 1;
+   TRACE();
+
+   self->clk_i = 0;
+   self->run_i = 1;
+
+   TRACE();
+
+   self->clk_i = 1;
+ 
+   TRACE();
+
+   self->run_i = 0;
+   self->databus_last = 0;
+
+   self->clk_i = 0;
+   TRACE();
+
+   // Maybe waiting for the databus is not needed.
+   int loops = 0;
+   int arrayIndex = 0;
+   while(!self->doneAddress){
+      while(!self->valid_o){
+          UP();
+          loops += 1;
+          if(loops > 10000){
+            printf("Failed on A\n");
+            goto end;
+          }
+      }
+      
+      if(self->store_o){
+        iptr addr = self->addr_o / 4; // DATA_W 
+        //printf("%d\n",addr);
+        seen[addr] = true;
+      }
+
+      UP();
+   }
+
+end:
+
+   UP();
+   UP();
+   UP();
+   UP();
+   UP();
+
+   int amountSeen = 0;
+   for(int i = 0; i < result.amountOfExternalValuesRead; i++){
+      if(seen[i]){
+         amountSeen += 1;
+      }
+   }
+
+   free(seen);
+   result.amountOfInternalValuesUsed = amountSeen;
+
+   return result;
+}
+
 int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args){
    static VSuperAddress* self = nullptr;
 
@@ -747,57 +883,6 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
 
       UP();
    }
-
-#if 0
-   int loops = 0;
-   int arrayIndex = 0;
-   while(!self->doneDatabus){
-      self->databus_last = 0;
-      while(!self->databus_valid){
-          UP();
-          loops += 1;
-          if(loops > 10000){
-            printf("Failed on A\n");
-            goto end;
-          }
-      }
-
-      // At this point databus is valid for the first time
-
-      int transferLength = self->databus_len / 4; // AXI_DATA_W
-      iptr databus_initial_addr = self->databus_addr;
-
-      for(int i = 0; i < transferLength; i++){
-          if(i == transferLength - 1){
-            self->databus_last = 1;
-          }
- 
-          while(!self->databus_valid){
-             UP();
-             loops += 1;
-             if(loops > 10000){
-                 printf("Failed on B\n");
-                 goto end;
-             }
-          }
-
-          if(arrayIndex < arraySize){
-              arrayToFill[arrayIndex++] = databus_initial_addr + i * 4; // DATA_W
-          }
-
-          UP();
-      }
-
-      self->databus_last = 0;
-      UP();
-
-      loops += 1;
-      if(loops > 10000){
-        printf("Failed on C\n");
-        goto end;
-      }
-   }
-#endif
 
 end:
 

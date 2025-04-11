@@ -12,6 +12,8 @@ enum CASTType{
   CASTType_IF,
   CASTType_FUNCTION,
   CASTType_COMMENT,
+  CASTType_STRUCT_DEF,
+  CASTType_MEMBER_DECL,
   CASTType_VAR_DECL,
   CASTType_VAR_DECL_STMT,
   CASTType_STATEMENT,
@@ -19,7 +21,6 @@ enum CASTType{
 };
 
 String Repr(CASTType type);
-bool IsBlockType(CASTType type);
 
 struct CAST;
 
@@ -38,13 +39,22 @@ struct CAST{
     
     // Top level
     struct{
-      ArenaList<CAST*>* functions;
+      String pad1;
+      String pad2;
+      ArenaList<CAST*>* declarations_pad0;
     };
 
     // If 
     struct{
       ArenaList<CASTIf>* ifExpressions;
       ArenaList<CAST*>* elseStatements; // If nullptr then no else clause
+    };
+
+    // Struct Def
+    struct{
+      String name;
+      String pad0;
+      ArenaList<CAST*>* declarations;
     };
     
     // Function decl
@@ -83,10 +93,14 @@ struct CEmitter{
   void PopLevel();
   CAST* FindFirstCASTType(CASTType type,bool errorIfNotFound = true);
   void InsertStatement(CAST* statementCAST);
-
+  void InsertDeclaration(CAST* declarationCAST);
+  
+  void Struct(String structName);
+  void Member(String type,String memberName);
+  
   void Function(String returnType,String functionName);
   void Argument(String type,String name);
-  void Declare(String type,String name,String initialValue = {});
+  void VarDeclare(String type,String name,String initialValue = {});
 
   void If(String expression);
   void ElseIf(String expression);
@@ -98,6 +112,7 @@ struct CEmitter{
   void Comment(String expression);
   void Statement(String statement); // Generic statement, mostly to bypass any other logic and insert stuff directly.
   void Assignment(String lhs,String rhs);
+  void Return(String varToReturn = {});
 };
 
 CEmitter* StartCCode(Arena* out);

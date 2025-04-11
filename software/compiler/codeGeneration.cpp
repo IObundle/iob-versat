@@ -932,6 +932,170 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   }
 }
 
+String GenerateAddressGenCompilationFunction(AddressAccess access,String addressGenName,Arena* out){
+  TEMP_REGION(temp,out);
+
+  Array<String> inputVars = access.inputVariableNames;
+  String varName = STRING("args");
+  
+  auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,AddressReadParameters params) -> void{
+    TEMP_REGION(temp,emitter->arena);
+          
+    String* view = (String*) &params;
+    for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
+      String str = META_AddressReadParameters_Members[i];
+
+      String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
+      emitter->Assignment(t,view[i]);
+    }
+  };
+
+  auto EmitDoubleOrSingleLoopCode = [EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess access){
+    TEMP_REGION(temp,c->arena);
+    
+    AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&access,loopIndex,temp);
+    AddressAccess* singleLoop = ConvertAccessSingleLoop(&access,temp);
+
+    region(temp){
+      String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
+      c->VarDeclare(STRING("int"),STRING("doubleLoop"),repr);
+    }
+
+    region(temp){
+      String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,temp),temp);
+      c->VarDeclare(STRING("int"),STRING("singleLoop"),repr2);
+    }
+      
+    c->If(STRING("doubleLoop < singleLoop"));
+    c->Comment(STRING("Dobule is smaller (better)"));
+    region(temp){
+      String r = PushString(temp,"printf(\"Dobule loop\\n\")"); 
+      //c->Statement(r);
+              
+      ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
+      Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
+              
+      AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
+      EmitStoreAddressGenIntoConfig(c,parameters);
+    }
+
+    c->Else();
+    c->Comment(STRING("Single is smaller (better)"));
+    region(temp){
+      String r = PushString(temp,"printf(\"Single loop\\n\")"); 
+      //c->Statement(r);
+
+      ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
+      Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
+
+      String res = InstantiateAccess(ext,internal,temp);
+      AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
+
+      EmitStoreAddressGenIntoConfig(c,parameters);
+    }
+
+    c->EndIf();
+  };
+  
+  AddressAccess initial = access;
+  
+  auto Recurse = [EmitDoubleOrSingleLoopCode,EmitStoreAddressGenIntoConfig,&initial](auto Recurse,int loopIndex,CEmitter* c,Arena* out) -> void{
+    TEMP_REGION(temp,out);
+
+    LoopLinearSum* external = initial.external;
+          
+    int totalSize = external->terms.size;
+    int leftOverSize = totalSize - loopIndex;
+
+    // Last member must generate an 'else' instead of a 'else if'
+    if(leftOverSize > 1){
+      auto other = StartString(temp);
+            
+      SymbolicExpression* currentDecider = GetLoopHighestDecider(&external->terms[loopIndex]);
+      bool first = true;
+      for(int i = loopIndex + 1; i < totalSize; i++){
+        SymbolicExpression* otherDecider = GetLoopHighestDecider(&external->terms[i]);
+
+        if(first){
+          first = false;
+        } else {
+          other->PushString(" && ");
+        }
+
+        other->PushString("(a%d > a%d)",loopIndex,i);
+      }
+
+      String expr = EndString(temp,other);
+
+      if(loopIndex == 0){
+        c->If(expr);
+      } else {
+        // The other ifs are elseifs of the first if done.
+        c->ElseIf(expr);
+      }
+
+      String comment = PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var));
+      c->Comment(comment);
+      String r = PushString(temp,"printf(\"LoopIndex: %d\\n\")",loopIndex); 
+      //c->Statement(r);
+
+      EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
+      
+      Recurse(Recurse,loopIndex + 1,c,out);
+    } else {
+      c->Else();
+
+      String comment = PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var));
+      c->Comment(comment);
+      String r = PushString(temp,"printf(\"LoopIndex: %d\\n\")",loopIndex); 
+      //c->Statement(r);
+
+      EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
+
+      c->EndIf();
+    }
+  };
+
+  CEmitter* m = StartCCode(temp);
+
+  String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
+  m->Function(STRING("static AddressVReadArguments"),functionName);
+
+  m->Argument(STRING("iptr"),STRING("ext"));
+
+  for(String input : inputVars){
+    m->Argument(STRING("int"),input);
+  }
+
+  m->VarDeclare(STRING("AddressVReadArguments"),varName,STRING("{}"));
+  
+  for(int i = 0; i <  initial.external->terms.size; i++){
+    LoopLinearSumTerm term  =  initial.external->terms[i];
+    String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
+    String name = PushString(temp,"a%d",i);
+    String comment = PushString(temp,"Loop var: %.*s",UNPACK_SS(term.var));
+    m->Comment(comment);
+    m->VarDeclare(STRING("int"),name,repr);
+  }
+
+  for(int i = 0; i <  initial.external->terms.size; i++){
+    LoopLinearSumTerm term  =  initial.external->terms[i];
+          
+    String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
+  }
+
+  Recurse(Recurse,0,m,temp);
+
+  m->Return(varName);
+  CAST* ast = EndCCode(m);
+
+  StringBuilder* b = StartString(temp);
+  Repr(ast,b);
+  String data = EndString(out,b);
+
+  return data;
+}
+
 void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -1467,7 +1631,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     
     TemplateSetCustom("mergeMux",MakeValue(&muxInfo));
 
+    // Combines address gen with the struct names that use them. Mostly done this way because we generate C code which does not support method overloading meaning that we have to do it manually.
     TrieSet<Pair<String,AddressGenDef*>>* structNameAndAddressGen = PushTrieSet<Pair<String,AddressGenDef*>>(temp);
+    TrieSet<AddressGenDef*>* addressGenUsed = PushTrieSet<AddressGenDef*>(temp);
     
     auto GetAddressGen = [](String addressGenName) -> AddressGenDef*{
       for(AddressGenDef* def : addressGens){
@@ -1495,6 +1661,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
           printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
         } else {
           structNameAndAddressGen->Insert({typeName,def});
+          addressGenUsed->Insert(def);
         }
       }
     }
@@ -1502,284 +1669,156 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
     // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
 
+    auto ConvertAddressGenDef = [](AddressGenDef* def,Arena* out) -> AddressAccess*{
+      TEMP_REGION(temp,out);
+      
+      auto loopVarBuilder = StartArray<String>(temp);
+      for(int i = 0; i <  def->loops.size; i++){
+        AddressGenForDef loop  =  def->loops[i];
+
+        *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
+      }
+      Array<String> loopVars = EndArray(loopVarBuilder);
+      
+      // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
+      SymbolicExpression* loopExpression = PushLiteral(temp,1);
+      for(AddressGenForDef loop : def->loops){
+        SymbolicExpression* start = ParseSymbolicExpression(loop.start,temp);
+        SymbolicExpression* end = ParseSymbolicExpression(loop.end,temp);
+          
+        SymbolicExpression* diff = SymbolicSub(end,start,temp);
+
+        loopExpression = SymbolicMult(loopExpression,diff,temp);
+      }
+      SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
+      
+      // Building expression for the external address
+      SymbolicExpression* normalized = Normalize(def->symbolic,temp);
+      for(String str : loopVars){
+        normalized = Group(normalized,str,temp);
+      }
+        
+      LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
+      for(int i = 0; i < loopVars.size; i++){
+        String var = loopVars[i];
+
+        Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
+
+        SymbolicExpression* term = termOpt.value_or(nullptr);
+        if(!term){
+          term = PushLiteral(temp,0);
+        }
+          
+        AddressGenForDef loop = def->loops[i];
+          
+        SymbolicExpression* loopStart = ParseSymbolicExpression(loop.start,temp);
+        SymbolicExpression* loopEnd = ParseSymbolicExpression(loop.end,temp);
+          
+        LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loopStart,loopEnd,temp);
+        expr = AddLoopLinearSum(sum,expr,temp);
+      }
+
+      // Extracts the constant term
+      SymbolicExpression* toCalcConst = normalized;
+
+      // TODO: Currently we are not dealing with loops that do not start at zero
+      SymbolicExpression* zero = PushLiteral(temp,0);
+      for(String str : loopVars){
+        toCalcConst = SymbolicReplace(toCalcConst,str,zero,temp);
+      }
+      toCalcConst = Normalize(toCalcConst,temp);
+
+      LoopLinearSum* freeTerm = PushLoopLinearSumFreeTerm(toCalcConst,temp);
+      
+      AddressAccess* result = PushStruct<AddressAccess>(out);
+      result->inputVariableNames = CopyArray<String>(def->inputs,out);
+      result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
+      result->external = AddLoopLinearSum(expr,freeTerm,out);
+      return result;
+    };
+
     GrowableArray<String> builder = StartArray<String>(temp2);
-
-    // Generic uses C++ method overloading to have the same name but handle all the struct types.
-    for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
-      String structName = p.first;
-      AddressGenDef* def = p.second;
-
-      AddressGen gen = CompileAddressGenDef(*def,temp);
-      String res = InstantiateGenericAddressGen(gen,structName,temp);
-
-      *builder.PushElem() = res;
+    
+    // Only one compilation function is generated per address gen, nothing depends on the config structures here.
+    for(AddressGenDef* def : addressGenUsed){
+      AddressAccess* initial = ConvertAddressGenDef(def,temp);
+      String data = GenerateAddressGenCompilationFunction(*initial,def->name,temp);
+      *builder.PushElem() = data;
     }
 
+    // TODO: Missing the generic methods that use C++ overloading to simplify the name of the methods
+
     for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
       String structName = p.first;
       AddressGenDef* def = p.second;
 
-      if(def->type == AddressGenType_READ){
-        // MARK
-        AddressAccess initial = {};
+      AddressAccess* initial = ConvertAddressGenDef(def,temp);
+      String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
 
-        initial.inputVariableNames = CopyArray<String>(def->inputs,temp);
+      String functionName = PushString(temp,"%.*s_%.*s",UNPACK_SS(def->name),UNPACK_SS(structName));
+      String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
 
-        auto loopVarBuilder = StartArray<String>(temp);
-        
-        for(int i = 0; i <  def->loops.size; i++){
-          AddressGenForDef loop  =  def->loops[i];
+      Array<String> inputVars = initial->inputVariableNames;
+      String varName = STRING("config");
 
-          *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
-        }
-
-        Array<String> loopVars = EndArray(loopVarBuilder);
-        
-        // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
-        SymbolicExpression* loopExpression = PushLiteral(temp,1);
-        for(AddressGenForDef loop : def->loops){
-          SymbolicExpression* start = ParseSymbolicExpression(loop.start,temp);
-          SymbolicExpression* end = ParseSymbolicExpression(loop.end,temp);
-          
-          SymbolicExpression* diff = SymbolicSub(end,start,temp);
-
-          loopExpression = SymbolicMult(loopExpression,diff,temp);
-        }
-        SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
-
-        initial.internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,temp);
-        
-        SymbolicExpression* normalized = Normalize(def->symbolic,temp);
-
-        // Break apart the external into the LoopLinearSum structure.
-        LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
-        
-        for(String str : loopVars){
-          normalized = Group(normalized,str,temp);
-        }
-        
-        for(int i = 0; i < loopVars.size; i++){
-          String var = loopVars[i];
-
-          Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
-
-          SymbolicExpression* term = termOpt.value_or(nullptr);
-          if(!term){
-            term = PushLiteral(temp,0);
-          }
-          
-          AddressGenForDef loop  =  def->loops[i];
-          
-          SymbolicExpression* loopStart = ParseSymbolicExpression(loop.start,temp);
-          SymbolicExpression* loopEnd = ParseSymbolicExpression(loop.end,temp);
-          
-          LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loopStart,loopEnd,temp);
-          expr = AddLoopLinearSum(sum,expr,temp);
-        }
-        SymbolicExpression* toCalcConst = normalized;
-        SymbolicExpression* zero = PushLiteral(temp,0);
-        for(String str : loopVars){
-          toCalcConst = SymbolicReplace(toCalcConst,str,zero,temp);
-        }
-        toCalcConst = Normalize(toCalcConst,temp);
-
-        expr->freeTerm = toCalcConst;
-        initial.external = expr;
-
-        LoopLinearSum* external = expr;
-        
-        auto Recurse = [&initial,external](auto Recurse,int loopIndex,CEmitter* c,Arena* out) -> void{
-          TEMP_REGION(temp,out);
-
-          int totalSize = external->terms.size;
-          int leftOverSize = totalSize - loopIndex;
-  
-          // Not the last
-          if(leftOverSize > 1){
-            auto other = StartString(temp);
-            
-            SymbolicExpression* currentDecider = GetLoopHighestDecider(&external->terms[loopIndex]);
-            bool first = true;
-            for(int i = loopIndex + 1; i < totalSize; i++){
-              SymbolicExpression* otherDecider = GetLoopHighestDecider(&external->terms[i]);
-
-              if(first){
-                first = false;
-              } else {
-                other->PushString(" && ");
-              }
-
-              other->PushString("(a%d > a%d)",loopIndex,i);
-            }
-
-            String expr = EndString(temp,other);
-
-            if(loopIndex == 0){
-              c->If(expr);
-            } else {
-              // The other ifs are elseifs of the first if done.
-              c->ElseIf(expr);
-            }
-
-            {
-            String repr = PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var));
-            c->Comment(repr);
-            String r = PushString(temp,"printf(\"LoopIndex: %d\\n\")",loopIndex); 
-            c->Statement(r);
-            }
-            
-            AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
-            String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp);
-            c->Declare(STRING("int"),STRING("doubleLoop"),repr);
-
-            AddressAccess* singleLoop = ConvertAccessSingleLoop(&initial,out);
-            String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp);
-            c->Declare(STRING("int"),STRING("singleLoop"),repr2);
-            
-            c->If(STRING("doubleLoop > singleLoop"));
-            c->Comment(STRING("Single is better"));
-            {
-              String r = PushString(temp,"printf(\"Single loop\\n\")"); 
-              c->Statement(r);
-              
-              TEMP_REGION(temp,out);
-              ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
-              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
-              
-              AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
-
-              String* view = (String*) &parameters;
-              for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-                String str = META_AddressReadParameters_Members[i];
-
-                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
-                c->Assignment(t,view[i]);
-              }
-            }
-
-            c->Else();
-            c->Comment(STRING("DoubleLoop is better"));
-            {
-              String r = PushString(temp,"printf(\"Double loop\\n\")"); 
-              c->Statement(r);
-
-              TEMP_REGION(temp,out);
-              ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
-              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
-
-              String res = InstantiateAccess(ext,internal,temp);
-              AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
-
-              String* view = (String*) &parameters;
-              for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-                String str = META_AddressReadParameters_Members[i];
-
-                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
-                c->Assignment(t,view[i]);
-              }
-            }
-
-            c->EndIf();
-
-            Recurse(Recurse,loopIndex + 1,c,out);
-          } else {
-            c->Else();
-
-            String r = PushString(temp,"printf(\"LoopIndex: %d\\n\")",totalSize - 1); 
-            c->Statement(r);
-            
-            AddressAccess* doubleLoop = ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(&initial,loopIndex,out);
-            String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,out),temp);
-
-            c->Declare(STRING("int"),STRING("doubleLoop"),repr);
-
-            AddressAccess* singleLoop = ConvertAccessSingleLoop(&initial,out);
-            String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,out),temp);
-
-            c->Declare(STRING("int"),STRING("singleLoop"),repr2);
-            
-            c->If(STRING("doubleLoop > singleLoop"));
-            {
-              String r = PushString(temp,"printf(\"Single loop\\n\")"); 
-              c->Statement(r);
-
-              TEMP_REGION(temp,out);
-              ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
-              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
-              
-              AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
-
-              String* view = (String*) &parameters;
-              for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-                String str = META_AddressReadParameters_Members[i];
-                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
-                c->Assignment(t,view[i]);
-              }
-            }
-            c->Else();
-            {
-              String r = PushString(temp,"printf(\"Double loop\\n\")"); 
-              c->Statement(r);
-
-              TEMP_REGION(temp,out);
-              ExternalMemoryAccess ext = CompileExternalMemoryAccess(singleLoop->external,temp);
-              Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
-
-              String res = InstantiateAccess(ext,internal,temp);
-              AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
-
-              String* view = (String*) &parameters;
-              for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-                String str = META_AddressReadParameters_Members[i];
-
-                String t = PushString(temp,"config->%.*s",UNPACK_SS(str));
-                c->Assignment(t,view[i]);
-              }
-            }
-            c->EndIf();
-          }
-        };
-
+      {
         CEmitter* m = StartCCode(temp);
       
-        m->Function(STRING("static void"),STRING("Configure"));
+        m->Function(STRING("static void"),loadFunctionName);
+        m->Argument(argName,varName);
+        m->Argument(STRING("AddressVReadArguments"),STRING("args"));
 
-        m->Argument(STRING("volatile VReadMultipleConfig*"),STRING("config"));
-        m->Argument(STRING("iptr"),STRING("ext"));
+        for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
+          String str = META_AddressReadParameters_Members[i];
 
-        for(Token input : def->inputs){
-          m->Argument(STRING("int"),input);
-        }
-        
-        for(int i = 0; i <  initial.external->terms.size; i++){
-          LoopLinearSumTerm term  =  initial.external->terms[i];
-          String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
-          String name = PushString(temp2,"a%d",i);
-          String comment = PushString(temp2,"Loop var: %.*s",UNPACK_SS(term.var));
-          m->Comment(comment);
-          m->Declare(STRING("int"),name,repr);
+          String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
+          String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
+          m->Assignment(lhs,rhs);
         }
 
-        for(int i = 0; i <  initial.external->terms.size; i++){
-          LoopLinearSumTerm term  =  initial.external->terms[i];
-          
-          String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
-        }
-
-        Recurse(Recurse,0,m,temp);
-        
         CAST* ast = EndCCode(m);
 
-        StringBuilder* b = StartString(temp);
-        Repr(ast,b);
-        String data = EndString(temp2,b);
+        StringBuilder* strBuilder = StartString(temp);
+        Repr(ast,strBuilder);
+        String data = EndString(temp,strBuilder);
+
         *builder.PushElem() = data;
-      } else {
-        AddressGen gen = CompileAddressGenDef(*def,temp);
+      }
 
-        String res = InstantiateAddressGen(gen,structName,temp);
+      {
+        CEmitter* m = StartCCode(temp);
+      
+        m->Function(STRING("static void"),functionName);
 
-        *builder.PushElem() = res;
+        m->Argument(argName,varName);
+        m->Argument(STRING("iptr"),STRING("ext"));
+
+        for(String input : inputVars){
+          m->Argument(STRING("int"),input);
+        }
+
+        auto strBuilder = StartString(temp);
+        strBuilder->PushString("CompileVUnit_%.*s(ext",UNPACK_SS(def->name));
+        for(String input : inputVars){
+          strBuilder->PushString(",");
+          strBuilder->PushString(input);
+        }
+        strBuilder->PushString(")");
+        String functionCall = EndString(temp,strBuilder);
+
+        String load = PushString(temp,"%.*s(%.*s,args)",UNPACK_SS(loadFunctionName),UNPACK_SS(varName));
+  
+        m->Assignment(STRING("AddressVReadArguments args"),functionCall);
+        m->Statement(load);
+        CAST* ast = EndCCode(m);
+
+        {
+          StringBuilder* strBuilder = StartString(temp);
+          Repr(ast,strBuilder);
+          String data = EndString(temp,strBuilder);
+
+          *builder.PushElem() = data;
+        }
       }
     }
 
