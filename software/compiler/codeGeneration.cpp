@@ -938,12 +938,12 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
   Array<String> inputVars = access.inputVariableNames;
   String varName = STRING("args");
   
-  auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,AddressReadParameters params) -> void{
+  auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,AddressVParameters params) -> void{
     TEMP_REGION(temp,emitter->arena);
           
     String* view = (String*) &params;
-    for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-      String str = META_AddressReadParameters_Members[i];
+    for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
+      String str = META_AddressVParameters_Members[i];
 
       String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
       emitter->Assignment(t,view[i]);
@@ -975,7 +975,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       ExternalMemoryAccess ext = CompileExternalMemoryAccess(doubleLoop->external,temp);
       Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(doubleLoop->internal,temp);
               
-      AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
+      AddressVParameters parameters = InstantiateAccess2(ext,internal,temp);
       EmitStoreAddressGenIntoConfig(c,parameters);
     }
 
@@ -989,7 +989,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       Array<AddressGenLoopSpecificatonSym> internal = CompileAddressGenDef(singleLoop->internal,temp);
 
       String res = InstantiateAccess(ext,internal,temp);
-      AddressReadParameters parameters = InstantiateAccess2(ext,internal,temp);
+      AddressVParameters parameters = InstantiateAccess2(ext,internal,temp);
 
       EmitStoreAddressGenIntoConfig(c,parameters);
     }
@@ -1059,7 +1059,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
   CEmitter* m = StartCCode(temp);
 
   String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
-  m->Function(STRING("static AddressVReadArguments"),functionName);
+  m->Function(STRING("static AddressVArguments"),functionName);
 
   m->Argument(STRING("iptr"),STRING("ext"));
 
@@ -1067,7 +1067,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     m->Argument(STRING("int"),input);
   }
 
-  m->VarDeclare(STRING("AddressVReadArguments"),varName,STRING("{}"));
+  m->VarDeclare(STRING("AddressVArguments"),varName,STRING("{}"));
   
   for(int i = 0; i <  initial.external->terms.size; i++){
     LoopLinearSumTerm term  =  initial.external->terms[i];
@@ -1084,7 +1084,11 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
   }
 
-  Recurse(Recurse,0,m,temp);
+  if(initial.external->terms.size > 1){
+    Recurse(Recurse,0,m,temp);
+  } else {
+    EmitDoubleOrSingleLoopCode(m,0,initial);
+  }
 
   m->Return(varName);
   CAST* ast = EndCCode(m);
@@ -1634,6 +1638,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     // Combines address gen with the struct names that use them. Mostly done this way because we generate C code which does not support method overloading meaning that we have to do it manually.
     TrieSet<Pair<String,AddressGenDef*>>* structNameAndAddressGen = PushTrieSet<Pair<String,AddressGenDef*>>(temp);
     TrieSet<AddressGenDef*>* addressGenUsed = PushTrieSet<AddressGenDef*>(temp);
+    TrieSet<String>* structsUsed = PushTrieSet<String>(temp);
     
     auto GetAddressGen = [](String addressGenName) -> AddressGenDef*{
       for(AddressGenDef* def : addressGens){
@@ -1662,6 +1667,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         } else {
           structNameAndAddressGen->Insert({typeName,def});
           addressGenUsed->Insert(def);
+          structsUsed->Insert(typeName);
         }
       }
     }
@@ -1739,26 +1745,17 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     GrowableArray<String> builder = StartArray<String>(temp2);
     
-    // Only one compilation function is generated per address gen, nothing depends on the config structures here.
+    // Generates a function for each address gen (if it depends on struct (ex: due to sharing) then it does not belong here)
     for(AddressGenDef* def : addressGenUsed){
       AddressAccess* initial = ConvertAddressGenDef(def,temp);
       String data = GenerateAddressGenCompilationFunction(*initial,def->name,temp);
       *builder.PushElem() = data;
     }
-
-    // TODO: Missing the generic methods that use C++ overloading to simplify the name of the methods
-
-    for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
-      String structName = p.first;
-      AddressGenDef* def = p.second;
-
-      AddressAccess* initial = ConvertAddressGenDef(def,temp);
-      String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
-
-      String functionName = PushString(temp,"%.*s_%.*s",UNPACK_SS(def->name),UNPACK_SS(structName));
+    
+    // Generates a function for each struct
+    for(String structName : structsUsed){
       String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
-
-      Array<String> inputVars = initial->inputVariableNames;
+      String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
       String varName = STRING("config");
 
       {
@@ -1766,10 +1763,10 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       
         m->Function(STRING("static void"),loadFunctionName);
         m->Argument(argName,varName);
-        m->Argument(STRING("AddressVReadArguments"),STRING("args"));
+        m->Argument(STRING("AddressVArguments"),STRING("args"));
 
-        for(int i = 0; i <  META_AddressReadParameters_Members.size; i++){
-          String str = META_AddressReadParameters_Members[i];
+        for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
+          String str = META_AddressVParameters_Members[i];
 
           String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
           String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
@@ -1784,6 +1781,23 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
         *builder.PushElem() = data;
       }
+    }
+    
+    // TODO: Missing the generic methods that use C++ overloading to simplify the name of the methods
+
+    // Generates a function for each struct + address gen pair (if it does not depend on struct, it does not belong here)
+    for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
+      String structName = p.first;
+      AddressGenDef* def = p.second;
+
+      AddressAccess* initial = ConvertAddressGenDef(def,temp);
+      String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
+      String varName = STRING("config");
+
+      String functionName = PushString(temp,"%.*s_%.*s",UNPACK_SS(def->name),UNPACK_SS(structName));
+      String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
+
+      Array<String> inputVars = initial->inputVariableNames;
 
       {
         CEmitter* m = StartCCode(temp);
@@ -1808,7 +1822,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
         String load = PushString(temp,"%.*s(%.*s,args)",UNPACK_SS(loadFunctionName),UNPACK_SS(varName));
   
-        m->Assignment(STRING("AddressVReadArguments args"),functionCall);
+        m->Assignment(STRING("AddressVArguments args"),functionCall);
         m->Statement(load);
         CAST* ast = EndCCode(m);
 

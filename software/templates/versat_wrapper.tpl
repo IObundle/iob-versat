@@ -648,10 +648,10 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   return 0;
 }
 
-SimulateVReadResult SimulateVRead(AddressVReadArguments args){
+SimulateVReadResult SimulateVRead(AddressVArguments args){
    SimulateVReadResult result = {};
 
-   result.amountOfExternalValuesRead = ((args.read_length) / sizeof(float)) * (args.read_amount_minus_one + 1);
+   result.amountOfExternalValuesRead = ((args.length) / sizeof(float)) * (args.amount_minus_one + 1);
 
    // TODO: Bitfield to save memory?
    bool* seen = (bool*) malloc(result.amountOfExternalValuesRead);
@@ -695,26 +695,19 @@ SimulateVReadResult SimulateVRead(AddressVReadArguments args){
    self->rst_i = 0;
 
    self->start_i = 0;
-   self->duty_i = args.output_duty;
-   self->period_i = args.output_per;
-   self->incr_i = args.output_incr;
-   self->iterations_i = args.output_iter;
-   self->shift_i = args.output_shift;
-   self->period2_i = args.output_per2;
-   self->incr2_i = args.output_incr2;
-   self->iterations2_i = args.output_iter2;
-   self->shift2_i = args.output_shift2;
+   self->duty_i = args.duty;
+   self->period_i = args.per;
+   self->incr_i = args.incr;
+   self->iterations_i = args.iter;
+   self->shift_i = args.shift;
+   self->period2_i = args.per2;
+   self->incr2_i = args.incr2;
+   self->iterations2_i = args.iter2;
+   self->shift2_i = args.shift2;
    self->period3_i = 0;
    self->incr3_i = 0;
    self->iterations3_i = 0;
    self->shift3_i = 0;
-
-#if 0
-   self->databus_length = args.length;
-   self->start_address_i = args.start_address;
-   self->address_shift_i = args.addr_shift;
-   self->count_i = args.amount_minus_one + 1;
-#endif
 
    self->databus_length = 0;
    self->start_address_i = 0;
@@ -784,7 +777,7 @@ end:
    return result;
 }
 
-int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args){
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){
    static VSuperAddress* self = nullptr;
 
    Verilated::traceEverOn(true);
@@ -793,10 +786,10 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
    if(self == nullptr){
       self = new VSuperAddress();
    }
-
+   
    VerilatedVcdC* tfp = new VerilatedVcdC;
    self->trace(tfp, 99);
-   tfp->open("loop.vcd");
+   tfp->open("simulate.vcd");
 
    bool doTrace = false;
    
@@ -822,24 +815,25 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
    self->clk_i = 0;
    self->rst_i = 0;
 
-   self->start_i = args.start;
+   self->start_i = 0;
    self->duty_i = args.duty;
-   self->period_i = args.period;
+   self->period_i = args.per;
    self->incr_i = args.incr;
-   self->iterations_i = args.iterations;
+   self->iterations_i = args.iter;
    self->shift_i = args.shift;
-   self->period2_i = args.period2;
+   self->period2_i = args.per2;
    self->incr2_i = args.incr2;
-   self->iterations2_i = args.iterations2;
+   self->iterations2_i = args.iter2;
    self->shift2_i = args.shift2;
-   self->period3_i = args.period3;
-   self->incr3_i = args.incr3;
-   self->iterations3_i = args.iterations3;
-   self->shift3_i = args.shift3;
-   self->databus_length = args.length;
-   self->start_address_i = args.start_address;
-   self->address_shift_i = args.addr_shift;
-   self->count_i = args.amount_minus_one + 1;
+   self->period3_i = 0;
+   self->incr3_i = 0;
+   self->iterations3_i = 0;
+   self->shift3_i = 0;
+
+   self->databus_length = 0;
+   self->start_address_i = 0;
+   self->address_shift_i = 0;
+   self->count_i = 0;
 
    TRACE();
 
@@ -877,7 +871,7 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args)
       if(self->store_o){
         iptr addr = self->addr_o / 4; // DATA_W 
         if(arrayIndex < arraySize){
-          arrayToFill[arrayIndex++] = SimulateAddressPosition(args.start_address,args.amount_minus_one,args.length,args.addr_shift,addr);
+          arrayToFill[arrayIndex++] = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
         }
       }
 
@@ -892,9 +886,8 @@ end:
    UP();
    UP();
 
-   //tfp->close();
-
    return arrayIndex;
 }
 
 #undef UPDATE
+

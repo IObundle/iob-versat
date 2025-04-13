@@ -2279,39 +2279,39 @@ String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* 
   return EndString(out,builder);
 }
 
-AddressReadParameters InstantiateAccess2(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out){
-  AddressReadParameters res = {};
+AddressVParameters InstantiateAccess2(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out){
+  AddressVParameters res = {};
 
   res.ext_addr = STRING("ext"); // TODO: Should be a parameter or something, not randomly hardcoded here
-  res.read_length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
-  res.read_amount_minus_one = PushString(out,external.amountMinusOne);
-  res.read_addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
+  res.length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
+  res.amount_minus_one = PushString(out,external.amountMinusOne);
+  res.addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
 
-  res.read_enabled = STRING("1");
+  res.enabled = STRING("1");
   res.pingPong = STRING("1");
 
-  res.output_start = STRING("0");
+  res.start = STRING("0");
 
   {
     AddressGenLoopSpecificatonSym l = internal[0]; 
-    res.output_per = PushString(out,l.periodExpression);
-    res.output_incr = PushString(out,l.incrementExpression);
-    res.output_duty = PushString(out,l.dutyExpression);
-    res.output_iter = PushString(out,l.iterationExpression);
-    res.output_shift = PushString(out,l.shiftExpression);
+    res.per = PushString(out,l.periodExpression);
+    res.incr = PushString(out,l.incrementExpression);
+    res.duty = PushString(out,l.dutyExpression);
+    res.iter = PushString(out,l.iterationExpression);
+    res.shift = PushString(out,l.shiftExpression);
   }
     
   if(internal.size > 1){
     AddressGenLoopSpecificatonSym l = internal[0]; 
-    res.output_per2 = PushString(out,l.periodExpression);
-    res.output_incr2 = PushString(out,l.incrementExpression);
-    res.output_iter2 = PushString(out,l.iterationExpression);
-    res.output_shift2 = PushString(out,l.shiftExpression);
+    res.per2 = PushString(out,l.periodExpression);
+    res.incr2 = PushString(out,l.incrementExpression);
+    res.iter2 = PushString(out,l.iterationExpression);
+    res.shift2 = PushString(out,l.shiftExpression);
   } else {
-    res.output_per2 = STRING("0");
-    res.output_incr2 = STRING("0");
-    res.output_iter2 = STRING("0");
-    res.output_shift2 = STRING("0");
+    res.per2 = STRING("0");
+    res.incr2 = STRING("0");
+    res.iter2 = STRING("0");
+    res.shift2 = STRING("0");
   }
 
   return res;

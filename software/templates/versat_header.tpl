@@ -167,48 +167,31 @@ void ConfigSimulateDatabus(bool value);
 
 typedef struct{
    iptr ext_addr;
-   iptr read_length;
-   iptr read_amount_minus_one;
-   iptr read_addr_shift;
-   iptr read_enabled;
+   iptr length;
+   iptr amount_minus_one;
+   iptr addr_shift;
+   iptr enabled;
    iptr pingPong;
-   iptr output_start;
-   iptr output_per;
-   iptr output_incr;
-   iptr output_duty;
-   iptr output_iter;
-   iptr output_shift;
-   iptr output_per2;
-   iptr output_incr2;
-   iptr output_iter2;
-   iptr output_shift2;
-} AddressVReadArguments;
+   iptr start;
+   iptr per;
+   iptr incr;
+   iptr duty;
+   iptr iter;
+   iptr shift;
+   iptr per2;
+   iptr incr2;
+   iptr iter2;
+   iptr shift2;
+} AddressVArguments;
 
 // PC-Emul side function only that allow us to simulate what addresses a V unit would access, instead of having to run the accelerator and having to inspect the VCD file, we can simulate it at pc-emul.
-#{if simulateLoops}
-typedef struct{
-   iptr ext_addr;
-        
-   iptr start;
-   iptr duty;
-
-   iptr period ,incr ,iterations ,shift;
-   iptr period2,incr2,iterations2,shift2;
-   iptr period3,incr3,iterations3,shift3;
-
-   iptr amount_minus_one;
-   iptr start_address; // Replaced by ext_addr? Need to see how the units use this.
-   iptr addr_shift;
-   iptr length; 
-} AddressGenArguments;
-
 typedef struct{
   int amountOfExternalValuesRead;
   int amountOfInternalValuesUsed; // Repeated values are only counted once. The VRead is simulated in order to calculate this.
 } SimulateVReadResult;
 
-int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressGenArguments args);
-SimulateVReadResult SimulateVRead(AddressVReadArguments args);
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args);
+SimulateVReadResult SimulateVRead(AddressVArguments args);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -251,10 +234,9 @@ extern volatile AcceleratorStatic* accelStatic;
 #{end}
 
 #{if mergeNames.size > 1}
-
-#{for delayArray mergedDelays}
+  #{for delayArray mergedDelays}
 static unsigned int delayBuffer_@{index}[] = {#{join "," d delayArray} @{d |> Hex} #{end}};
-#{end}
+  #{end}
 
 static unsigned int* delayBuffers[] = {#{join "," name mergeNames}delayBuffer_@{index}#{end}};
 
@@ -262,11 +244,7 @@ typedef enum{
    #{join "," name mergeNames} MergeType_@{name} = @{index} #{end}  
 } MergeType;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#{if outputChangeDelay}
+  #{if outputChangeDelay}
 static inline void ChangeDelay(int oldDelay,int newDelay){
   if(oldDelay == newDelay){
     return;
@@ -275,24 +253,24 @@ static inline void ChangeDelay(int oldDelay,int newDelay){
   volatile int* delayBase = (volatile int*) (versat_base + delayStart);
 
   switch(oldDelay){
-#{for amount amountMerged}
+    #{for amount amountMerged}
     case @{amount}:{
       switch(newDelay){
-  #{for diff differences}
-    #{if diff.oldIndex == amount}
+      #{for diff differences}
+        #{if diff.oldIndex == amount}
         case @{diff.newIndex}: {
           #{for difference diff.differences}
           delayBase[@{difference.index}] = @{difference.newValue |> Hex};
           #{end}
         } break;
-    #{end}
-  #{end}
+        #{end}
+      #{end}
       }
     } break;
-#{end}
+    #{end}
   }
 }
-#{end}
+  #{end}
 
 static inline void ActivateMergedAccelerator(MergeType type){
    // TODO: Cannot use static here otherwise multiple includes do not see any change and do not change the accelerator.
@@ -317,11 +295,6 @@ static inline void ActivateMergedAccelerator(MergeType type){
 
    VersatLoadDelay(delayBuffers[asInt]);
 }
-
-#ifdef __cplusplus
-}
-#endif
-
 #{end}
 
 #{for a addrGen}
