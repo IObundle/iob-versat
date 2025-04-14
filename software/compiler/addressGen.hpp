@@ -3,8 +3,9 @@
 #include "utils.hpp"
 #include "memory.hpp"
 
+#include "embeddedData.hpp"
+
 struct SymbolicExpression;
-struct LinearSum;
 struct LoopLinearSum;
 struct LoopLinearSumTerm;
 
@@ -14,13 +15,6 @@ struct LoopLinearSumTerm;
 
 // NOTE: Majority of the approach taken in relation to memory allocations and how much we mutate data is not final, we do not care about things like that currently. More important is to start making the code correct and producing the correct data and later we can rewrite the code to be better in this aspect.
 
-// I want everything using symbolic expressions.
-struct LoopDefinition{
-  String loopVariableName;
-  SymbolicExpression* start;
-  SymbolicExpression* end;
-};
-
 struct AddressAccess{
   LoopLinearSum* internal;
   LoopLinearSum* external;
@@ -28,11 +22,32 @@ struct AddressAccess{
   Array<String> inputVariableNames;
 };
 
+struct ExternalMemoryAccess{
+  String totalTransferSize;
+  String length;
+  String amountMinusOne;
+  String addrShift;
+};
+
+struct InternalMemoryAccess{
+  String periodExpression;
+  String incrementExpression;
+
+  String iterationExpression;
+  String shiftExpression;
+
+  String dutyExpression; // Non empty if it exists
+
+  String shiftWithoutRemovingIncrement; // Shift as if period did not change addr. Useful for current implementation of VRead/VWrites
+};
+
 void Print(AddressAccess* access);
-AddressAccess* ShiftExternalToInternal(AddressAccess* access,int maxInternalLoops,int maxExternalLoops,Arena* out);
 
-AddressAccess* ConvertAccessSingleLoop(AddressAccess* access,Arena* out);
-
+AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out);
+AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopIndex,Arena* out);
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
-AddressAccess* ConvertAccessTo2ExternalLoopsUsingNLoopAsBiggest(AddressAccess* access,int biggestLoopIndex,Arena* out);
+
+AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out);
+
+

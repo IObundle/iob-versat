@@ -34,6 +34,8 @@ module MemoryReader #(
    output [ADDR_W-1:0] mem_addr_o,
    input  [DATA_W-1:0] mem_data_i,
 
+   input               force_reset_i,
+
    input clk_i,
    input rst_i
 );
@@ -55,6 +57,10 @@ module MemoryReader #(
          if (s_transfer && !m_last_i) begin
             m_valid_o <= 1'b1;
             last_addr <= s_addr_i;
+         end
+
+         if(force_reset_i) begin
+            m_valid_o <= 1'b0;
          end
       end
    end

@@ -3,8 +3,8 @@
 module VWrite #(
    parameter SIZE_W     = 32,
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 6,
-   parameter PERIOD_W   = 4, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 16,
+   parameter PERIOD_W   = 14, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -108,9 +108,6 @@ module VWrite #(
 
    wire [DATA_W-1:0] store_data = in0;
 
-   //wire gen_valid, gen_ready;
-   //wire [ADDR_W-1:0] gen_addr_temp;
-
    reg [ADDR_W-1:0] gen_addr_temp;
    reg gen_valid;
    wire gen_ready;
@@ -175,11 +172,6 @@ module VWrite #(
 
       .doneDatabus(),
       .doneAddress(),
-
-      //outputs 
-      //.valid_o(gen_valid),
-      //.ready_i(gen_ready),
-      //.addr_o (gen_addr_temp),
 
       .valid_o(),
       .ready_i(1'b1),
@@ -279,6 +271,8 @@ module VWrite #(
       .mem_enable_o(read_en),
       .mem_addr_o  (read_addr),
       .mem_data_i  (read_data),
+
+      .force_reset_i(!running),
 
       .clk_i(clk),
       .rst_i(rst)

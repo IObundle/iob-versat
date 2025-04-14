@@ -10,9 +10,6 @@
 extern "C"{
 #endif
 
-//#include "iob-uart.h"
-//#include "printf.h"
-
 #ifdef __cplusplus
   }
 #endif
@@ -26,9 +23,6 @@ extern "C"{
 
 typedef uint64_t uint64;
 
-// There should be a shared header for common structures, but do not share code.
-// It does not work as well and keeps giving compile and linker errors. It's not worth it.
-
 iptr versat_base;
 static bool enableDMA;
 
@@ -39,9 +33,9 @@ typeof(accelStatic) accelStatic = 0;
 
 void versat_init(int base){
   versat_base = (iptr) base;
-  //enableDMA = acceleratorSupportsDMA;
-  enableDMA = false;
-  
+  enableDMA = false; // It is more problematic for the general case if we start enabled. More error prone, especially when integrating with linux.
+
+  // TODO: Need to receive a printf like function from outside to enable this, I do not want to tie the implementation to IObSoC.
   //printf("Embedded Versat\n");
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
@@ -142,8 +136,6 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
 }
 
 void VersatUnitWrite(const void* baseaddr,int index,int val){
-  //int* ptr = (int*) (baseaddr + index * sizeof(int));
-  //*ptr = val;
   iptr base = (iptr) baseaddr;
 
   MEMSET(base,index,val);
@@ -152,12 +144,9 @@ void VersatUnitWrite(const void* baseaddr,int index,int val){
 int VersatUnitRead(const void* baseaddr,int index){
   iptr base = (iptr) baseaddr;
   return MEMGET(base,index);
-  //int* ptr = (int*) (base + index * sizeof(int));
-  //return *ptr;
 }
 
 float VersatUnitReadFloat(const void* baseaddr,int index){
-  // float* ptr = (float*) (base + index * sizeof(float)
   iptr base = (iptr) baseaddr;
   int val = MEMGET(base,index);
   float* ptr = (float*) &val;

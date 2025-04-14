@@ -71,13 +71,10 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   Array<Wire> states = PushArray<Wire>(perm,info->states.size);
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(perm,info->externalInterfaces.size);
   int memoryMapBits = 0;
-
+  
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
   decl.parameters = Extract(info->defaultParameters,perm,&ParameterExpression::name);
-  //decl.parameters = Map(info->defaultParameters,perm,[](ParameterExpression p) -> String{
-  //  return p.name;
-  //});
   
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
@@ -185,7 +182,26 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   if(info->isSource){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
+  
+  bool isReadType = true;
+  for(String str : META_AddressVParameters_Members){
+    bool foundOne = false;
+    for(Wire wire : configs){
+      if(CompareString(str,wire.name)){
+        foundOne = true;
+        break;
+      }
+    }
 
+    if(!foundOne){
+      isReadType = false;
+    }
+  }
+
+  if(isReadType){
+    decl.supportedAddressGenType = AddressGenType_READ;
+  }
+  
   FUDeclaration* res = RegisterFU(decl);
 
   return res;

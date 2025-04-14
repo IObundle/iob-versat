@@ -100,11 +100,15 @@ String PushRepresentation(SymbolicExpression* expr,Arena* out){
   return EndString(out,builder);
 }
 
-void Print(SymbolicExpression* expr){
+void Print(SymbolicExpression* expr,bool printNewLine){
   TEMP_REGION(temp,nullptr);
   
   String res = PushRepresentation(expr,temp);
   printf("%.*s",UNPACK_SS(res));
+
+  if(printNewLine){
+    printf("\n");
+  }
 }
 
 static void PrintAST(SymbolicExpression* expr,int level = 0){
@@ -1645,7 +1649,6 @@ struct TestCase{
   String expectedNormalized;
 };
 
-#if 1
 void TestSymbolic(){
   TEMP_REGION(temp,nullptr);
 
@@ -1697,7 +1700,6 @@ void TestSymbolic(){
     printf("\n");
   }
 }
-#endif
 
 // Returns first found, assuming that the expression was normalized beforehand otherwise gonna miss literals
 static Opt<int> FindLiteralIndex(SymbolicExpression* expr){
@@ -1768,182 +1770,6 @@ Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,
   default: return {};
   }
   return {};
-}
-
-SymbolicExpression* RemoveMulLiteral(SymbolicExpression* expr,Arena* out){
-  Assert(expr->type == SymbolicExpressionType_MUL);
-  int size = expr->sum.size;
-  bool negative = expr->negative;
-
-  Opt<int> literalIndexOpt = FindLiteralIndex(expr);
-  
-  if(!literalIndexOpt.has_value()){
-    return SymbolicDeepCopy(expr,out);
-  }
-
-  int index = literalIndexOpt.value();
-
-  negative ^= expr->sum[index]->negative;
-
-  if(size == 1){
-    DEBUG_BREAK(); // We are primarely using this function on address gen in which this should not happen. Debug break to see if anything is missing, but eventually this function might be used elsewhere and that is ok, remove this then.
-    return PushLiteral(out,0);
-  }
-
-  Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,size - 1);
-  
-  int inserted = 0;
-  for(int i = 0; i < size; i++){
-    SymbolicExpression* child = expr->sum[i];
-      
-    if(i == index){
-      continue;
-    }
-    children[inserted++] = child;
-  }
-  
-  SymbolicExpression* res = PushMulBase(out,negative);
-  res->sum = children;
-
-  return res;
-}
-
-LinearSum* BreakdownSymbolicExpression(SymbolicExpression* expr,Array<String> variables,Arena* out){
-  TEMP_REGION(temp,out);
-  
-  SymbolicExpression* normalized = Normalize(expr,temp);
-
-  for(String str : variables){
-    normalized = Group(normalized,str,temp);
-  }
-
-  //Print(normalized);
-
-  Array<SymbolicExpression*> terms = PushArray<SymbolicExpression*>(out,variables.size);
-
-  for(int i = 0; i <  variables.size; i++){
-    String var = variables[i];
-
-    Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,out); 
-    //MultPartition part = PartitionMultExpressionOnVariable(normalized,var,out);
-    SymbolicExpression* term = termOpt.value_or(nullptr); //part.leftovers;
-
-    if(!term){
-      DEBUG_BREAK();
-      term = PushLiteral(out,1);
-    }
-
-    terms[i] = term;
-  }
-
-  // We obtain the free term by replacing all variables with zero and normalizing.
-  // A simple approach although having a way of removing the terms directly seems more "consistent".
-
-  SymbolicExpression* zero = PushLiteral(temp,0);
-  SymbolicExpression* freeTerms = normalized;
-
-  for(String str : variables){
-    freeTerms = SymbolicReplace(freeTerms,str,zero,temp);
-  }
-
-  freeTerms = Normalize(freeTerms,out);
-
-  //Print(freeTerms);
-
-  LinearSum* sum = PushStruct<LinearSum>(out);
-  sum->freeTerm = freeTerms;
-  sum->variableNames = CopyArray(variables,out);
-  sum->variableTerms = terms;
-
-  return sum;
-}
-
-SymbolicExpression* TransformIntoSymbolicExpression(LinearSum* sum,Arena* out){
-  TEMP_REGION(temp,out);
-
-  auto termBuilder = StartArray<SymbolicExpression*>(temp);
-
-  *termBuilder.PushElem() = sum->freeTerm;
-  
-  int size = sum->variableTerms.size;
-  for(int i = 0; i <  size; i++){
-    SymbolicExpression* term = sum->variableTerms[i];
-    SymbolicExpression* var = PushVariable(temp,sum->variableNames[i]);
-
-    //Print(term);
-    //Print(var);
-    SymbolicExpression* fullTerm = SymbolicMult(term,var,temp);
-
-    *termBuilder.PushElem() = fullTerm;
-  }
-
-  SymbolicExpression* finalSum = SymbolicAdd(EndArray(termBuilder),temp);
-
-  // Copy into out arena
-  SymbolicExpression* final = SymbolicDeepCopy(finalSum,out);
-  return final;
-}
-
-LinearSum* Copy(LinearSum* in,Arena* out){
-  LinearSum* res = PushStruct<LinearSum>(out);
-
-  int size = in->variableTerms.size;
-  res->variableNames = PushArray<String>(out,size);
-  res->variableTerms = PushArray<SymbolicExpression*>(out,size);
-   
-  for(int i = 0; i < size; i++){
-    res->variableNames[i] = PushString(out,in->variableNames[i]);
-    res->variableTerms[i] = SymbolicDeepCopy(in->variableTerms[i],out);
-  }
-  res->freeTerm = SymbolicDeepCopy(in->freeTerm,out);
-
-  return res;
-}
-
-LinearSum* PushOneVarSum(String baseVar,Arena* out){
-  LinearSum* res = PushStruct<LinearSum>(out);
-
-  res->variableNames = PushArray<String>(out,1);
-  res->variableNames[0] = PushString(out,baseVar);
-
-  res->variableTerms = PushArray<SymbolicExpression*>(out,1);
-  res->variableTerms[0] = PushLiteral(out,1);
-
-  res->freeTerm = PushLiteral(out,0);
-
-  return res;
-}
-
-LinearSum* AddLinearSum(LinearSum* left,LinearSum* right,Arena* out){
-  TEMP_REGION(temp,nullptr);
-
-  LinearSum* res = PushStruct<LinearSum>(out);
-
-  int leftSize = left->variableTerms.size;
-  int rightize = right->variableTerms.size;
-  
-  int size = left->variableTerms.size + right->variableTerms.size;
-  res->variableNames = PushArray<String>(out,size);
-  res->variableTerms = PushArray<SymbolicExpression*>(out,size);
-   
-  for(int i = 0; i < leftSize; i++){
-    res->variableNames[i] = PushString(out,left->variableNames[i]);
-    res->variableTerms[i] = SymbolicDeepCopy(left->variableTerms[i],out);
-  }
-  for(int i = leftSize; i < size; i++){
-    res->variableNames[i] = PushString(out,left->variableNames[i]);
-    res->variableTerms[i] = SymbolicDeepCopy(left->variableTerms[i],out);
-  }
-  res->freeTerm = Normalize(SymbolicAdd(left->freeTerm,right->freeTerm,temp),out);
-
-  return res;
-}
-
-void Print(LinearSum* sum){
-  TEMP_REGION(temp,nullptr);
-
-  SymbolicExpression* asSymbolic = TransformIntoSymbolicExpression(sum,temp);
-  Print(asSymbolic);
 }
 
 LoopLinearSum* PushLoopLinearSumEmpty(Arena* out){
@@ -2082,7 +1908,7 @@ SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out){
   return result;
 }
 
-void Print(LoopLinearSum* sum){
+void Print(LoopLinearSum* sum,bool printNewLine){
   TEMP_REGION(temp,nullptr);
 
   int size = sum->terms.size;
@@ -2097,4 +1923,8 @@ void Print(LoopLinearSum* sum){
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(sum,temp);
   Print(fullExpression);
+
+  if(printNewLine){
+    printf("\n");
+  }
 }

@@ -41,7 +41,7 @@ struct MultPartition{
   SymbolicExpression* leftovers;
 }; 
 
-void Print(SymbolicExpression* expr);
+void Print(SymbolicExpression* expr,bool printNewLine = false);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
 
 int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values);
@@ -93,28 +93,8 @@ SymbolicExpression* Group(SymbolicExpression* expr,String variableToGroupWith,Ar
 void TestSymbolic();
 
 // Expr must be a sum of mul. Assuming that variableName only appears once. TODO: Probably would be best to create a function that first groups everything so that variableName only appears once and then call this function. Or maybe do the grouping inside here if needed.
+// TODO: This function is kinda not needed. We only use it to break apart a symbolic expression into a LoopLinearSumTerm, but even then we can do it better because we know the format of the variables inside the symbolic expression and we could simplify this.
 Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,String variableName,Arena* out);
-
-SymbolicExpression* RemoveMulLiteral(SymbolicExpression* expr,Arena* out);
-
-// A more simpler representation for expressions of the form f() * x + g() * y + ...
-// Where x and y are variables and f and g are symbolic expressions that do not contain the x and y variables. 
-// Variables are not represented inside the symbolic expression (they are implicit).
-// The terms are easily acessible this way, as we do not need to pick apart a single symbolic expression that way.
-struct LinearSum{
-  // SoA approach, worth it? Or move to a AoS?
-  Array<String> variableNames;
-  Array<SymbolicExpression*> variableTerms;
-  SymbolicExpression* freeTerm;
-};
-
-LinearSum* BreakdownSymbolicExpression(SymbolicExpression* expr,Array<String> variables,Arena* out);
-SymbolicExpression* TransformIntoSymbolicExpression(LinearSum* sum,Arena* out);
-LinearSum* Copy(LinearSum* in,Arena* out);
-
-LinearSum* PushOneVarSum(String baseVar,Arena* out);
-LinearSum* AddLinearSum(LinearSum* left,LinearSum* right,Arena* out);
-void Print(LinearSum* sum);
 
 struct LoopLinearSumTerm{
   String var;
@@ -123,7 +103,7 @@ struct LoopLinearSumTerm{
   SymbolicExpression* loopEnd;
 };
 
-// This basically plays the role of the SingleAddressAccess.
+// A Sum of expressions in the form term * X + term * Y + term * Z + ... + constant, where X,Y and Z are loop variables that range from a start expression to a end expression.
 struct LoopLinearSum{
   // 0 is the innermost and size-1 the outermost loop
   Array<LoopLinearSumTerm> terms;
@@ -141,4 +121,4 @@ SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* ou
 
 SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
-void Print(LoopLinearSum* sum);
+void Print(LoopLinearSum* sum,bool printNewLine = false);

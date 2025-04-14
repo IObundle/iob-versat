@@ -59,7 +59,6 @@ struct FUDeclaration{
   String name;
 
   // These always exist, regardless of merge info 
-
   Array<Wire> configs;
   Array<Wire> states;
 
@@ -84,6 +83,8 @@ struct FUDeclaration{
   const char* operation;
 
   SubMap* flattenMapping;
+
+  AddressGenType supportedAddressGenType;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   

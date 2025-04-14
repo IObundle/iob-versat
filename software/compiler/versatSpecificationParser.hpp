@@ -176,64 +176,13 @@ struct AddressGenFor{
 
 struct SymbolicExpression;
 
-// TODO: if we are moving into a single representation for address gen, then most of this will be "removed"
-//       for now, keep things at it is.
 struct AddressGenDef{
+  AddressGenType type;
+  String name;
   Array<Token> inputs;
   Array<AddressGenForDef> loops;
   SymbolicExpression* symbolic;
-  SymbolicExpression* symbolicInternal;
-  SymbolicExpression* symbolicExternal;
-  Token externalName;
-  AddressGenType type;
-  String name;
-};
-
-struct AddressGenTerm{
-  Opt<Token> loopVariable;
-  Array<Token> constants;
-};
-
-struct AddressGenLoopSpecificaton{
-  String iterationExpression;
-  String incrementExpression;
-  String dutyExpression; // Non empty if it exists
-  String nonPeriodIncrement;
-  String nonPeriodEnd;
-  String nonPeriodVal;
-  bool isPeriodType;
-};
-
-struct ExternalMemoryAccess{
-  String totalTransferSize;
-  String length;
-  String amountMinusOne;
-  String addrShift;
-};
-
-struct AddressGenLoopSpecificatonSym{
-  String periodExpression;
-  String incrementExpression;
-
-  String iterationExpression;
-  String shiftExpression;
-
-  String dutyExpression; // Non empty if it exists
-
-  String shiftWithoutRemovingIncrement; // Shift as if period did not change addr. Useful for current implementation of VRead/VWrites
-};
-
-struct AddressGen{
-  AddressGenType type;
-
-  Array<AddressGenLoopSpecificatonSym> loopSpecSymbolic;
-  Array<AddressGenLoopSpecificatonSym> internalSpecSym;
-  Array<AddressGenLoopSpecificatonSym> externalSpecSym;
-  String constantExpr;
-  String externalName;
-  String name;
-  Array<Token> constants;
-  Array<String> loopRepr;
+  Token externalName; // TODO: Probably not needed, could just infer from the AddressGenType.
 };
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
@@ -245,19 +194,3 @@ FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition 
 FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def);
 
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);
-String InstantiateAddressGen(AddressGenDef def,Arena* out);
-
-AddressGen CompileAddressGenDef(AddressGenDef def,Arena* out);
-
-// Kinda of an hack to use C++ method overloading to simplify name resolution.
-// Generates function with the name of the address gen but a different type for each different struct type that exists.
-String InstantiateGenericAddressGen(AddressGen gen,String typeStructName,Arena* out);
-
-String InstantiateAddressGen(AddressGen gen,String typeStructName,Arena* out);
-
-#include "addressGen.hpp"
-
-ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Arena* out);
-Array<AddressGenLoopSpecificatonSym> CompileAddressGenDef(LoopLinearSum* access,Arena* out);
-AddressVParameters InstantiateAccess2(ExternalMemoryAccess external,Array<AddressGenLoopSpecificatonSym> internal,Arena* out);
-String InstantiateAccess(ExternalMemoryAccess ext,Array<AddressGenLoopSpecificatonSym> internal,Arena* out);
