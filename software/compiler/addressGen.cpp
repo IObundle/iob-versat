@@ -118,6 +118,16 @@ SymbolicExpression* LoopMaximumValue(LoopLinearSumTerm term,Arena* out){
   return Normalize(maxVal,out);
 }
 
+void Repr(StringBuilder* builder,AddressAccess* access){
+  TEMP_REGION(temp,nullptr);
+
+  builder->PushString("External:\n");
+  Repr(builder,access->external);
+  builder->PushString("\n\nInternal:\n");
+  Repr(builder,access->internal);
+  builder->PushString("\n");
+}
+
 void Print(AddressAccess* access){
   TEMP_REGION(temp,nullptr);
 
@@ -224,7 +234,7 @@ static AddressVParameters InstantiateAccess(ExternalMemoryAccess external,Array<
   }
     
   if(internal.size > 1){
-    InternalMemoryAccess l = internal[0]; 
+    InternalMemoryAccess l = internal[1]; 
     res.per2 = PushString(out,l.periodExpression);
     res.incr2 = PushString(out,l.incrementExpression);
     res.iter2 = PushString(out,l.iterationExpression);
@@ -399,8 +409,9 @@ static Array<InternalMemoryAccess> CompileInternalAccess(LoopLinearSum* access,A
   };
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
-
-  Array<InternalMemoryAccess> res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,true,out);
+  DEBUG_BREAK();
+  
+  Array<InternalMemoryAccess> res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,false,out);
   
   return res;
 }

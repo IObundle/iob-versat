@@ -962,6 +962,15 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     AddressAccess* doubleLoop = ConvertAccessTo2External(&access,loopIndex,temp);
     AddressAccess* singleLoop = ConvertAccessTo1External(&access,temp);
 
+#if 1
+    printf("\n\naccess\n");
+    Print(&access);
+    printf("\n\nDouble\n");
+    Print(doubleLoop);
+    printf("\n\nSingle\n");
+    Print(singleLoop);
+#endif
+    
     region(temp){
       String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
       c->VarDeclare(STRING("int"),STRING("doubleLoop"),repr);
@@ -975,7 +984,12 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     c->If(STRING("doubleLoop < singleLoop"));
     c->Comment(STRING("Double is smaller (better)"));
     region(temp){
-      String r = PushString(temp,"printf(\"Dobule loop\\n\")"); 
+      StringBuilder* b = StartString(temp);
+      Repr(b,doubleLoop);
+      String repr = EndString(temp,b);
+      c->Comment(repr);
+      
+      String r = PushString(temp,"printf(\"Double loop\\n\")"); 
       //c->Statement(r);
               
       AddressVParameters parameters = InstantiateAccess(doubleLoop,temp);
@@ -985,6 +999,11 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     c->Else();
     c->Comment(STRING("Single is smaller (better)"));
     region(temp){
+      StringBuilder* b = StartString(temp);
+      Repr(b,singleLoop);
+      String repr = EndString(temp,b);
+      c->Comment(repr);
+
       String r = PushString(temp,"printf(\"Single loop\\n\")"); 
       //c->Statement(r);
 
@@ -1708,17 +1727,14 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
       for(int i = 0; i < loopVars.size; i++){
         String var = loopVars[i];
-        
+
+        // TODO: This function is kinda too heavy for what is being implemented.
         Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
 
         SymbolicExpression* term = termOpt.value_or(nullptr);
-        // NOTE: The GetMultExpression is probably not a good approach, we know that variables are grouped and 
         if(!term){
-          term = PushLiteral(temp,1);
+          term = PushLiteral(temp,0);
         }
-        
-        Print(normalized,true);
-        Print(term,true);
         
         AddressGenForDef loop = def->loops[i];
           
@@ -1753,8 +1769,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     // Generates a function for each address gen (if it depends on struct (ex: due to sharing) then it does not belong here)
     for(AddressGenDef* def : addressGenUsed){
       AddressAccess* initial = ConvertAddressGenDef(def,temp);
-      Print(initial->external,true);
-      DEBUG_BREAK();
       String data = GenerateAddressGenCompilationFunction(*initial,def->name,temp);
       *builder.PushElem() = data;
     }

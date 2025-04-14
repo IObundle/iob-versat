@@ -32,7 +32,7 @@ static char GetOperationSymbol(SymbolicExpression* expr){
   }
 }
 
-void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
+static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
   if(expr->negative){
     builder->PushString("-");
   }
@@ -109,6 +109,10 @@ void Print(SymbolicExpression* expr,bool printNewLine){
   if(printNewLine){
     printf("\n");
   }
+}
+
+void Repr(StringBuilder* builder,SymbolicExpression* expr){
+  BuildRepresentation(builder,expr,true,0);
 }
 
 static void PrintAST(SymbolicExpression* expr,int level = 0){
@@ -1716,6 +1720,11 @@ static Opt<int> FindLiteralIndex(SymbolicExpression* expr){
 
 Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,String variableName,Arena* out){
   switch(expr->type){
+  case SymbolicExpressionType_VARIABLE:{
+    if(CompareString(expr->variable,variableName)){
+      return ApplyNegation(PushLiteral(out,1),expr->negative);
+    }
+  } break;
   case SymbolicExpressionType_SUM:{
     for(SymbolicExpression* child : expr->sum){
       Opt<SymbolicExpression*> res = GetMultExpressionAssociatedTo(child,variableName,out);
@@ -1927,4 +1936,22 @@ void Print(LoopLinearSum* sum,bool printNewLine){
   if(printNewLine){
     printf("\n");
   }
+}
+
+void Repr(StringBuilder* builder,LoopLinearSum* sum){
+  TEMP_REGION(temp,builder->arena);
+  
+  int size = sum->terms.size;
+
+  for(int i = size - 1; i >= 0; i--){
+    builder->PushString("for %.*s ",UNPACK_SS(sum->terms[i].var));
+    Repr(builder,sum->terms[i].loopStart);
+    builder->PushString("..");
+    Repr(builder,sum->terms[i].loopEnd);
+    builder->PushString("\n");
+  }
+
+  SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(sum,temp);
+  Repr(builder,fullExpression);
+  
 }

@@ -77,10 +77,10 @@ struct AddressGenParameters{
 
 // Maybe change to map, although not sure how to do the reverse map from String[] to enum.
 table AddressGenWireNames(AddressGenType type,String[] names){
-   AddressGenType_MEM          : {iterA,perA,dutyA,startA,shiftA,incrA,reverseA,extA,in0_wr,iter2A,per2A,shift2A,incr2A,
-                                  iterB,perB,dutyB,startB,shiftB,incrB,reverseB,extB,in1_wr,iter2B,per2B,shift2B,incr2B},
+   AddressGenType_MEM  : {iterA,perA,dutyA,startA,shiftA,incrA,reverseA,extA,in0_wr,iter2A,per2A,shift2A,incr2A,
+                          iterB,perB,dutyB,startB,shiftB,incrB,reverseB,extB,in1_wr,iter2B,per2B,shift2B,incr2B},
 
-   AddressGenType_READ         : @Members(AddressVParameters)   
+   AddressGenType_READ : @Members(AddressVParameters)   
 };
 
 enum MergeModifier{

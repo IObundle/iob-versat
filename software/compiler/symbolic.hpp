@@ -42,6 +42,7 @@ struct MultPartition{
 }; 
 
 void Print(SymbolicExpression* expr,bool printNewLine = false);
+void Repr(StringBuilder* builder,SymbolicExpression* expr);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
 
 int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values);
@@ -122,3 +123,4 @@ SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* ou
 SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
 void Print(LoopLinearSum* sum,bool printNewLine = false);
+void Repr(StringBuilder* builder,LoopLinearSum* sum);

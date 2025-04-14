@@ -1,5 +1,7 @@
 #include "emitter.hpp"
 
+#include "parser.hpp"
+
 String Repr(CASTType type){
   switch(type){
   case CASTType_TOP_LEVEL: return STRING("CASTType_TOP_LEVEL");
@@ -289,7 +291,7 @@ void CEmitter::EndBlock(){
 void CEmitter::Comment(String comment){
   CAST* commentAst = PushCAST(CASTType_COMMENT,arena);
   commentAst->comment = PushString(arena,comment);
-
+  
   InsertStatement(commentAst);
 }
 
@@ -398,8 +400,34 @@ void Repr(CAST* top,StringBuilder* b,int level){
     }
   } break;
   case CASTType_COMMENT:{
-    b->PushSpaces(level * 2);
-    b->PushString("// %.*s",UNPACK_SS(top->comment));
+    bool isSingleLine = true;
+    for(char ch : top->comment){
+      if(ch == '\n'){
+        isSingleLine = false;
+        break;
+      }
+    }
+    
+    if(isSingleLine){
+      b->PushSpaces(level * 2);
+      b->PushString("// %.*s",UNPACK_SS(top->comment));
+    } else {
+      TEMP_REGION(temp,b->arena);
+      
+      b->PushSpaces(level * 2);
+      b->PushString("/*\n");
+      Array<String> lines = Split(top->comment,'\n',temp);
+
+      DEBUG_BREAK();
+      for(String line : lines){
+        b->PushSpaces((level + 1) * 2);
+        b->PushString(line);
+        b->PushString("\n");
+      }
+      
+      b->PushSpaces(level * 2);
+      b->PushString("*/");
+    }
   } break;
   case CASTType_IF: {
     SingleLink<CASTIf>* iter = top->ifExpressions->head;
