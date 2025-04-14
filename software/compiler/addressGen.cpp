@@ -409,7 +409,6 @@ static Array<InternalMemoryAccess> CompileInternalAccess(LoopLinearSum* access,A
   };
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
-  DEBUG_BREAK();
   
   Array<InternalMemoryAccess> res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,false,out);
   

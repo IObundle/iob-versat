@@ -961,15 +961,6 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     
     AddressAccess* doubleLoop = ConvertAccessTo2External(&access,loopIndex,temp);
     AddressAccess* singleLoop = ConvertAccessTo1External(&access,temp);
-
-#if 1
-    printf("\n\naccess\n");
-    Print(&access);
-    printf("\n\nDouble\n");
-    Print(doubleLoop);
-    printf("\n\nSingle\n");
-    Print(singleLoop);
-#endif
     
     region(temp){
       String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);

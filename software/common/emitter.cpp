@@ -418,7 +418,6 @@ void Repr(CAST* top,StringBuilder* b,int level){
       b->PushString("/*\n");
       Array<String> lines = Split(top->comment,'\n',temp);
 
-      DEBUG_BREAK();
       for(String line : lines){
         b->PushSpaces((level + 1) * 2);
         b->PushString(line);

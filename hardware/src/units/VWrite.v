@@ -272,7 +272,7 @@ module VWrite #(
       .mem_addr_o  (read_addr),
       .mem_data_i  (read_data),
 
-      .force_reset_i(!running),
+      .force_reset_i(!running || run),
 
       .clk_i(clk),
       .rst_i(rst)
