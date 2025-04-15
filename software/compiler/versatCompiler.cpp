@@ -700,6 +700,18 @@ Mainly the structs for the AddressGen arguments.
 
 AddressGen:
 
+- Datapath width
+
+-- Current address gen is kinda hardcoding the datapath width.
+-- Also not sure how it handles axi_data_w as well.
+-- Need to start making some tests that exercise this.
+
+- Optimizations:
+
+-- Duty is not being used.
+-- We could collapse certain loops, assuming that we have the info needed (or we can push it into runtime).
+-- Leftover loops can be used to reduce the preassure on the lower loops (less bits needed and stuff like that, we currently pay for the upper loops bits wether we use them or not)
+
 - If we eventually have to handle non zero start loops, need to figure out how we do it. We can shift loops around so they start at zero, but do not know if we should do this when converting an addressGenDef into an AddressAccess, or if we convert first and then have a function that does this shift, etc... Mostly depends on how easy this transformation is when using SymbolicExpressions vs using LinearLoopSum. 
 
 - There is an optimization that we can make in order to reduce memory usage. For loops where the innermost term is not a '1' we are fetching more memory than we care about and that is fine. The problem is that we are storing those unused values inside the internal memory when we do not have to. If the innermost term was a 4, we could make it so that the internal memory only stores every 4 values read. For double loop address gens, we make sure that in hardware we reset every time we have a loop (so that the address gen lines up correctly). That way, for a loop that contains a constant term N, we reduce the amount of internal memory used by a factor of N.

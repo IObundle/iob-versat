@@ -211,44 +211,6 @@ SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term){
   return term->term;
 }
 
-static AddressVParameters InstantiateAccess(ExternalMemoryAccess external,Array<InternalMemoryAccess> internal,Arena* out){
-  AddressVParameters res = {};
-
-  res.ext_addr = STRING("ext"); // TODO: Should be a parameter or something, not randomly hardcoded here
-  res.length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
-  res.amount_minus_one = PushString(out,external.amountMinusOne);
-  res.addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
-
-  res.enabled = STRING("1");
-  res.pingPong = STRING("1");
-
-  res.start = STRING("0");
-
-  {
-    InternalMemoryAccess l = internal[0]; 
-    res.per = PushString(out,l.periodExpression);
-    res.incr = PushString(out,l.incrementExpression);
-    res.duty = PushString(out,l.dutyExpression);
-    res.iter = PushString(out,l.iterationExpression);
-    res.shift = PushString(out,l.shiftExpression);
-  }
-    
-  if(internal.size > 1){
-    InternalMemoryAccess l = internal[1]; 
-    res.per2 = PushString(out,l.periodExpression);
-    res.incr2 = PushString(out,l.incrementExpression);
-    res.iter2 = PushString(out,l.iterationExpression);
-    res.shift2 = PushString(out,l.shiftExpression);
-  } else {
-    res.per2 = STRING("0");
-    res.incr2 = STRING("0");
-    res.iter2 = STRING("0");
-    res.shift2 = STRING("0");
-  }
-
-  return res;
-}
-
 static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -420,5 +382,57 @@ AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
   Array<InternalMemoryAccess> internal = CompileInternalAccess(access->internal,temp);
 
-  return InstantiateAccess(external,internal,out);
+  AddressVParameters res = {};
+  
+  SymbolicExpression* freeTerm = access->external->freeTerm;
+    
+  if(IsZero(freeTerm)){
+    freeTerm = access->internal->freeTerm;
+  } else {
+    Assert(IsZero(access->internal->freeTerm)); // NOTE: I do not think it is possible for both external and internal to have free terms.
+  }
+
+  // NOTE: We push the start term to the ext pointer in order to save memory inside the unit. This is being done in a  kinda hacky way, but nothing major.
+  String ext_addr = STRING("ext"); // TODO: Should be a parameter or something, not randomly hardcoded here
+  if(!IsZero(freeTerm)){
+    String repr = PushRepresentation(freeTerm,temp);
+
+    ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UNPACK_SS(repr));
+  }
+
+  res.start = STRING("0");
+  
+  res.ext_addr = ext_addr;
+  res.length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
+  res.amount_minus_one = PushString(out,external.amountMinusOne);
+  res.addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
+
+  res.enabled = STRING("1");
+  res.pingPong = STRING("1");
+
+  {
+    InternalMemoryAccess l = internal[0]; 
+    res.per = PushString(out,l.periodExpression);
+    res.incr = PushString(out,l.incrementExpression);
+    res.duty = PushString(out,l.dutyExpression);
+    res.iter = PushString(out,l.iterationExpression);
+    res.shift = PushString(out,l.shiftExpression);
+  }
+    
+  if(internal.size > 1){
+    InternalMemoryAccess l = internal[1]; 
+    res.per2 = PushString(out,l.periodExpression);
+    res.incr2 = PushString(out,l.incrementExpression);
+    res.iter2 = PushString(out,l.iterationExpression);
+    res.shift2 = PushString(out,l.shiftExpression);
+  } else {
+    res.per2 = STRING("0");
+    res.incr2 = STRING("0");
+    res.iter2 = STRING("0");
+    res.shift2 = STRING("0");
+  }
+
+  return res;
+
+  //return InstantiateAccess(external,internal,out);
 }

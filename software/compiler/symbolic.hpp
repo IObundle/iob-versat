@@ -67,6 +67,8 @@ SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out);
 // Use this function to get the literal value of a literal type expression, takes into account negation.
 int GetLiteralValue(SymbolicExpression* expr);
 
+bool IsZero(SymbolicExpression* expr);
+
 // Must call normalizeLiteral before calling this.
 // Furthermore, the negative is removed from leftovers and pushed onto the literal (base)
 MultPartition CollectTermsWithLiteralMultiplier(SymbolicExpression* expr,Arena* out);

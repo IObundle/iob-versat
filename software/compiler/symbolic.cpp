@@ -261,6 +261,14 @@ int GetLiteralValue(SymbolicExpression* expr){
   }
 }
 
+bool IsZero(SymbolicExpression* expr){
+  if(expr->type == SymbolicExpressionType_LITERAL && expr->literal == 0){
+    return true;
+  }
+
+  return false;
+}
+
 SymbolicExpression* SymbolicAdd(SymbolicExpression* left,SymbolicExpression* right,Arena* out){
   // TODO: We are always creating a new node even when it might be possible not to.
   //       Assuming that the normalization function is capable of collapsing everything into one, this should not pose a problem, as long as we normalize the end result, but not sure and nevertheless this is a bit slower.
