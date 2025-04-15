@@ -182,24 +182,27 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   if(info->isSource){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
-  
-  bool isReadType = true;
-  for(String str : META_AddressVParameters_Members){
-    bool foundOne = false;
-    for(Wire wire : configs){
-      if(CompareString(str,wire.name)){
-        foundOne = true;
+
+  // TODO: Is this something generic that we could move into meta code?
+  for(AddressGenWireNames_GenType gen : AddressGenWireNames){
+    bool isType = true;
+    for(String str : gen.names){
+      bool foundOne = false;
+      for(Wire wire : configs){
+        if(CompareString(str,wire.name)){
+          foundOne = true;
+          break;
+        }
+      }
+      if(!foundOne){
+        isType = false;
         break;
       }
     }
 
-    if(!foundOne){
-      isReadType = false;
+    if(isType){
+      decl.supportedAddressGenType = (AddressGenType) (decl.supportedAddressGenType | gen.type);
     }
-  }
-
-  if(isReadType){
-    decl.supportedAddressGenType = AddressGenType_READ;
   }
   
   FUDeclaration* res = RegisterFU(decl);
@@ -210,8 +213,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
 void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out){
   TEMP_REGION(temp,out);
   TEMP_REGION(temp2,temp);
-
-  //Arena* perm = globalPermanent;
 
   // TODO: This function was mostly used to calculate the configInfo stuff, which now is gone.
   //       Need to see how much of this code is also useful for the merge stuff.

@@ -888,7 +888,7 @@ int main(int argc,const char* argv[]){
             String repr = DefaultRepr(val,typeDef,temp);
             fprintf(source,"%.*s",UNPACK_SS(repr));
           } else {
-            fprintf(source,"%.*s_%.*s_aux%d",UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
+            fprintf(source,"{%.*s_%.*s_aux%d,ARRAY_SIZE(%.*s_%.*s_aux%d)}",UNPACK_SS(def->structTypename),UNPACK_SS(name),i,UNPACK_SS(def->structTypename),UNPACK_SS(name),i);
           }
 
           first = false;

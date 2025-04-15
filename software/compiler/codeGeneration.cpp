@@ -947,7 +947,8 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       
       String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
       String v = view[i];
-      
+
+      // TODO: Kinda hacky
       if(CompareString(str,STRING("ext_addr"))){
         v = PushString(temp,"(iptr) %.*s",UNPACK_SS(v));
       }
@@ -1671,7 +1672,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         if(!def){
           printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
         } else {
-          if(def->type != unit->decl->supportedAddressGenType){
+          if(!(def->type & unit->decl->supportedAddressGenType)){
             printf("Cannot generate address gen for type %.*s\n",UNPACK_SS(unit->decl->name));
             exit(0);
           }
