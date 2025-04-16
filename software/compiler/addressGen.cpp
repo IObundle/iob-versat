@@ -168,7 +168,7 @@ AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out){
   result->internal = Copy(result->external,out);
   result->external = PushLoopLinearSumEmpty(out);
   
-  SymbolicExpression* maxLoopValue = EvaluateMaxLinearSumValue(result->external,temp);
+  SymbolicExpression* maxLoopValue = EvaluateMaxLinearSumValue(result->internal,temp);
   maxLoopValue = Normalize(SymbolicAdd(maxLoopValue,PushLiteral(temp,1),temp),out);
 
   result->external = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),maxLoopValue,out);
