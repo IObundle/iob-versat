@@ -160,7 +160,10 @@ SymbolicExpression* EvaluateMaxLinearSumValue(LoopLinearSum* sum,Arena* out){
 AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out){
   TEMP_REGION(temp,out);
 
+  SymbolicExpression* freeTerm = access->external->freeTerm;
+  
   AddressAccess* result = Copy(access,out);
+  result->external->freeTerm = PushLiteral(temp,0); // Pretend that the free term does not exist
   
   result->internal = Copy(result->external,out);
   result->external = PushLoopLinearSumEmpty(out);
@@ -169,7 +172,8 @@ AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out){
   maxLoopValue = Normalize(SymbolicAdd(maxLoopValue,PushLiteral(temp,1),temp),out);
 
   result->external = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),maxLoopValue,out);
-
+  result->external->freeTerm = SymbolicDeepCopy(freeTerm,out);
+  
   return result;
 }
 

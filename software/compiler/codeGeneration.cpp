@@ -1,5 +1,5 @@
 #include "codeGeneration.hpp"
-
+ 
 #include "accelerator.hpp"
 #include "declaration.hpp"
 #include "filesystem.hpp"
@@ -960,6 +960,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
   auto EmitDoubleOrSingleLoopCode = [EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess access){
     TEMP_REGION(temp,c->arena);
     
+    // TODO: The way we handle the free term is kinda sketchy.
     AddressAccess* doubleLoop = ConvertAccessTo2External(&access,loopIndex,temp);
     AddressAccess* singleLoop = ConvertAccessTo1External(&access,temp);
     
