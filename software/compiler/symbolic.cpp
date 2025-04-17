@@ -39,6 +39,7 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
 
   int bindingStrength = TypeToBingingStrength(expr);
   bool bind = (parentBindingStrength >= bindingStrength);
+
   //bind = true;
   switch(expr->type){
   case SymbolicExpressionType_VARIABLE: {
@@ -48,6 +49,10 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
     builder->PushString("%d",expr->literal);
   } break;
   case SymbolicExpressionType_DIV: {
+    if(expr->negative){
+      bind = true;
+    }
+    
     bool hasNonOpSon = (expr->top->type != SymbolicExpressionType_DIV && expr->bottom->type != SymbolicExpressionType_DIV);
     if(hasNonOpSon && !top && bind){
       builder->PushString("(");
@@ -65,6 +70,10 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
   case SymbolicExpressionType_SUM:
   case SymbolicExpressionType_MUL: {
   //case SymbolicExpressionType_ARRAY: {
+    if(expr->negative){
+      bind = true;
+    }
+
     if(bind){
       builder->PushString("(");
     }
@@ -765,6 +774,20 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out){
     return res;
   } break;
   case SymbolicExpressionType_SUM: // fallthrough
+    if(expr->negative){
+      ArenaList<SymbolicExpression*>* list = PushArenaList<SymbolicExpression*>(temp);
+      for(SymbolicExpression* child : expr->sum){
+        SymbolicExpression* negated = SymbolicDeepCopy(child,out);
+        negated->negative = !negated->negative;
+
+        *list->PushElem() = negated;
+      }
+
+      SymbolicExpression* res = CopyExpression(expr,out);
+      res->negative = false;
+      res->sum = PushArrayFromList(out,list);
+      return res;
+    }
   case SymbolicExpressionType_MUL: {
     if(expr->sum.size == 1){
       SymbolicExpression* onlyOne = RemoveParenthesis(expr->sum[0],out);
@@ -1658,11 +1681,13 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
   TEMP_REGION(temp,out);
   SymbolicExpression* current = expr;
   SymbolicExpression* next = nullptr;
-  
+
   if(debugPrint){
     printf("Norm start:\n");
     PrintAST(expr);
   }
+
+  bool debugPrintAST = false;
   
   // Better way of detecting end, should be a check if expression did not change after an entire loop
   for(int i = 0; i < 3; i++){
@@ -1674,35 +1699,49 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
     current = next;
     if(debugPrint) printf("Normalize Literals:\n");
     if(debugPrint) {Print(current); printf("\n");}
-    if(debugPrint) PrintAST(current);
+    if(debugPrintAST) PrintAST(current);
 
+    next = NormalizeLiterals(current,out);
+    CheckIfSymbolicExpressionsShareNodes(current,next);
+    current = next;
+    if(debugPrint) printf("Normalize Literals:\n");
+    if(debugPrint) {Print(current); printf("\n");}
+    if(debugPrintAST) PrintAST(current);
+    
     next = ApplyDistributivity(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("Apply distributivity:\n");
     if(debugPrint) {Print(current); printf("\n");}
-    if(debugPrint) PrintAST(current);
+    if(debugPrintAST) PrintAST(current);
 
     next = RemoveParenthesis(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("Remove paran:\n");
     if(debugPrint) {Print(current); printf("\n");}
-    if(debugPrint) PrintAST(current);
+    if(debugPrintAST) PrintAST(current);
+
+    next = RemoveParenthesis(current,out);
+    CheckIfSymbolicExpressionsShareNodes(current,next);
+    current = next;
+    if(debugPrint) printf("Remove paran:\n");
+    if(debugPrint) {Print(current); printf("\n");}
+    if(debugPrintAST) PrintAST(current);
 
     next = ApplySimilarTermsAddition(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next);
     current = next;
     if(debugPrint) printf("SimilarTerms:\n");
     if(debugPrint) {Print(current); printf("\n");}
-    if(debugPrint) PrintAST(current);
+    if(debugPrintAST) PrintAST(current);
 
     next = RemoveParenthesis(current,out);
     CheckIfSymbolicExpressionsShareNodes(current,next); 
     current = next;
     if(debugPrint) printf("Remove paran:\n");
     if(debugPrint) {Print(current); printf("\n");}
-    if(debugPrint) PrintAST(current);
+    if(debugPrintAST) PrintAST(current);
 
     // Logic inside similar term might add superflouous constants, so we normalize literals again
     next = NormalizeLiterals(current,out);
@@ -1710,7 +1749,7 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
     current = next;
     if(debugPrint) printf("Normalize Literals:\n");
     if(debugPrint) {Print(current); printf("\n");}
-    if(debugPrint) PrintAST(current);
+    if(debugPrintAST) PrintAST(current);
   }
 
   current = ApplyNonRecursive(current,out,SortTerms);
@@ -1730,18 +1769,19 @@ void TestSymbolic(){
 
   TestCase cases[] = {
     {STRING("a+b+c+d"),STRING("a+b+c+d")},
-    {STRING("a-a-b-b-2*c-c"),STRING("-2*b-3*c")},
+    {STRING("a-a-b-b-2*c-c"),STRING("-(2*b)-(3*c)")},
     {STRING("a+a+b+b+2*c+c"),STRING("2*a+2*b+3*c")},
     {STRING("a*b + a * b"),STRING("2*a*b")},
-    {STRING("-a * b - a * b"),STRING("-2*a*b")},
-    {STRING("-((1*x)*(3-1))+1*y"),STRING("-2*x+y")},
-    {STRING("-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))"),STRING("-a-b")},
-    {STRING("(a-b)*(a-b)"),STRING("a*a-2*a*b+b*b")},
+    {STRING("-a * b - a * b"),STRING("-(2*a*b)")},
+    {STRING("-((1*x)*(3-1))+1*y"),STRING("-(2*x)+y")},
+    {STRING("-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))"),STRING("-(a)-(b)")},
+    {STRING("(a-b)*(a-b)"),STRING("a*a-(2*a*b)+b*b")},
     {STRING("a*b + a*b + 2*a*b"),STRING("4*a*b")},
     {STRING("1+2+3+1*20*30"),STRING("606")},
     {STRING("a * (x + y)"),STRING("a*x+a*y")},
-    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-y")},
-    {STRING("-6*(4-1)+5"),STRING("-13")}
+    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-(y)")},
+    {STRING("-6*(4-1)+5"),STRING("-13")},
+    {STRING("-(1*(x-1))+0"),STRING("-(x)+1")}
   };
 
   bool printNormalizeProcess = true;
@@ -1763,6 +1803,8 @@ void TestSymbolic(){
       Print(sym);
       printf("\nEnd  :");
       Print(normalized);
+
+#if 1
       printf("\nExpec:%.*s\n",UNPACK_SS(c.expectedNormalized));
       PrintAST(normalized);
 
@@ -1771,6 +1813,7 @@ void TestSymbolic(){
         Normalize(sym,temp,true);
         printf("\n");
       }
+#endif
     }
 
     printf("\n");
