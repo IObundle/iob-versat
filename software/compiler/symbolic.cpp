@@ -159,12 +159,13 @@ static void PrintAST(SymbolicExpression* expr,int level = 0){
 }
 
 int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
+  int val = 0;
   switch(expr->type){
   case SymbolicExpressionType_LITERAL:{
-    return expr->literal;
+    val = expr->literal;
   } break;
   case SymbolicExpressionType_VARIABLE:{
-    return values->GetOrFail(expr->variable);
+    val = values->GetOrFail(expr->variable);
   } break;
   case SymbolicExpressionType_DIV:{
     int left = Evaluate(expr->top,values);
@@ -175,7 +176,7 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
       DEBUG_BREAK();
     }
 
-    return (left / right);
+    val = (left / right);
   } break;
   case SymbolicExpressionType_SUM: // fallthrough
   case SymbolicExpressionType_MUL:{
@@ -192,11 +193,15 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
       }
     }
 
-    return value;
+    val = value;
   } break;
   }
 
-  NOT_POSSIBLE("All cases handled");
+  if(expr->negative){
+    val = -val;
+  }
+
+  return val;
 }
 
 #define EXPECT(TOKENIZER,STR) \
@@ -1592,11 +1597,68 @@ SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace
   NOT_POSSIBLE();
 }
 
+Array<String> ExtractAllVariables(SymbolicExpression* top,Arena* out){
+  TEMP_REGION(temp,out);
+  auto Recurse = [](auto Recurse,SymbolicExpression* expr,ArenaList<String>* accum){
+    switch(expr->type){
+    case SymbolicExpressionType_LITERAL:{
+      return;
+    } break;
+    case SymbolicExpressionType_VARIABLE:{
+      *accum->PushElem() = expr->variable;
+    } break;
+    case SymbolicExpressionType_DIV:{
+      Recurse(Recurse,expr->top,accum);
+      Recurse(Recurse,expr->bottom,accum);
+    } break;
+    case SymbolicExpressionType_SUM: // fallthrough
+    case SymbolicExpressionType_MUL:{
+      for(SymbolicExpression* child : expr->sum){
+        Recurse(Recurse,child,accum);
+      }
+    } break;
+    }
+  };
+  
+  auto* accum = PushArenaList<String>(temp);
+  Recurse(Recurse,top,accum);
+  Array<String> res = PushArrayFromList(out,accum);
+
+  return res;
+}
+
+void CheckIfCorrect(SymbolicExpression* start,SymbolicExpression* end){
+  TEMP_REGION(temp,nullptr);
+
+  Array<String> allVariables = ExtractAllVariables(start,temp);
+  int varSize = allVariables.size;
+
+  for(int i = 0; i < 100; i++){
+    Hashmap<String,int>* values = PushHashmap<String,int>(temp,varSize);
+
+    for(int ii = 0; ii < varSize; ii++){
+      int randomValue = (int) (GetRandomNumber() % 100);
+      values->Insert(allVariables[ii],randomValue);
+    }
+
+    int startVal = Evaluate(start,values);
+    int endVal = Evaluate(end,values);
+
+    if(startVal != endVal){
+      printf("Different values for the expressions:\n");
+      Print(start,true);
+      Print(end,true);
+      return;
+    }
+  }
+  
+}
+
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrint){
   TEMP_REGION(temp,out);
   SymbolicExpression* current = expr;
   SymbolicExpression* next = nullptr;
-
+  
   if(debugPrint){
     printf("Norm start:\n");
     PrintAST(expr);
@@ -1652,6 +1714,8 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
   }
 
   current = ApplyNonRecursive(current,out,SortTerms);
+
+  CheckIfCorrect(expr,current);
   
   return current;
 }
