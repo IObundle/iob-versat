@@ -2,6 +2,7 @@
  
 #include "accelerator.hpp"
 #include "declaration.hpp"
+#include "embeddedData.hpp"
 #include "filesystem.hpp"
 #include "logger.hpp"
 #include "memory.hpp"
@@ -1556,7 +1557,19 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     // TODO: We eventually only want to put this as true if we output at least one address gen.
     TemplateSetBool("simulateLoops",true);
-        
+
+    {
+      CEmitter* m = StartCCode(temp);
+      m->Struct(STRING("AddressVArguments"));
+      for(String str : META_AddressVParameters_Members){
+        m->Member(STRING("iptr"),str);
+      }
+      CAST* ast = EndCCode(m);
+      auto b = StartString(temp);
+      Repr(ast,b);
+      TemplateSetString("AddressStruct",EndString(temp,b));
+    }
+    
     Array<Array<int>> allDelays = PushArray<Array<int>>(temp,info.infos.size);
     if(info.infos.size >= 2){
       int i = 0;
@@ -1702,11 +1715,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
       SymbolicExpression* loopExpression = PushLiteral(temp,1);
       for(AddressGenForDef loop : def->loops){
-        SymbolicExpression* start = ParseSymbolicExpression(loop.start,temp);
-        SymbolicExpression* end = ParseSymbolicExpression(loop.end,temp);
-          
-        SymbolicExpression* diff = SymbolicSub(end,start,temp);
-
+        SymbolicExpression* diff = SymbolicSub(loop.end,loop.start,temp);
         loopExpression = SymbolicMult(loopExpression,diff,temp);
       }
       SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
@@ -1731,10 +1740,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
         
         AddressGenForDef loop = def->loops[i];
           
-        SymbolicExpression* loopStart = ParseSymbolicExpression(loop.start,temp);
-        SymbolicExpression* loopEnd = ParseSymbolicExpression(loop.end,temp);
-          
-        LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loopStart,loopEnd,temp);
+        LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,loop.end,temp);
         expr = AddLoopLinearSum(sum,expr,temp);
       }
 

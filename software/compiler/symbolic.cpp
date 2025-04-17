@@ -523,7 +523,7 @@ static SymbolicExpression* ParseExpression(Tokenizer* tok,Arena* out){
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out){
   // TODO: For now, only handle the simplest expressions and parenthesis
   if(!tmpl){
-    tmpl = CreateTokenizerTemplate(globalPermanent,"+-*/();[]",{}); // TODO: It is impossible to fully abstract the tokenizer as long as we have the template not being correctly constructed. We need a way of describing the things that we want (including digits), instead of just describing what symbols are or not allowed
+    tmpl = CreateTokenizerTemplate(globalPermanent,"+-*/();[]",{".."}); // TODO: It is impossible to fully abstract the tokenizer as long as we have the template not being correctly constructed. We need a way of describing the things that we want (including digits), instead of just describing what symbols are or not allowed
   }
 
   TOKENIZER_REGION(tok,tmpl);
@@ -544,8 +544,8 @@ Array<SymbolicExpression*> GetAllExpressions(SymbolicExpression* top,Arena* out)
     *arr.PushElem() = expr;
 
     switch(expr->type){
-  case SymbolicExpressionType_SUM:
-  case SymbolicExpressionType_MUL: {
+    case SymbolicExpressionType_SUM:
+    case SymbolicExpressionType_MUL: {
       for(SymbolicExpression* s : expr->sum){
         recurse(recurse,s,arr);
       }

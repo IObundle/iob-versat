@@ -60,6 +60,11 @@ module VWrite #(
    input [  ADDR_W-1:0] shift2,
    input [  ADDR_W-1:0] incr2,
 
+   input [  ADDR_W-1:0] iter3,
+   input [PERIOD_W-1:0] per3,
+   input [  ADDR_W-1:0] shift3,
+   input [  ADDR_W-1:0] incr3,
+
    input                ignore_first,
    input [ 20-1:0]      extra_delay,
 
@@ -230,10 +235,10 @@ module VWrite #(
       .iterations2_i(iter2),
       .shift2_i(shift2),
 
-      .period3_i({PERIOD_W{1'b0}}),
-      .incr3_i({ADDR_W{1'b0}}),
-      .iterations3_i({ADDR_W{1'b0}}),
-      .shift3_i({ADDR_W{1'b0}}),
+      .period3_i(per3),
+      .incr3_i(incr3),
+      .iterations3_i(iter3),
+      .shift3_i(shift3),
 
       //outputs 
       .valid_o(store_en),

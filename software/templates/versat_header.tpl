@@ -165,24 +165,7 @@ void ConfigEnableDMA(bool value);
 void ConfigCreateVCD(bool value);
 void ConfigSimulateDatabus(bool value); 
 
-typedef struct{
-   iptr ext_addr;
-   iptr length;
-   iptr amount_minus_one;
-   iptr addr_shift;
-   iptr enabled;
-   iptr pingPong;
-   iptr start;
-   iptr per;
-   iptr incr;
-   iptr duty;
-   iptr iter;
-   iptr shift;
-   iptr per2;
-   iptr incr2;
-   iptr iter2;
-   iptr shift2;
-} AddressVArguments;
+@{AddressStruct}
 
 // PC-Emul side function only that allow us to simulate what addresses a V unit would access, instead of having to run the accelerator and having to inspect the VCD file, we can simulate it at pc-emul.
 typedef struct{

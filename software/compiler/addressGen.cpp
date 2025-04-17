@@ -386,6 +386,8 @@ AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
   Array<InternalMemoryAccess> internal = CompileInternalAccess(access->internal,temp);
 
+  printf("%d\n",internal.size);
+  
   AddressVParameters res = {};
   
   SymbolicExpression* freeTerm = access->external->freeTerm;
@@ -436,7 +438,25 @@ AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
     res.shift2 = STRING("0");
   }
 
-  return res;
+  // TODO: This is stupid. Need to represent the per,incr,iter,shift as a struct and have an array to be able to handle N outputs automatically, hardcoding like this is not the way.
+  if(internal.size > 2){
+    InternalMemoryAccess l = internal[2]; 
+    res.per3 = PushString(out,l.periodExpression);
+    res.incr3 = PushString(out,l.incrementExpression);
+    res.iter3 = PushString(out,l.iterationExpression);
+    res.shift3 = PushString(out,l.shiftExpression);
+  } else {
+    res.per3 = STRING("0");
+    res.incr3 = STRING("0");
+    res.iter3 = STRING("0");
+    res.shift3 = STRING("0");
+  }
 
-  //return InstantiateAccess(external,internal,out);
+  if(internal.size > 3){
+    // TODO: Proper error reporting requires us to lift the data up.
+    printf("Error instantiating address gen. Contains more loops than the unit is capable of handling\n");
+    exit(-1);
+  }
+  
+  return res;
 }

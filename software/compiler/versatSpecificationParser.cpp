@@ -1984,10 +1984,14 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
       Token loopVariable = tok->NextToken();
       CHECK_IDENTIFIER(loopVariable);
 
-      Token start = tok->NextToken();
+      SymbolicExpression* start = ParseSymbolicExpression(tok,out);
+      PROPAGATE(start);
+      
       EXPECT(tok,"..");
-      Token end = tok->NextToken();
 
+      SymbolicExpression* end = ParseSymbolicExpression(tok,out);
+      PROPAGATE(end);
+      
       *loops->PushElem() = (AddressGenForDef){.loopVariable = loopVariable,.start = start,.end = end};
     } else if(CompareString(construct,"addr")){
       EXPECT(tok,"=");

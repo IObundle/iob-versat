@@ -1,5 +1,6 @@
 #pragma once
 
+#include "symbolic.hpp"
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
 #include "versat.hpp"
@@ -156,22 +157,10 @@ struct HierarchicalName{
 
 struct AddressGenForDef{
   Token loopVariable;
-  Token start; // Can be a number or an input
-  Token end;
-};
-
-struct IdOrNumber{
-  union {
-    Token identifier;
-    int number;
-  };
-  bool isId;
-};
-
-struct AddressGenFor{
-  Token loopVariable;
-  IdOrNumber start;
-  IdOrNumber end;
+  SymbolicExpression* start;
+  SymbolicExpression* end;
+  //Token start; // Can be a number or an input
+  //Token end;
 };
 
 struct SymbolicExpression;

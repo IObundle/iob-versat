@@ -44,15 +44,19 @@ struct AddressVParameters{
    String enabled;
    String pingPong;
    String start;
+   String duty;
    String per;
    String incr;
-   String duty;
    String iter;
    String shift;
    String per2;
    String incr2;
    String iter2;
    String shift2;
+   String per3;
+   String incr3;
+   String iter3;
+   String shift3;
 };
 
 struct AddressGenParameters{
