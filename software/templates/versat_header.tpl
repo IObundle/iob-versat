@@ -180,6 +180,17 @@ SimulateVReadResult SimulateVRead(AddressVArguments args);
 } // extern "C"
 #endif
 
+// These value must match the same parameter used to instantiate the Versat hardware unit.
+// Bad things will happen if a mismatch occurs
+#ifndef VERSAT_AXI_DATA_W
+  #define VERSAT_AXI_DATA_W @{arch.databusDataSize}
+#endif
+#ifndef VERSAT_DATA_W
+  #define VERSAT_DATA_W 32 // TODO: Techically Versat could support non 32 datapaths, but no attempt or test has been performed. It will most likely fail, especially the units which almost always expect 32 bits.
+#endif
+
+#define VERSAT_DIFF_W (VERSAT_AXI_DATA_W / VERSAT_DATA_W)
+
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{typeName}";
 static bool isSimpleAccelerator = @{isSimple};
@@ -201,6 +212,17 @@ extern volatile @{typeName}State* accelState; // @{nStates}
 #{else}
 extern volatile AcceleratorState* accelState; // @{nStates}
 #{end}
+
+static inline iptr ALIGN(iptr base,iptr alignment){
+  // TODO: Because alignment is power of 2 (unless we want to support weird AXI_DATA_W values), we can use a faster implementation here.
+  iptr diff = base % alignment;
+  if(diff == 0){
+    return base;
+  }
+
+  iptr result = (base - diff + alignment);
+  return result;
+}
 
 extern volatile AcceleratorStatic* accelStatic;
 

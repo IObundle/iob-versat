@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module VRead #(
-   parameter SIZE_W     = 32,
+   //parameter SIZE_W     = 32, // TODO: Completely forgot why we have SIZE_W in the first place
    parameter DATA_W     = 32,
    parameter ADDR_W     = 17,
    parameter PERIOD_W   = 15, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
@@ -113,8 +113,8 @@ module VRead #(
    reg gen_valid;
    wire gen_ready;
 
-   localparam SIZE_W_TEMP = (SIZE_W / 8);
-   localparam [ADDR_W-1:0] OFFSET_W = SIZE_W_TEMP[ADDR_W-1:0];
+   localparam OFFSET_TEMP = AXI_DATA_W / 8;
+   localparam [ADDR_W-1:0] OFFSET_W = OFFSET_TEMP[ADDR_W-1:0];
 
    always @(posedge clk,posedge rst) begin
       if(rst) begin
@@ -138,7 +138,7 @@ module VRead #(
       .LEN_W(LEN_W),
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W),
+      .DATA_W(DATA_W),
       .PERIOD_W(PERIOD_W),
       .DELAY_W(1)
       ) reader (
@@ -300,6 +300,7 @@ assign data_data = databus_rdata_0;
 
    localparam DIFF = AXI_DATA_W / DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
+   localparam DECISION_BIT_START = $clog2(DATA_W / 8);
 
    function [ADDR_W-DECISION_BIT_W-1:0] symbolSpaceConvert(input [ADDR_W-1:0] in);
       reg [ADDR_W-1:0] noPingPong;
@@ -312,38 +313,27 @@ assign data_data = databus_rdata_0;
       end
    endfunction
 
-   reg [ADDR_W-1:0] addr_out;
-
    generate
       if (AXI_DATA_W > DATA_W) begin
-         always @* begin
-            addr_out                            = 0;
-            addr_out[ADDR_W-DECISION_BIT_W-1:0] = symbolSpaceConvert(output_addr[ADDR_W-1:0]);
-            addr_out[ADDR_W-1]                  = pingPong && output_addr[ADDR_W-1];
-         end
-
          reg [DECISION_BIT_W-1:0] sel_0;  // Matches addr_0_port_0
          always @(posedge clk, posedge rst) begin
             if (rst) begin
                sel_0 <= 0;
             end else begin
-               sel_0 <= output_addr[DECISION_BIT_W-1:0];
+               sel_0 <= output_addr[DECISION_BIT_START+:DECISION_BIT_W];
             end
          end
 
          WideAdapter #(
             .INPUT_W (AXI_DATA_W),
             .OUTPUT_W(DATA_W),
-            .SIZE_W  (SIZE_W)
+            .SIZE_W  (DATA_W)
          ) adapter (
             .sel_i(sel_0),
             .in_i (ext_2p_data_in_0),
             .out_o(out0)
          );
       end else begin
-         always @* begin
-            addr_out = output_addr;
-         end
          assign out0 = ext_2p_data_in_0;
       end  // if(AXI_DATA_W > DATA_W)
    endgenerate
@@ -353,7 +343,7 @@ assign data_data = databus_rdata_0;
    assign ext_2p_data_out_0 = write_data;
 
    assign ext_2p_read_0     = output_enabled;
-   assign ext_2p_addr_in_0  = addr_out;
+   assign ext_2p_addr_in_0  = output_addr;
 
    reg reportedA;
    reg reportedB;

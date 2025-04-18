@@ -5,8 +5,6 @@
 #{end}
 TYPE_NAME := @{typeName}
 
-# TODO: Everything here should be relative. Otherwise we are binding the setup with the build process, when in reality they should be separated.
-
 HARDWARE_FOLDER := @{generatedUnitsLocation}
 SOFTWARE_FOLDER := .
 

@@ -16,7 +16,8 @@ enum SymbolicExpressionType{
   SymbolicExpressionType_VARIABLE,
   SymbolicExpressionType_SUM,
   SymbolicExpressionType_MUL,
-  SymbolicExpressionType_DIV
+  SymbolicExpressionType_DIV,
+  SymbolicExpressionType_FUNC
 };
 
 struct SymbolicExpression{
@@ -25,15 +26,19 @@ struct SymbolicExpression{
 
   // All these should be inside a union. Not handling this for now
   int literal;
-  String variable;
 
+  union {
+    String variable;
+    String name;
+  };
+    
   // For div, imagine a fraction expression
   struct {
     SymbolicExpression* top;
     SymbolicExpression* bottom;
   };
   
-  Array<SymbolicExpression*> sum;
+  Array<SymbolicExpression*> terms; // Terms of SUM and MUL. Function arguments for FUNC
 };
 
 struct MultPartition{
@@ -59,6 +64,8 @@ SymbolicExpression* SymbolicMult(SymbolicExpression* left,SymbolicExpression* ri
 SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,Arena* out);
 SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,SymbolicExpression* extra,Arena* out);
 SymbolicExpression* SymbolicDiv(SymbolicExpression* top,SymbolicExpression* bottom,Arena* out);
+
+SymbolicExpression* SymbolicFunc(String functionName,Array<SymbolicExpression*> terms,Arena* out);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);

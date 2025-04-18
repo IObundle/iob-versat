@@ -161,6 +161,15 @@ if(_){ \
 
 #define DEBUG_BREAK() DEBUG_BREAK_IF(true)
 
+#define WARN_CODE() do{ \
+    once{ \
+      printf("\n\n===========\n"); \
+      printf("WARNING, reached a piece of code that is not properly implemented or tested and can give erroneous results:\n"); \
+      LOCATION(); \
+      printf("===========\n\n\n"); \
+    }; \
+  } while(0)
+
 // If possible use argument to put a simple string indicating the error that must likely occured
 // We do not print it for now but useful for long lasting code.
 #define NOT_IMPLEMENTED(...) do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); fflush(stdout); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned

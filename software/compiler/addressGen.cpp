@@ -194,8 +194,16 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
   temp.terms = RemoveElement(external->terms,highestConstantIndex,out);
   temp.freeTerm = external->freeTerm;
 
+  // We perform a loop "evaluation" here. 
   SymbolicExpression* val = EvaluateMaxLinearSumValue(&temp,out);
   SymbolicExpression* maxLoopValueExpr = Normalize(SymbolicAdd(val,PushLiteral(out,1),out),out);
+
+#if 1
+  Array<SymbolicExpression*> terms = PushArray<SymbolicExpression*>(out,2);
+  terms[0] = maxLoopValueExpr;
+  terms[1] = PushVariable(out,STRING("VERSAT_DIFF_W"));
+  maxLoopValueExpr = SymbolicFunc(STRING("ALIGN"),terms,out);
+#endif
   
   result->internal = Copy(external,out);
   result->internal->terms[highestConstantIndex].term = maxLoopValueExpr; //PushLiteral(out,maxLoopValue);
@@ -381,12 +389,10 @@ static Array<InternalMemoryAccess> CompileInternalAccess(LoopLinearSum* access,A
   return res;
 }
 
-AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
+AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out){
   TEMP_REGION(temp,out);
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
   Array<InternalMemoryAccess> internal = CompileInternalAccess(access->internal,temp);
-
-  printf("%d\n",internal.size);
   
   AddressVParameters res = {};
   
@@ -410,6 +416,15 @@ AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
   
   res.ext_addr = ext_addr;
   res.length = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length));
+
+  // NOTE: The reason we need to align is because the increase in AXI_DATA_W forces data to be aligned inside the VUnits memories. The single loop does not care because we only need to access values individually, but the double loop cannot function because it assumes that the data is read and stored in a linear matter while in reality the data is stored in multiples of (AXI_DATA_W/DATA_W). 
+  
+#if 0
+  if(doubleLoop){
+    res.length = PushString(out,"(ALIGN(%.*s,VERSAT_DIFF_W) * sizeof(float))",UNPACK_SS(external.length));
+  }
+#endif
+  
   res.amount_minus_one = PushString(out,external.amountMinusOne);
   res.addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
 
@@ -421,16 +436,31 @@ AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
     res.per = PushString(out,l.periodExpression);
     res.incr = PushString(out,l.incrementExpression);
     res.duty = PushString(out,l.dutyExpression);
+
+//    if(highestExternalLoop == 0){
+//      res.incr = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.incrementExpression));
+//    }
+
     res.iter = PushString(out,l.iterationExpression);
     res.shift = PushString(out,l.shiftExpression);
-  }
+//    if(highestExternalLoop == 1){
+//      res.shift = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.shiftExpression));
+//    }
+    }
     
   if(internal.size > 1){
     InternalMemoryAccess l = internal[1]; 
     res.per2 = PushString(out,l.periodExpression);
     res.incr2 = PushString(out,l.incrementExpression);
+//    if(highestExternalLoop == 2){
+//      res.incr2 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.incrementExpression));
+//    }
+    
     res.iter2 = PushString(out,l.iterationExpression);
     res.shift2 = PushString(out,l.shiftExpression);
+//    if(highestExternalLoop == 3){
+//      res.shift2 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.shiftExpression));
+//    }
   } else {
     res.per2 = STRING("0");
     res.incr2 = STRING("0");
@@ -439,12 +469,19 @@ AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out){
   }
 
   // TODO: This is stupid. Need to represent the per,incr,iter,shift as a struct and have an array to be able to handle N outputs automatically, hardcoding like this is not the way.
+  // TODO: Do not like this being as hardcoded as it is, but we cannot really progress until we start tackling the AXI_DATA_W and start properly testing stuff.
   if(internal.size > 2){
     InternalMemoryAccess l = internal[2]; 
     res.per3 = PushString(out,l.periodExpression);
     res.incr3 = PushString(out,l.incrementExpression);
+//    if(highestExternalLoop == 4){
+//      res.incr3 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.incrementExpression));
+//    }
     res.iter3 = PushString(out,l.iterationExpression);
     res.shift3 = PushString(out,l.shiftExpression);
+//    if(highestExternalLoop == 5){
+//      res.shift3 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.shiftExpression));
+//    }
   } else {
     res.per3 = STRING("0");
     res.incr3 = STRING("0");

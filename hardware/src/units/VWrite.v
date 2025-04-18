@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
 module VWrite #(
-   parameter SIZE_W     = 32,
-   parameter DATA_W     = 32,
+   //parameter SIZE_W     = 32, TODO: Completely forgot why we have SIZE_W in the first place.
+   parameter DATA_W     = 32, // Internal datapath width
    parameter ADDR_W     = 16,
    parameter PERIOD_W   = 14, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
-   parameter AXI_ADDR_W = 32,
-   parameter AXI_DATA_W = 32,
+   parameter AXI_ADDR_W = 32, 
+   parameter AXI_DATA_W = 32, // External databus width
    parameter DELAY_W    = 7,
    parameter LEN_W      = 16
 ) (
@@ -117,8 +117,8 @@ module VWrite #(
    reg gen_valid;
    wire gen_ready;
 
-   localparam SIZE_W_TEMP = (SIZE_W / 8);
-   localparam [ADDR_W-1:0] OFFSET_W = SIZE_W_TEMP[ADDR_W-1:0];
+   localparam OFFSET_TEMP = AXI_DATA_W / 8;
+   localparam [ADDR_W-1:0] OFFSET_W = OFFSET_TEMP[ADDR_W-1:0];
 
    always @(posedge clk,posedge rst) begin
       if(rst) begin
@@ -144,7 +144,7 @@ module VWrite #(
       .LEN_W(LEN_W),
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W),
+      .DATA_W(DATA_W),
       .PERIOD_W(PERIOD_W),
       .DELAY_W(1)
       ) writer (
@@ -202,7 +202,7 @@ module VWrite #(
    );
 
    assign data_ready = databus_ready_0;
-   assign databus_wstrb_0 = 4'b1111;
+   assign databus_wstrb_0 = ~0;
    assign databus_wdata_0 = data_data; 
 
    wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};

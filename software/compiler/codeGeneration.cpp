@@ -982,11 +982,8 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       Repr(b,doubleLoop);
       String repr = EndString(temp,b);
       c->Comment(repr);
-      
-      String r = PushString(temp,"printf(\"Double loop\\n\")"); 
-      //c->Statement(r);
-              
-      AddressVParameters parameters = InstantiateAccess(doubleLoop,temp);
+
+      AddressVParameters parameters = InstantiateAccess(doubleLoop,loopIndex,true,temp);
       EmitStoreAddressGenIntoConfig(c,parameters);
     }
 
@@ -998,10 +995,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       String repr = EndString(temp,b);
       c->Comment(repr);
 
-      String r = PushString(temp,"printf(\"Single loop\\n\")"); 
-      //c->Statement(r);
-
-      AddressVParameters parameters = InstantiateAccess(singleLoop,temp);
+      AddressVParameters parameters = InstantiateAccess(singleLoop,-1,false,temp);
       EmitStoreAddressGenIntoConfig(c,parameters);
     }
 

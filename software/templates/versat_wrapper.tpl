@@ -200,10 +200,10 @@ if(SimulateDatabus){
             if(ptr == nullptr){
             #{if opts.databusDataSize > 64}
             for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int32_t)); i++){
-               self->databus_rdata_@{i}[i] = 0xfeeffeef;
+               self->databus_rdata_@{i}[i] = 0xdeadbeef;
             }
             #{else}
-               self->databus_rdata_@{i} = 0xfeeffeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
+               self->databus_rdata_@{i} = 0xdeadbeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
             #{end}
             } else {
             #{if opts.databusDataSize > 64}

@@ -6,6 +6,8 @@
 // TODO: The interface logic is a bit clubersome to use by outside modules. Would be nice to give another look.
 // TODO: Also take a look at the BurstAlign and BurstSplit interfaces. These three modules are usually used together but the interface is a bit clubersome when doing so.
 //       It should be easy to instantiate a TransferController and the necessary Align or Split interfaces without much hassle
+// TODO: We might also consider implementing some transfer logic inside this. Forcing the outside code to set the burst_start_i wire is a bit error prone.
+//       We can always receive the AXI wires and use them to drive the logic. It probably does not add any extra resources since we are just implementing what the outside code is implementing already.
 module AXITransferController #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,

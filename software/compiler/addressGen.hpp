@@ -49,6 +49,6 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 
-AddressVParameters InstantiateAccess(AddressAccess* access,Arena* out);
+AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out);
 
 
