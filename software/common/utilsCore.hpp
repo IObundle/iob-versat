@@ -25,6 +25,8 @@
 #define MIN(A,B) ((A) < (B) ? (A) : (B))
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
 
+inline float ABS(float f){return (f < 0.0f ? -f : f);};
+
 // TODO: We probably want to standardize some of these. Do it right. Care about overflow and stuff like that
 //       Either that or use values from C or something.
 #ifndef INT_MAX

@@ -11,14 +11,24 @@
 
 #include "versat_accel.h" // TODO: Is this needed? We technically have all the data that we need to not depend on this header and removing this dependency could simplify the build process. Take a look later
 
-//#include "versat.hpp"
-//#include "utils.hpp"
-//#include "acceleratorStats.hpp"
-
 #define ALIGN_UP(val,size) (((val) + (size - 1)) & ~(size - 1))
 #define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
 #include "verilated.h"
+
+// Needed to obtain the wire size of the unit from the verilated code.
+// Since the verilated code is an "instantiation" of the unit, we do not have to bother with the possibility of wire not being concrete (because they depend on parameters). We can just use the values directly.
+#include "VUnitWireInfo.h"
+
+#{for external externalMemory}
+#{set id external.interface}
+#{if external.type}
+// DP
+#{else}
+// 2P
+#define WIRE_SIZE_ext_2p_addr_in_@{id} (UNIT_MSB_ext_2p_addr_in_@{id} - UNIT_LSB_ext_2p_addr_in_@{id} + 1)
+#{end}
+#{end}
 
 #{if trace}       
 #{if opts.generateFSTFormat}
@@ -179,6 +189,14 @@ static void InternalUpdateAccelerator(){
 
    cyclesDone += 1;
 
+   #{if opts.databusDataSize > 64}
+   int mult = ((@{opts.databusDataSize} / 8) / sizeof(int32_t));
+   #{else}
+   int mult = 1;
+   #{end}
+
+   int mult2 = @{opts.databusDataSize / 8};
+
    V@{typeName}* self = dut;
 
    // Databus must be updated before memories because databus could drive memories but memories "cannot" drive databus (in the sense that databus acts like a master if connected directly to memories but memories do not act like a master when connected to a databus. The unit logic is the one that acts like a master)
@@ -199,7 +217,7 @@ if(SimulateDatabus){
          if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
             #{if opts.databusDataSize > 64}
-            for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int32_t)); i++){
+            for(int i = 0; i < mult; i++){
                self->databus_rdata_@{i}[i] = 0xdeadbeef;
             }
             #{else}
@@ -207,8 +225,8 @@ if(SimulateDatabus){
             #{end}
             } else {
             #{if opts.databusDataSize > 64}
-               for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int)); i++){
-                   self->databus_rdata_@{i}[i] = ptr[access->counter + i];
+               for(int i = 0; i < mult; i++){
+                   self->databus_rdata_@{i}[i] = ptr[access->counter * mult + i];
                }
             #{else}
                self->databus_rdata_@{i} = ptr[access->counter];
@@ -217,8 +235,8 @@ if(SimulateDatabus){
          } else { // self->databus_wstrb_@{i} != 0
             if(ptr != nullptr){
             #{if opts.databusDataSize > 64}
-               for(int i = 0; i < (@{opts.databusDataSize} / sizeof(int)); i++){
-                  ptr[access->counter + i] = self->databus_wdata_@{i}[i];
+               for(int i = 0; i < mult; i++){
+                  ptr[access->counter * mult + i] = self->databus_wdata_@{i}[i];
                }
             #{else}
                ptr[access->counter] = self->databus_wdata_@{i};
@@ -228,18 +246,19 @@ if(SimulateDatabus){
          self->databus_ready_@{i} = 1;
 
        int transferLength = self->databus_len_@{i};
+       #{if opts.databusDataSize > 64}
+       int sizeOfData = @{opts.databusDataSize} / 8;
+       #{else}
        int sizeOfData = sizeof(@{dataType});
+       #{end}
+       
        int countersLength = ALIGN_UP(transferLength,sizeOfData) / sizeOfData;
 
          if(access->counter >= countersLength - 1){
             access->counter = 0;
             self->databus_last_@{i} = 1;
          } else {
-         #{if opts.databusDataSize > 64}
-             access->counter += (@{opts.databusDataSize} / sizeof(int));
-         #{else}
-             access->counter += 1;
-         #{end}
+            access->counter += 1;
          }
 
          access->latencyCounter = MEMORY_LATENCY;
@@ -261,8 +280,14 @@ if(SimulateDatabus){
    int saved_dp_enable_@{id}_port_@{index} = self->ext_dp_enable_@{id}_port_@{index};
    int saved_dp_write_@{id}_port_@{index} = self->ext_dp_write_@{id}_port_@{index};
    int saved_dp_addr_@{id}_port_@{index} = self->ext_dp_addr_@{id}_port_@{index};
+
+   #{if opts.databusDataSize > 64}
+   @{dataType} saved_dp_data_@{id}_port_@{index}[((@{opts.databusDataSize} / 8) / sizeof(int32_t))];
+   memcpy(saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}) * mult);
+   #{else}
    @{dataType} saved_dp_data_@{id}_port_@{index};
-   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}));
+   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}) * mult);
+   #{end}
    #{end}
 
    {
@@ -271,37 +296,34 @@ if(SimulateDatabus){
    }
    #{else}
    // 2P
-   #{set dataType #{call IntName external.tp.dataSizeOut}}
+   uint8_t saved_2p_r_data_@{id}[@{opts.databusDataSize / 8}];
 
-   @{dataType} saved_2p_r_data_@{id};
    {
      int memSize = @{external |> MemorySize};
-   // 2P
       if(self->ext_2p_read_@{id}){
          int readOffset = self->ext_2p_addr_in_@{id};
 
          Assert(readOffset < memSize);
-         int address = baseAddress + readOffset; // * sizeof(@{dataType});
+         int address = baseAddress + readOffset;
          
-         address = ALIGN_DOWN(address,sizeof(@{dataType}));
+         address = ALIGN_DOWN(address,mult2);
 
-         Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
-
-         @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-         memcpy(&saved_2p_r_data_@{id},ptr,sizeof(@{dataType}));
+         Assert(address + mult2 <= totalExternalMemory);
+         
+         uint8_t* ptr = (uint8_t*) &externalMemory[address];
+         memcpy(saved_2p_r_data_@{id},ptr,mult2);
       }
      baseAddress += memSize;
    }
 
-#if 1
    int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
    int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
-#endif
    
    int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
    int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
-   @{dataType} saved_2p_w_data_@{id};
-   memcpy(&saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},sizeof(@{dataType}));
+
+   uint8_t saved_2p_w_data_@{id}[@{opts.databusDataSize / 8}];
+   memcpy(saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},mult2);
 
    #{end}
    self->eval();
@@ -328,11 +350,11 @@ if(SimulateDatabus){
        Assert(readOffset < memSize);
        int address = baseAddress + readOffset;
 
-       address = ALIGN_DOWN(address,sizeof(@{dataType}));
-       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
+       address = ALIGN_DOWN(address,sizeof(@{dataType}) * mult);
+       Assert(address + sizeof(@{dataType}) * mult <= totalExternalMemory);
 
        @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-       memcpy(&self->ext_dp_in_@{id}_port_@{index},ptr,sizeof(@{dataType}));
+       memcpy(&self->ext_dp_in_@{id}_port_@{index},ptr,sizeof(@{dataType}) * mult);
       }
    #{end}
    baseAddress += memSize;
@@ -342,17 +364,30 @@ if(SimulateDatabus){
    {
      int memSize = @{external |> MemorySize};
    // 2P
+
+#if 0
+   // TEST
+   printf("ADDR: %p\n",self);
+   printf("\nSIZEOF: %lu\n",sizeof(self->ext_2p_data_in_@{id}));
+   printf("ADDRESS1: %p\n",&self->ext_2p_addr_in_@{id});
+   printf("SIZE1: %lu\n",sizeof(self->ext_2p_addr_in_@{id}));
+   printf("\nADDRESS2: %p\n",&self->ext_2p_data_in_@{id});
+   fflush(stdout);
+   exit(0);
+#endif
+
       if(saved_2p_r_enable_@{id}){
        int readOffset = saved_2p_r_addr_@{id};
+       int size = sizeof(self->ext_2p_data_in_@{id});
 
        Assert(readOffset < memSize);
-       int address = baseAddress + readOffset; // * sizeof(@{dataType});
+       int address = baseAddress + readOffset;
 
-       address = ALIGN_DOWN(address,sizeof(@{dataType}));
-       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
+       address = ALIGN_DOWN(address,size);
+       Assert(address + size <= totalExternalMemory);
 
-       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-       memcpy(&self->ext_2p_data_in_@{id},ptr,sizeof(@{dataType}));
+       uint8_t* ptr = (uint8_t*) &externalMemory[address];
+       memcpy(&self->ext_2p_data_in_@{id},ptr,sizeof(self->ext_2p_data_in_@{id}));
       }
      baseAddress += memSize;
      }
@@ -379,10 +414,10 @@ if(SimulateDatabus){
        int address = baseAddress + writeOffset; // * sizeof(@{dataType});
 
        address = ALIGN_DOWN(address,sizeof(@{dataType}));
-       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
+       Assert(address + sizeof(@{dataType}) * mult <= totalExternalMemory);
 
        @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-       memcpy(ptr,&saved_dp_data_@{id}_port_@{index},sizeof(@{dataType}));
+       memcpy(ptr,&saved_dp_data_@{id}_port_@{index},sizeof(@{dataType}) * mult);
    }
    #{end}
    baseAddress += memSize;
@@ -398,11 +433,11 @@ if(SimulateDatabus){
        Assert(writeOffset < memSize);
        int address = baseAddress + writeOffset; // * sizeof(@{dataType});
 
-       address = ALIGN_DOWN(address,sizeof(@{dataType}));
-       Assert(address + sizeof(@{dataType}) <= totalExternalMemory);
-       
-       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-       memcpy(ptr,&saved_2p_w_data_@{id},sizeof(@{dataType}));
+       address = ALIGN_DOWN(address,mult2);
+       Assert(address + mult2 <= totalExternalMemory);
+
+       uint8_t* ptr = (uint8_t*) &externalMemory[address];
+       memcpy(ptr,saved_2p_w_data_@{id},mult2);
      }
      baseAddress += memSize;
      }

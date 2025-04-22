@@ -150,18 +150,25 @@ struct MapDef{
   bool isBijection;
 };
 
+struct FileDef{
+  String name;
+  String filepathFromRoot;
+};
+
 struct Defs{
   Array<EnumDef*> enums;
   Array<StructDef*> structs;
   Array<TableDef*> tables;
   Array<MapDef*> maps;
+  Array<FileDef*> files;
 };
 
 enum DefType{
   DefType_ENUM,
   DefType_STRUCT,
   DefType_TABLE,
-  DefType_MAP
+  DefType_MAP,
+  DefType_FILE
 };
 
 struct GenericDef{
@@ -180,6 +187,7 @@ Pool<EnumDef> enums = {};
 Pool<StructDef> structs = {};
 Pool<TableDef> tables = {};
 Pool<MapDef> maps = {};
+Pool<FileDef> files = {};
 
 // TODO: Weird way of doing things but works for now.
 GenericDef GetDefinition(Token name){
@@ -468,6 +476,33 @@ TableDef* ParseTable(Tokenizer* tok,Arena* out){
   return def;
 }
 
+FileDef* ParseFile(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  AssertToken(tok,"file");
+
+  String fileName = tok->NextToken();
+
+  AssertToken(tok,"=");
+
+  auto mark = tok->Mark();
+
+  while(!tok->Done()){
+    if(tok->IfPeekToken(";")){
+      break;
+    }
+    tok->NextToken();
+  }
+
+  String filepath = tok->Point(mark);
+  AssertToken(tok,";");
+
+  FileDef* def = files.Alloc();
+  def->name = fileName;
+  def->filepathFromRoot = TrimWhitespaces(filepath);
+
+  return def;
+}
+
 MapDef* ParseMap(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -548,6 +583,8 @@ void ParseContent(String content,Arena* out){
       StructDef* def = ParseStruct(tok,out);
     } else if(CompareString(peek,"table")){
       TableDef* def = ParseTable(tok,out);
+    } else if(CompareString(peek,"file")){
+      FileDef* def = ParseFile(tok,out);
     } else if(CompareString(peek,"map") || CompareString(peek,"define_map")){
       MapDef* def = ParseMap(tok,out);
     } else {
@@ -785,6 +822,11 @@ int main(int argc,const char* argv[]){
         fprintf(header,"Opt<%.*s> META_%.*s_ReverseMap(%.*s);\n",UNPACK_SS(pTo.type->name),UNPACK_SS(def->name),UNPACK_SS(pFrom.type->name));
       }
     }
+
+    fprintf(header,"\n// File content\n\n");
+    for(FileDef* def : files){
+      fprintf(header,"extern String META_%.*s_Content;\n",UNPACK_SS(def->name));
+    }
   } // header
   
   {
@@ -1002,6 +1044,32 @@ int main(int argc,const char* argv[]){
         fprintf(source,"}\n");
       }
     }
+
+    fprintf(source,"\n// Embedded Files\n\n");
+
+    for(FileDef* def : files){
+      String path = def->filepathFromRoot;
+      String absolute = GetAbsolutePath(path,temp);
+      String content = PushFile(temp,absolute);
+
+      // TODO: This is probably a bit slower than needed.
+      fprintf(source,"String META_%.*s_Content = STRING(\"",UNPACK_SS(def->name));
+      
+      for(char ch : content){
+        switch(ch){
+        case '\n': fprintf(source,"\\n"); break;
+        case '\"': fprintf(source,"\\\""); break;
+        case '\t': fprintf(source,"\\t"); break;
+        case '\\': fprintf(source,"\\"); break;
+        case '\r': fprintf(source,"\\r"); break;
+        case '\'': fprintf(source,"\'"); break;
+        default: fprintf(source,"%c",ch);
+        }
+      }
+
+      fprintf(source,"\");");
+    }
+    
   } // source
     
   return 0;

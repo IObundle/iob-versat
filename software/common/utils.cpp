@@ -127,10 +127,21 @@ void PrintEscapedString(String toEscape,char spaceSubstitute){
   }
 }
 
-String GetAbsolutePath(const char* path,Arena* out){
-  fs::path canonical = fs::weakly_canonical(path);
-  String res = PushString(out,"%s",canonical.c_str());
+String GetAbsolutePath(String path,Arena* out){
+  char buffer[PATH_MAX+1];
+  char* ptr = realpath(StaticFormat("%.*s",UNPACK_SS(path)),buffer);
+
+  String res = PushString(out,"%s",ptr);
   return res;
+}
+
+String CurrentWorkingDirectory(Arena* out){
+  // NOTE: Kinda weird but since getcdw does not return the size, its simpler to do this.
+  char buffer[1024];
+  getcwd(buffer, sizeof(buffer));
+  Assert(buffer); // TODO: Do not like this, check how getcdw can fail
+  
+  return PushString(out,"%.*s",1024,buffer);
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){

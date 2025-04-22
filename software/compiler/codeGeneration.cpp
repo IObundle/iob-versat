@@ -1952,7 +1952,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     ProcessTemplate(output,comp);
 
     // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
-    // Used by make to find the verilator root of the build server
+    // TODO: Instead of hardcoding this, need to use the embedData approach used for the ExtractVerilatedSignals and use for this.
     String getVerilatorRootScript = STRING("#!/bin/bash\nTEMP_DIR=$(mktemp -d)\n\npushd $TEMP_DIR &> /dev/null\n\necho \"module Test(); endmodule\" > Test.v\nverilator --cc Test.v &> /dev/null\n\npushd ./obj_dir &> /dev/null\nVERILATOR_ROOT=$(awk '\"VERILATOR_ROOT\" == $1 { print $3}' VTest.mk)\nrm -r $TEMP_DIR\n\necho $VERILATOR_ROOT\n");
     {
       String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
@@ -1963,5 +1963,16 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       fflush(output);
       OS_SetScriptPermissions(output);
     }
+
+    {
+      String extractVerilatedSignalPath = PushString(temp,"%.*s/ExtractVerilatedSignals.py",UNPACK_SS(globalOptions.softwareOutputFilepath));
+      FILE* output = OpenFileAndCreateDirectories(extractVerilatedSignalPath,"w",FilePurpose_MISC);
+      DEFER_CLOSE_FILE(output);
+
+      fprintf(output,"%.*s",UNPACK_SS(META_ExtractVerilatedSignals_Content));
+      fflush(output);
+      OS_SetScriptPermissions(output);
+    }
   }
+  
 }

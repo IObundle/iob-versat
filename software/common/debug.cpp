@@ -294,7 +294,7 @@ void PrintStacktrace(){
   
   Array<String> canonical = PushArray<String>(temp,size);
   for(int i = 0; i < size; i++){
-    canonical[i] = GetAbsolutePath(StaticFormat("%.*s",UNPACK_SS(traces[i].fileName)),temp);
+    canonical[i] = GetAbsolutePath(traces[i].fileName,temp);
   }
 
 #if 1

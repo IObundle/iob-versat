@@ -100,3 +100,4 @@ define_map possibleAttributes{
    VERSAT_STAGE   : versat_stage
 };
 
+file ExtractVerilatedSignals = ./scripts/ExtractVerilatedSignals.py;

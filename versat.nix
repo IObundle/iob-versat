@@ -12,7 +12,7 @@ let pkgs2 = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/cf8cc
 in
 let
 fs = tweag.lib.fileset;
-sourceFiles = (fs.union ./Makefile (fs.union ./config.mk ./software));
+sourceFiles = (fs.union ./scripts (fs.union ./Makefile (fs.union ./config.mk ./software)));
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "versat";

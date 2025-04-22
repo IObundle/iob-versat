@@ -13,7 +13,8 @@ Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute);
 void   PrintEscapedString(String toEscape,char spaceSubstitute);
 
-String GetAbsolutePath(const char* path,Arena* out);
+String CurrentWorkingDirectory(Arena* out);
+String GetAbsolutePath(String path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
