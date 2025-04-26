@@ -24,11 +24,45 @@
 #{set id external.interface}
 #{if external.type}
 // DP
+#define WIRE_SIZE_ext_dp_addr_@{id} (UNIT_MSB_ext_dp_addr_@{id}_port_0 - UNIT_LSB_ext_dp_addr_@{id}_port_0 + 1)
+#define BYTE_SIZE_ext_dp_@{id} (1 << (WIRE_SIZE_ext_dp_addr_@{id}))
+
+#define WIRE_SIZE_ext_dp_data_@{id}_0 (UNIT_MSB_ext_dp_out_@{id}_port_0 - UNIT_LSB_ext_dp_out_@{id}_port_0 + 1)
+#define WIRE_SIZE_ext_dp_data_@{id}_1 (UNIT_MSB_ext_dp_out_@{id}_port_1 - UNIT_LSB_ext_dp_out_@{id}_port_1 + 1)
+
+#define BYTE_SIZE_ext_dp_data_@{id}_0 (WIRE_SIZE_ext_dp_data_@{id}_0 / 8)
+#define BYTE_SIZE_ext_dp_data_@{id}_1 (WIRE_SIZE_ext_dp_data_@{id}_1 / 8)
+
 #{else}
 // 2P
 #define WIRE_SIZE_ext_2p_addr_in_@{id} (UNIT_MSB_ext_2p_addr_in_@{id} - UNIT_LSB_ext_2p_addr_in_@{id} + 1)
+#define WIRE_SIZE_ext_2p_addr_out_@{id} (UNIT_MSB_ext_2p_addr_out_@{id} - UNIT_LSB_ext_2p_addr_out_@{id} + 1)
+#define BYTE_SIZE_ext_2p_@{id} (1 << (WIRE_SIZE_ext_2p_addr_in_@{id}))
+
+#define WIRE_SIZE_ext_2p_data_in_@{id} (UNIT_MSB_ext_2p_data_in_@{id} - UNIT_LSB_ext_2p_data_in_@{id} + 1)
+#define WIRE_SIZE_ext_2p_data_out_@{id} (UNIT_MSB_ext_2p_data_out_@{id} - UNIT_LSB_ext_2p_data_out_@{id} + 1)
+
+#define BYTE_SIZE_ext_2p_data_in_@{id} (WIRE_SIZE_ext_2p_data_in_@{id} / 8)
+#define BYTE_SIZE_ext_2p_data_out_@{id} (WIRE_SIZE_ext_2p_data_out_@{id} / 8)
 #{end}
 #{end}
+
+inline void CopyFromMemory(void* output,void* memory,int address,int memoryDataSize){
+   char* memoryAsChar = (char*) memory;
+   int trueAddress = ALIGN_DOWN(address,memoryDataSize);
+
+   // TODO: Check if we are not writing/reading outside the boundary
+   //Assert(trueAddress <= );
+   memcpy(output,&memoryAsChar[trueAddress],memoryDataSize);
+};
+
+inline void CopyToMemory(void* input,void* memory,int address,int memoryDataSize){
+   char* memoryAsChar = (char*) memory;
+   int trueAddress = ALIGN_DOWN(address,memoryDataSize);
+   
+   // TODO: Check if we are not writing/reading outside the boundary
+   memcpy(&memoryAsChar[trueAddress],input,memoryDataSize);
+}
 
 #{if trace}       
 #{if opts.generateFSTFormat}
@@ -86,17 +120,11 @@ static const int MEMORY_LATENCY = 0;
 
 typedef char Byte;
 
-#if 0
-typedef struct{
-#{for name namedStates}
-  int @{name};
-#{end}
-} AcceleratorState;
-#endif
-
 // Everything is statically allocated
-static constexpr int totalExternalMemory = @{totalExternalMemory};
+#{if externalMemory}
+static constexpr int totalExternalMemory = #{join " + " ext externalMemory} #{set id ext.interface} #{if ext.type} BYTE_SIZE_ext_dp_@{id} #{else} BYTE_SIZE_ext_2p_@{id} #{end} #{end} ; 
 static Byte externalMemory[totalExternalMemory]; 
+#{end}
 static AcceleratorConfig configBuffer = {};
 static AcceleratorState stateBuffer = {};
 static AcceleratorStatic staticBuffer = {};
@@ -189,13 +217,7 @@ static void InternalUpdateAccelerator(){
 
    cyclesDone += 1;
 
-   #{if opts.databusDataSize > 64}
-   int mult = ((@{opts.databusDataSize} / 8) / sizeof(int32_t));
-   #{else}
-   int mult = 1;
-   #{end}
-
-   int mult2 = @{opts.databusDataSize / 8};
+   int sizeOfData = (@{opts.databusDataSize} / 8);
 
    V@{typeName}* self = dut;
 
@@ -211,48 +233,23 @@ if(SimulateDatabus){
       if(access->latencyCounter > 0){
          access->latencyCounter -= 1;
       } else {
-         #{set dataType #{call IntName opts.databusDataSize}}
-         @{dataType}* ptr = (@{dataType}*) (self->databus_addr_@{i});
+         char* ptr = (char*) (self->databus_addr_@{i});
 
          if(self->databus_wstrb_@{i} == 0){
             if(ptr == nullptr){
-            #{if opts.databusDataSize > 64}
-            for(int i = 0; i < mult; i++){
-               self->databus_rdata_@{i}[i] = 0xdeadbeef;
-            }
-            #{else}
-               self->databus_rdata_@{i} = 0xdeadbeef; // Feed bad data if not set (in pc-emul is needed otherwise segfault)
-            #{end}
+              memset(&self->databus_rdata_@{i},0xdf,sizeOfData);
             } else {
-            #{if opts.databusDataSize > 64}
-               for(int i = 0; i < mult; i++){
-                   self->databus_rdata_@{i}[i] = ptr[access->counter * mult + i];
-               }
-            #{else}
-               self->databus_rdata_@{i} = ptr[access->counter];
-            #{end}
+              memcpy(&self->databus_rdata_@{i},&ptr[access->counter * sizeOfData],sizeOfData);
             }
          } else { // self->databus_wstrb_@{i} != 0
             if(ptr != nullptr){
-            #{if opts.databusDataSize > 64}
-               for(int i = 0; i < mult; i++){
-                  ptr[access->counter * mult + i] = self->databus_wdata_@{i}[i];
-               }
-            #{else}
-               ptr[access->counter] = self->databus_wdata_@{i};
-            #{end}
+              memcpy(&ptr[access->counter * sizeOfData],&self->databus_wdata_@{i},sizeOfData);
             }
          }
          self->databus_ready_@{i} = 1;
 
-       int transferLength = self->databus_len_@{i};
-       #{if opts.databusDataSize > 64}
-       int sizeOfData = @{opts.databusDataSize} / 8;
-       #{else}
-       int sizeOfData = sizeof(@{dataType});
-       #{end}
-       
-       int countersLength = ALIGN_UP(transferLength,sizeOfData) / sizeOfData;
+         int transferLength = self->databus_len_@{i};
+         int countersLength = ALIGN_UP(transferLength,sizeOfData) / sizeOfData;
 
          if(access->counter >= countersLength - 1){
             access->counter = 0;
@@ -274,47 +271,23 @@ if(SimulateDatabus){
    #{set id external.interface}
    #{if external.type}
    // DP
-   #{for dp external.dp}
-   #{set dataType #{call IntName dp.dataSizeIn}}
-
+     #{for dp external.dp}
    int saved_dp_enable_@{id}_port_@{index} = self->ext_dp_enable_@{id}_port_@{index};
    int saved_dp_write_@{id}_port_@{index} = self->ext_dp_write_@{id}_port_@{index};
    int saved_dp_addr_@{id}_port_@{index} = self->ext_dp_addr_@{id}_port_@{index};
 
-   #{if opts.databusDataSize > 64}
-   @{dataType} saved_dp_data_@{id}_port_@{index}[((@{opts.databusDataSize} / 8) / sizeof(int32_t))];
-   memcpy(saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}) * mult);
-   #{else}
-   @{dataType} saved_dp_data_@{id}_port_@{index};
-   memcpy(&saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},sizeof(@{dataType}) * mult);
-   #{end}
-   #{end}
-
-   {
-     int memSize = @{external |> MemorySize}; // Template add something about id but do not know if needed
-     baseAddress += memSize;
-   }
+   uint8_t saved_dp_data_@{id}_port_@{index}[BYTE_SIZE_ext_dp_data_@{id}_@{index}]; 
+   memcpy(saved_dp_data_@{id}_port_@{index},&self->ext_dp_out_@{id}_port_@{index},BYTE_SIZE_ext_dp_data_@{id}_@{index});
+     #{end}
+   baseAddress += BYTE_SIZE_ext_dp_@{id};
    #{else}
    // 2P
-   uint8_t saved_2p_r_data_@{id}[@{opts.databusDataSize / 8}];
-
-   {
-     int memSize = @{external |> MemorySize};
-      if(self->ext_2p_read_@{id}){
-         int readOffset = self->ext_2p_addr_in_@{id};
-
-         Assert(readOffset < memSize);
-         int address = baseAddress + readOffset;
-         
-         address = ALIGN_DOWN(address,mult2);
-
-         Assert(address + mult2 <= totalExternalMemory);
-         
-         uint8_t* ptr = (uint8_t*) &externalMemory[address];
-         memcpy(saved_2p_r_data_@{id},ptr,mult2);
-      }
-     baseAddress += memSize;
+   uint8_t saved_2p_r_data_@{id}[BYTE_SIZE_ext_2p_data_in_@{id}];
+   if(self->ext_2p_read_@{id}){
+     int readOffset = self->ext_2p_addr_in_@{id};
+     CopyFromMemory(saved_2p_r_data_@{id},&externalMemory[baseAddress],readOffset,BYTE_SIZE_ext_2p_data_in_@{id});
    }
+   baseAddress += BYTE_SIZE_ext_2p_@{id};
 
    int saved_2p_r_enable_@{id} = self->ext_2p_read_@{id};
    int saved_2p_r_addr_@{id} = self->ext_2p_addr_in_@{id}; // Instead of saving address, should access memory and save data. Would simulate better what is actually happening
@@ -322,9 +295,8 @@ if(SimulateDatabus){
    int saved_2p_w_enable_@{id} = self->ext_2p_write_@{id};
    int saved_2p_w_addr_@{id} = self->ext_2p_addr_out_@{id};
 
-   uint8_t saved_2p_w_data_@{id}[@{opts.databusDataSize / 8}];
-   memcpy(saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},mult2);
-
+   uint8_t saved_2p_w_data_@{id}[BYTE_SIZE_ext_2p_data_out_@{id}];
+   memcpy(saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},BYTE_SIZE_ext_2p_data_out_@{id});
    #{end}
    self->eval();
 #{end}
@@ -338,60 +310,22 @@ if(SimulateDatabus){
    #{set id external.interface}
    #{if external.type}
    // DP
-   {
-
-   int memSize = @{external |> MemorySize};
-
    #{for dp external.dp}
-   #{set dataType #{call IntName dp.dataSizeIn}}
-      if(saved_dp_enable_@{id}_port_@{index} && !saved_dp_write_@{id}_port_@{index}){
-       int readOffset = saved_dp_addr_@{id}_port_@{index}; // Byte space
+   if(saved_dp_enable_@{id}_port_@{index} && !saved_dp_write_@{id}_port_@{index}){
+     int readOffset = saved_dp_addr_@{id}_port_@{index}; // Byte space
 
-       Assert(readOffset < memSize);
-       int address = baseAddress + readOffset;
-
-       address = ALIGN_DOWN(address,sizeof(@{dataType}) * mult);
-       Assert(address + sizeof(@{dataType}) * mult <= totalExternalMemory);
-
-       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-       memcpy(&self->ext_dp_in_@{id}_port_@{index},ptr,sizeof(@{dataType}) * mult);
-      }
-   #{end}
-   baseAddress += memSize;
+     CopyFromMemory(&self->ext_dp_in_@{id}_port_@{index},&externalMemory[baseAddress],readOffset,BYTE_SIZE_ext_dp_data_@{id}_@{index});
    }
+   #{end}
+   baseAddress += BYTE_SIZE_ext_dp_@{id};;
    #{else}
-   #{set dataType #{call IntName external.tp.dataSizeIn}}
-   {
-     int memSize = @{external |> MemorySize};
    // 2P
-
-#if 0
-   // TEST
-   printf("ADDR: %p\n",self);
-   printf("\nSIZEOF: %lu\n",sizeof(self->ext_2p_data_in_@{id}));
-   printf("ADDRESS1: %p\n",&self->ext_2p_addr_in_@{id});
-   printf("SIZE1: %lu\n",sizeof(self->ext_2p_addr_in_@{id}));
-   printf("\nADDRESS2: %p\n",&self->ext_2p_data_in_@{id});
-   fflush(stdout);
-   exit(0);
-#endif
-
-      if(saved_2p_r_enable_@{id}){
-       int readOffset = saved_2p_r_addr_@{id};
-       int size = sizeof(self->ext_2p_data_in_@{id});
-
-       Assert(readOffset < memSize);
-       int address = baseAddress + readOffset;
-
-       address = ALIGN_DOWN(address,size);
-       Assert(address + size <= totalExternalMemory);
-
-       uint8_t* ptr = (uint8_t*) &externalMemory[address];
-       memcpy(&self->ext_2p_data_in_@{id},ptr,sizeof(self->ext_2p_data_in_@{id}));
-      }
-     baseAddress += memSize;
-     }
-     #{end}
+   if(saved_2p_r_enable_@{id}){
+     int readOffset = saved_2p_r_addr_@{id};
+     CopyFromMemory(&self->ext_2p_data_in_@{id},&externalMemory[baseAddress],readOffset,BYTE_SIZE_ext_2p_data_in_@{id});
+   }
+   baseAddress += BYTE_SIZE_ext_2p_@{id};
+   #{end}
    self->eval();
 #{end}
 }
@@ -403,44 +337,23 @@ if(SimulateDatabus){
    #{set id external.interface}
    #{if external.type}
    {
-      // DP
-      int memSize = @{external |> MemorySize};
+   // DP
    #{for dp external.dp}
-   #{set dataType #{call IntName dp.dataSizeIn}}
-      if(saved_dp_enable_@{id}_port_@{index} && saved_dp_write_@{id}_port_@{index}){
-       int writeOffset = saved_dp_addr_@{id}_port_@{index};
+   if(saved_dp_enable_@{id}_port_@{index} && saved_dp_write_@{id}_port_@{index}){
+     int writeOffset = saved_dp_addr_@{id}_port_@{index};
 
-       Assert(writeOffset < memSize);
-       int address = baseAddress + writeOffset; // * sizeof(@{dataType});
-
-       address = ALIGN_DOWN(address,sizeof(@{dataType}));
-       Assert(address + sizeof(@{dataType}) * mult <= totalExternalMemory);
-
-       @{dataType}* ptr = (@{dataType}*) &externalMemory[address];
-       memcpy(ptr,&saved_dp_data_@{id}_port_@{index},sizeof(@{dataType}) * mult);
+     CopyToMemory(&saved_dp_data_@{id}_port_@{index},&externalMemory[baseAddress],writeOffset,BYTE_SIZE_ext_dp_data_@{id}_@{index});
    }
    #{end}
-   baseAddress += memSize;
+   baseAddress += BYTE_SIZE_ext_dp_@{id};
    }
    #{else}
-   #{set dataType #{call IntName external.tp.dataSizeOut}}
-     {
-     int memSize = @{external |> MemorySize};
-     // 2P
-     if(saved_2p_w_enable_@{id}){
-       int writeOffset = saved_2p_w_addr_@{id};
-
-       Assert(writeOffset < memSize);
-       int address = baseAddress + writeOffset; // * sizeof(@{dataType});
-
-       address = ALIGN_DOWN(address,mult2);
-       Assert(address + mult2 <= totalExternalMemory);
-
-       uint8_t* ptr = (uint8_t*) &externalMemory[address];
-       memcpy(ptr,saved_2p_w_data_@{id},mult2);
-     }
-     baseAddress += memSize;
-     }
+   // 2P
+   if(saved_2p_w_enable_@{id}){
+     int writeOffset = saved_2p_w_addr_@{id};
+     CopyToMemory(saved_2p_w_data_@{id},&externalMemory[baseAddress],writeOffset,BYTE_SIZE_ext_2p_data_out_@{id});
+   }
+   baseAddress += BYTE_SIZE_ext_2p_@{id};
    #{end}
    self->eval();
 #{end}

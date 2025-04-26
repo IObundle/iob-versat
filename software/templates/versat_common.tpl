@@ -116,17 +116,3 @@
    #{end}
    #{return nSeqOperations}
 #{end}
-
-#{define IntName count}
-#{set name "int32_t"}
-#{if count == 8}
-#{set name "int8_t"}
-#{end}
-#{if count == 16}
-#{set name "int16_t"}
-#{end}
-#{if count == 64}
-#{set name "int64_t"}
-#{end}
-#{return name}
-#{end}
