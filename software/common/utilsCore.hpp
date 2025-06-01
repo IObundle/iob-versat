@@ -71,6 +71,17 @@ inline float ABS(float f){return (f < 0.0f ? -f : f);};
 
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
 
+// NOTE: This macro instructs gcc to give an error for any switch that does not implement every case.
+//       Always end the switch with the END_SWITCH macro to restore the proper diagnostic message (which is just a warning)
+#define FULL_SWITCH(expr) _Pragma("GCC diagnostic error \"-Wswitch-enum\"") \
+  switch(expr)
+
+
+#define SWITCH(expr) _Pragma("GCC diagnostic warning \"-Wswitch-enum\"") \
+  switch(expr)
+
+#define END_SWITCH(expr) _Pragma("GCC diagnostic warning \"-Wswitch-enum\"")
+
 template<typename F>
 class _Defer{
 public:
@@ -562,6 +573,13 @@ Array<T> Offset(Array<T> in,int amount){
   }
 }
 
+template<typename T>
+inline Array<T> Shrink(Array<T> in,int amount){
+  Array<T> res = in;
+  res.size -= amount;
+  return res;
+}
+
 static inline bool Contains(String str,char ch){
    for(int i = 0; i < str.size; i++){
       if(str.data[i] == ch){
@@ -570,7 +588,6 @@ static inline bool Contains(String str,char ch){
    }
    return false;
 }
-
 
 template<typename T>
 inline void Reverse(Array<T>& arr){

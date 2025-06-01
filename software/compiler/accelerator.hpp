@@ -347,6 +347,9 @@ bool IsCombinatorial(Accelerator* accel);
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay);
 
+String GlobalStaticWireName(StaticId id,Wire w,Arena* out);
+
+// Accelerator mappings. A simple way of mapping nodes and port edges from one accelerator to another.
 void MappingCheck(AcceleratorMapping* map);
 void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
 AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out);

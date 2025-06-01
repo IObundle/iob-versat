@@ -94,7 +94,7 @@ struct CEmitter{
   CAST* FindFirstCASTType(CASTType type,bool errorIfNotFound = true);
   void InsertStatement(CAST* statementCAST);
   void InsertDeclaration(CAST* declarationCAST);
-  
+
   void Struct(String structName);
   void Member(String type,String memberName);
   

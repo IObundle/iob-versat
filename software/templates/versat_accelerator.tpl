@@ -103,38 +103,19 @@ module @{accel.name} #(
    input                           rst
    );
 
-wire wor_rvalid;
-
 wire [31:0] unitRdataFinal;
-reg [31:0] stateRead;
 
 #{if unitsMapped}
 // Memory access
-wire we = (|wstrb);
 wire[@{unitsMapped - 1}:0] unitRValid;
 reg [@{memoryMasks.size - 1}:0] memoryMappedEnable;
 wire [31:0] unitRData[@{unitsMapped - 1}:0];
 
 assign rdata = unitRdataFinal;
-assign rvalid = wor_rvalid;
-assign wor_rvalid = (|unitRValid);
-
-wire [31:0] #{join ", " i unitsMapped} rdata_@{i} #{end};
+assign rvalid = (|unitRValid);
 
 assign unitRdataFinal = (#{join "|" i unitsMapped} unitRData[@{i}] #{end});
-#{end}
 
-#{if nDones > 0}
-wire [@{nDones - 1}:0] unitDone;
-assign done = &unitDone;
-#{end}
-
-#{if numberConnections}
-wire [31:0] #{join ", " node instances} #{let id index} #{join ", " j node.outputs}#{if j} output_@{id}_@{index} #{end}#{end}
-#{end};
-#{end}
-
-#{if unitsMapped}
 // Memory mapped
 always @*
 begin
@@ -149,6 +130,17 @@ begin
    #{end}
    end
 end
+
+#{end}
+
+#{if nDones > 0}
+wire [@{nDones - 1}:0] unitDone;
+assign done = &unitDone;
+#{end}
+
+#{if numberConnections}
+wire [31:0] #{join ", " node instances} #{let id index} #{join ", " j node.outputs}#{if j} output_@{id}_@{index} #{end}#{end}
+#{end};
 #{end}
 
 #{if nCombOperations}

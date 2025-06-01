@@ -267,10 +267,8 @@ int main(int argc,char* argv[]){
   TEMP_REGION(temp2,temp);
   Arena* perm = globalPermanent;
 
-#if 1
+#if 0
   TestSymbolic();
-
-  //return 0;
 #endif
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
@@ -298,17 +296,17 @@ int main(int argc,char* argv[]){
   globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
   globalOptions.unitPaths = PushArrayFromList(perm,gather.unitPaths);
-  
-  RegisterTypes();
 
+  // Type stuff needed by templates
+  RegisterTypes();
   void RegisterParsedTypes();
   RegisterParsedTypes();
-
   void AfterRegisteringParsedTypes();
   AfterRegisteringParsedTypes();
   
   InitializeTemplateEngine(perm);
   LoadTemplates(perm);
+
   InitializeSimpleDeclarations();
 
   globalDebug.outputAccelerator = true;
@@ -487,8 +485,6 @@ int main(int argc,char* argv[]){
         decl->flattenedBaseCircuit = p.first;
         decl->flattenMapping = p.second;
       }
-
-      //Print(p.second);
     }
   }
 
@@ -728,6 +724,16 @@ AddressGen:
 -- The same concept applies to writes, but instead of storing memory, we must control the transfer process to not write over memory by completely disabling the strobe for the values that we do not want to write over.
 
 --- How would we handle bigger transfer sizes, like AXI_DATA_W = 256? For both reads and writes it become more difficult to save memory. 
+
+
+Testability:
+
+- While we test if versat runs and produces valid code, we do not test how does versat handle errors.
+
+-- How does Versat handle not being able to parse a Module Verilog?
+-- How does Versat handle not being able to parse the specs file?
+-- How does it handle graphs that contain loops, misuse in constructs like share, repeated variable names and the likes?
+-- Etc. Need to develop tests that only need to exercise this conditions and need to make sure that at least Versat produces some valid output and does not simply crash without giving any useful information.
 
 Misc:
 

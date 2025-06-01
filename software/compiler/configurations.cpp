@@ -996,9 +996,6 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   TEMP_REGION(temp,nullptr);
   
   GrowableArray<bool> seenShared = StartArray<bool>(temp);
-  
-  int memoryMappedDWords = 0;
-  int unitsMapped = 0;
 
   // TODO: Use AccelInfoIterator
 
@@ -1017,8 +1014,11 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   }
 
   info->configs = configsSeen->map->inserted;
-  
+
   // Handle non-static information
+  int memoryMappedDWords = 0;
+  int unitsMapped = 0;
+  int nDones = 0;
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
@@ -1054,10 +1054,14 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
     }
 
     info->signalLoop |= type->signalLoop;
+    if(ptr->declaration->implementsDone){
+      nDones += 1;
+    }
   }
 
   info->memoryMappedBits = log2i(memoryMappedDWords);
   info->unitsMapped = unitsMapped;
+  info->nDones = nDones;
   
   FUInstance* outputInstance = GetOutputInstance(&accel->allocated);
   if(outputInstance){

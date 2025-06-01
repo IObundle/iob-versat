@@ -129,6 +129,7 @@ struct AccelInfo{
   int sharedUnits;
   int externalMemoryInterfaces;
   int numberConnections;
+  int nDones;
   
   int memoryMappedBits;
   int unitsMapped;

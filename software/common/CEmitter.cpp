@@ -1,4 +1,4 @@
-#include "emitter.hpp"
+#include "CEmitter.hpp"
 
 #include "parser.hpp"
 
@@ -133,6 +133,7 @@ void CEmitter::InsertStatement(CAST* statementCAST){
 void CEmitter::InsertDeclaration(CAST* declarationAST){
   if(top == 0){
     *topLevel->declarations->PushElem() = declarationAST;
+    return;
   }
   
   for(int i = top - 1; i >= 0; i--){

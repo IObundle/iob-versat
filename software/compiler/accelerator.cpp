@@ -993,6 +993,11 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
   CalculateNodeType(outputNode);
 }
 
+String GlobalStaticWireName(StaticId id,Wire w,Arena* out){
+  String res = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(id.parent->name),UNPACK_SS(id.name),UNPACK_SS(w.name));
+  return res;
+}
+
 // Connects out -> in
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous){
   FUDeclaration* inDecl = in->declaration;

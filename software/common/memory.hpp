@@ -10,8 +10,9 @@
 
 struct Arena;
 extern Arena* contextArenas[2];
-// Pass nullptr to get one arena, pass an arena to get a guaranteed different arena
+// Pass nullptr to get one arena, pass an arena to get a guaranteed different arena to the one passed
 // Calling code must pass any arena that it contains to this function to make sure that the arena returned is different. We only receive one currently because we only expect to support out/temp flows (only 2 arenas required).
+// Check the TEMP_REGION macros and their usage to better understand how to use this approach for memory management.
 // Credit to Ryan Fleury for this technique.
 Arena* GetArena(Arena* diff);
 
@@ -98,6 +99,7 @@ inline void MemZero_(void* ptr,ssize_t size){u8* view = (u8*) ptr; for(ssize_t i
 template<typename T>
 T* PushStruct(Arena* arena){AlignArena(arena,alignof(T)); T* res = (T*) PushBytes(arena,sizeof(T)); MemZero(res,T); return res;};
 
+// TODO: Remove this, do a proper linked list arena implementation 
 // Arena that allocates more blocks of memory like a list.
 struct DynamicArena{
   DynamicArena* next;
@@ -570,6 +572,8 @@ public:
   T* Get(int index); // Returns nullptr if element not allocated (call Alloc(int index) to allocate)
   T& GetOrFail(int index);
   Byte* GetMemoryPtr();
+
+  T* GetFromAllocated(int index);
   
   int Size();
   void Clear(bool clearMemory = false);
@@ -1521,6 +1525,21 @@ T& Pool<T>::GetOrFail(int index){
   Assert(res);
 
   return *res;
+}
+
+template<typename T>
+T* Pool<T>::GetFromAllocated(int index){
+  //TODO: Slow
+  int i = 0;
+  for(T* elem : *this){
+    if(i == index){
+      return elem;
+    }
+
+    i += 1;
+  }
+
+  return nullptr;
 }
 
 template<typename T>

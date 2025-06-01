@@ -74,7 +74,23 @@ struct DoubleLink{
   T elem;
 };
 
-// A list inside an arena. Normally used with a temp arena and then converted to an array in a out arena 
+// NOTE: Do not use this if adding nodes to the list. This is mainly a helper for quick iterations that only need to read data
+template<typename T>
+struct ArenaListIterator{
+  SingleLink<T>* ptr;
+
+  bool operator!=(ArenaListIterator& iter){
+    return iter.ptr != this->ptr;
+  }
+  void operator++(){
+    ptr = ptr->next;
+  }
+  T& operator*(){
+    return ptr->elem;
+  }
+};
+
+// A list inside an arena. Normally used with a temp arena and then converted to an array in an out arena 
 template<typename T>
 struct ArenaList{
   SingleLink<T>* head;
@@ -83,6 +99,14 @@ struct ArenaList{
 
   T* PushElem();
 };
+
+
+// Implement C++ style foreach 
+template<typename T>
+ArenaListIterator<T> begin(ArenaList<T>* list){return ArenaListIterator<T>{list->head};};
+
+template<typename T>
+ArenaListIterator<T> end(ArenaList<T>* list){return ArenaListIterator<T>{nullptr};};
 
 template<typename T>
 struct ArenaDoubleList{
