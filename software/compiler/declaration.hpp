@@ -115,6 +115,16 @@ struct FUDeclaration{
     return info.infos.size;
   };
 
+  // TODO: Probably better to see all the outputs and all the infos, at the very least in Debug mode.
+  bool IsCombinatorialOperation(){
+    bool res = (isOperation && info.infos[0].outputLatencies[0] == 0);
+    return res;
+  }
+  bool IsSequentialOperation(){
+    bool res = (isOperation && info.infos[0].outputLatencies[0] != 0);
+    return res;
+  }
+  
   Array<int> GetOutputLatencies(){
     return info.infos[0].outputLatencies;
   }

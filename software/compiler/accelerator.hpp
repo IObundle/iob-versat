@@ -343,6 +343,9 @@ void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance*
 // Fixes edges such that unit before connected to after, are reconnected to new unit
 void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
 
+// If we have A:X -> B:Y and we give this function B:Y, it returns A:X
+PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
+
 bool IsCombinatorial(Accelerator* accel);
 
 void ConnectUnits(PortInstance out,PortInstance in,int delay);

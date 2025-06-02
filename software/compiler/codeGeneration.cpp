@@ -41,6 +41,45 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
   return EndArray(builder);
 }
 
+String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
+  TEMP_REGION(temp,out);
+  FUDeclaration* decl = inst->declaration;
+  Array<String> parameters = decl->parameters;
+  int size = parameters.size;
+
+  if(size == 0){
+    return {};
+  }
+  
+  auto mark = MarkArena(out);
+  
+  auto builder = StartString(temp);
+  builder->PushString("#(");
+  bool insertedOnce = false;
+  for(int i = 0; i < size; i++){
+    ParameterValue v = inst->parameterValues[i];
+    String parameter = parameters[i];
+    
+    if(!v.val.size){
+      continue;
+    }
+
+    if(insertedOnce){
+      builder->PushString(",");
+    }
+    builder->PushString(".%.*s(%.*s)",UNPACK_SS(parameter),UNPACK_SS(v.val));
+    insertedOnce = true;
+  }
+  builder->PushString(")");
+
+  if(!insertedOnce){
+    PopMark(mark);
+    return {};
+  }
+
+  return EndString(out,builder);
+}
+
 String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -96,22 +135,39 @@ String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena
   StringBuilder* b = StartString(temp);
   Repr(ast,b);
   String content = EndString(out,b);
-  //printf("%.*s\n",UNPACK_SS(EndString(temp,b)));
   return content;
 }
 
-String EmitModule(FUDeclaration* decl,Arena* out){
+String EmitModule(FUDeclaration* module,Arena* out){
   TEMP_REGION(temp,out);
 
-  Accelerator* accel = decl->fixedDelayCircuit;
-  AccelInfo info = decl->info;
+  Accelerator* accel = module->fixedDelayCircuit;
+  AccelInfo info = module->info;
+  Pool<FUInstance> instances = accel->allocated;
+ 
+  Pool<FUInstance> nodes = accel->allocated;
+  for(FUInstance* node : nodes){
+    if(node->declaration->nIOs){
+      SetParameter(node,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
+      SetParameter(node,STRING("AXI_DATA_W"),STRING("AXI_DATA_W"));
+      SetParameter(node,STRING("LEN_W"),STRING("LEN_W"));
+    }
+  }
+  
+  Array<InstanceInfo*> allSameLevel = GetAllSameLevelUnits(&info,0,0,temp);
+  auto builder = StartArray<Array<int>>(temp);
+  for(InstanceInfo* p : allSameLevel){
+    *builder.PushElem() = p->individualWiresGlobalConfigPos;
+  }
+  Array<Array<int>> wireIndexByInstanceGood = EndArray(builder);
+  Array<Wire> configs = module->configs;
   
   VEmitter* m = StartVCode(temp);
   TEMP_REGION(temp2,m->arena);
   
   m->Timescale("1ns","1ps");
 
-  m->Module(decl->name);
+  m->Module(module->name);
   m->DeclParam("ADDR_W",32);
   m->DeclParam("DATA_W",32);
   m->DeclParam("DELAY_W",DELAY_SIZE);
@@ -121,58 +177,91 @@ String EmitModule(FUDeclaration* decl,Arena* out){
 
   m->Input("run");
   m->Input("running");
+  m->Input("clk");
+  m->Input("rst");
+
   if(info.nDones){
     m->Output("done");
   }
-
-  for(int i = 0; i < info.inputs; i++){
-    m->IndexedInput("in%d",i,"DATA_W");
+  if(module->signalLoop){
+    m->Input("signal_loop");
+  }
+  
+  for(int i = 0; i < module->info.infos[0].inputDelays.size; i++){
+    m->InputIndexed("in%d",i,"DATA_W");
   }
 
-  for(int i = 0; i < info.outputs; i++){
-    m->IndexedOutput("out%d",i,"DATA_W");
+  for(int i = 0; i < module->info.infos[0].outputLatencies.size; i++){
+    m->OutputIndexed("out%d",i,"DATA_W");
   }
 
-  for(Wire w : decl->configs){
+  if(module->configs.size) m->Blank();
+  for(Wire w : module->configs){
     m->Input(w.name,w.bitSize);
   }
 
-  for(Pair<StaticId,StaticData*> p : decl->staticUnits){
+  for(Pair<StaticId,StaticData*> p : module->staticUnits){
     for(Wire w : p.second->configs){
       m->Input(GlobalStaticWireName(p.first,w,temp2),w.bitSize);
     }
   }
 
-  for(Wire w : decl->states){
-    m->Input(w.name,w.bitSize);
+  for(Wire w : module->states){
+    m->Output(w.name,w.bitSize);
   }
 
-  for(int i = 0; i < decl->numberDelays; i++){
-    m->IndexedInput("delay%d",i,"DELAY_W");
+  for(int i = 0; i < module->numberDelays; i++){
+    m->InputIndexed("delay%d",i,"DELAY_W");
   }
 
   // Databus interface
-  for(int i = 0; i < decl->nIOs; i++){
+  for(int i = 0; i < module->nIOs; i++){
+    m->InputIndexed("databus_ready_%d",i);
+    m->OutputIndexed("databus_valid_%d",i);
+    m->OutputIndexed("databus_addr_%d",i,"AXI_ADDR_W");
+    m->InputIndexed("databus_rdata_%d",i,"AXI_DATA_W");
+    m->OutputIndexed("databus_wdata_%d",i,"AXI_DATA_W");
+    m->OutputIndexed("databus_wstrb_%d",i,"(AXI_DATA_W/8)");
+    m->OutputIndexed("databus_len_%d",i,"LEN_W");
+    m->InputIndexed("databus_last_%d",i);
   }
   
   // External Memory interface
-  if(decl->memoryMapBits.has_value()){
-  }
-  
-  if(decl->signalLoop){
-    m->Input("signal_loop");
+  for(int i = 0; i <  module->externalMemory.size; i++){
+    ExternalMemoryInterface ext  =  module->externalMemory[i];
+    if(ext.type == ExternalMemoryType::DP){
+      m->OutputIndexed("ext_dp_addr_%d_port_0",i,ext.dp[0].bitSize);
+      m->OutputIndexed("ext_dp_out_%d_port_0",i,ext.dp[0].dataSizeOut);
+      m->InputIndexed("ext_dp_in_%d_port_0",i,ext.dp[0].dataSizeIn);
+      m->OutputIndexed("ext_dp_enable_%d_port_0",i);
+      m->OutputIndexed("ext_dp_write_%d_port_0",i);
+
+      m->OutputIndexed("ext_dp_addr_%d_port_1",i,ext.dp[1].bitSize);
+      m->OutputIndexed("ext_dp_out_%d_port_1",i,ext.dp[1].dataSizeOut);
+      m->InputIndexed("ext_dp_in_%d_port_1",i,ext.dp[1].dataSizeIn);
+      m->OutputIndexed("ext_dp_enable_%d_port_1",i);
+      m->OutputIndexed("ext_dp_write_%d_port_1",i);
+    } else {
+      m->OutputIndexed("ext_2p_addr_out_%d",i,ext.tp.bitSizeOut);
+      m->OutputIndexed("ext_2p_addr_in_%d",i,ext.tp.bitSizeIn);
+      m->OutputIndexed("ext_2p_write_%d",i);
+      m->OutputIndexed("ext_2p_read_%d",i);
+      m->InputIndexed("ext_2p_data_in_%d",i,ext.tp.dataSizeIn);
+      m->OutputIndexed("ext_2p_data_out_%d",i,ext.tp.dataSizeOut);
+    }
   }
 
-  if(decl->memoryMapBits){
-    
+  if(module->memoryMapBits){
+    m->Input("valid");
+    m->Input("addr",module->memoryMapBits.value());
+    m->Input("wstrb","(DATA_W/8)");
+    m->Input("wdata","DATA_W");
+    m->Output("rvalid");
+    m->Output("rdata","DATA_W");
   }
 
-  m->Input("clk");
-  m->Input("rst");
-
-#if 1
   // Memory mapped units
-  if(info.unitsMapped){
+  if(info.unitsMapped >= 1){
     Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
     m->Wire("unitRValid",info.unitsMapped);
@@ -180,7 +269,7 @@ String EmitModule(FUDeclaration* decl,Arena* out){
 
     m->Reg("memoryMappedEnable",memoryMasks.size);
 
-    m->WireArray("unitRData",32,info.unitsMapped);
+    m->WireArray("unitRData",info.unitsMapped,32);
     m->WireAndAssignJoinBlock("unitRDataFinal","|",32);
     for(int i = 0; i < info.unitsMapped; i++){
       m->Expression(StaticFormat("unitRData[%d]",i));
@@ -190,24 +279,327 @@ String EmitModule(FUDeclaration* decl,Arena* out){
 
     m->CombBlock();
     {
-      m->Set("memoryMappedEnable",0);
+      m->Set("memoryMappedEnable",StaticFormat("%d'b0",info.unitsMapped));
       m->If("valid");
       for(int i = 0; i <  memoryMasks.size; i++){
         String mask  =  memoryMasks[i];
         if(!Empty(mask)){
-          m->If("addr[%d-1 -: %d] == %d'b%.*s",decl->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask));
-          m->Set(StaticFormat("memoryMappedEnable[%d] - 1'b1",i));
+          m->If(StaticFormat("addr[(%d-1) -: %d] == %d'b%.*s",module->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask)));
+          m->Set(StaticFormat("memoryMappedEnable[%d]",i),"1'b1");
           m->EndIf();
+        } else {
+          m->Set(StaticFormat("memoryMappedEnable[%d]",i),"1'b1");
         }
       }
       m->EndIf();
     }
-  } else {
-    m->Assign("rdata","0");
-    m->Assign("rvalid","0");
-  }
+    m->EndBlock();
+#if 0
+    // TODO: Entity instancing needs to change if we want to support this.
+  } else if(info.unitsMapped == 1){
+    m->WireArray("unitRData",1,32);
+    m->Wire("unitRValid",1);
+
+    m->Assign("rdata","unitRData[0]");
+    m->Assign("rvalid","unitRValid");
 #endif
+  }
+
+  if(info.nDones){
+    m->Wire("unitDone",info.nDones);
+    m->Assign("done","&unitDone");
+  }
+
+  if(info.numberConnections){
+    for(int i = 0; i < instances.Size(); i++){
+      FUInstance* node = instances.Get(i);
+      for(int k = 0; k < node->outputs.size; k++){
+        bool out = node->outputs[k];
+        if(out){
+          m->Wire(StaticFormat("output_%d_%d",i,k),32);
+        }
+      }
+    }
+  }
+
+  int combOps = 0;
+  int seqOps = 0;
+  for(FUInstance* node : instances){
+    if(node->declaration->IsCombinatorialOperation()){
+      combOps += 1;
+    }
+    if(node->declaration->IsSequentialOperation()){
+      seqOps += 1;
+    }
+  }
+
+  auto OutputName = [](Pool<FUInstance>& instances,PortInstance node,Arena* out) -> String{
+    FUInstance* inst = node.inst;
+    FUDeclaration* decl = inst->declaration;
+
+    int id = 0;
+    for(FUInstance* ptr : instances){
+      if(ptr == inst){
+        break;
+      }
+      id++;
+    }
+    
+    if(decl == BasicDeclaration::input){
+      return PushString(out,"in%d",inst->portIndex);
+    }
+    if(decl->IsCombinatorialOperation()){
+      return PushString(out,"comb_%.*s_%d",UNPACK_SS(inst->name),inst->id);
+    }
+    if(decl->IsSequentialOperation()){
+      return PushString(out,"seq_%.*s_%d",UNPACK_SS(inst->name),inst->id);
+    }
+    
+    return PushString(out,"output_%d_%d",id,node.port);
+  };
+
+  auto Format = [](const char* format,Array<String> args,Arena* out){
+    TEMP_REGION(temp,out);
+    StringBuilder* b = StartString(temp);
+    
+    Tokenizer tok(STRING(format),"{}",{});
+    while(!tok.Done()){
+      Opt<Token> simpleText = tok.PeekFindUntil("{");
+
+      if(!simpleText.has_value()){
+        simpleText = tok.Finish();
+      }
+
+      tok.AdvancePeekBad(simpleText.value());
+
+      b->PushString(simpleText.value());
+
+      if(tok.Done()){
+        break;
+      }
+
+      tok.AssertNextToken("{");
+      Token indexText = tok.NextToken();
+      tok.AssertNextToken("}");
+
+      int index = ParseInt(indexText);
+
+      if(index < 2){
+        continue;
+      }
+      
+      // TODO: Remove this, need to update the operators format string to not start with an identifier
+      index -= 2;
+      
+      Assert(index < args.size);
+      
+      b->PushString(args[index]);
+    }
+
+    return EndString(out,b);
+  };
   
+  if(combOps){
+    for(FUInstance* node : instances){
+      if(node->declaration->IsCombinatorialOperation()){
+        m->Reg(StaticFormat("comb_%.*s_%d",UNPACK_SS(node->name),node->id),32);
+      }
+    }
+
+    m->CombBlock();
+    {
+      for(FUInstance* node : instances){
+        // TODO: Can simplify and make this capable of handling N inputs automatically.
+        if(node->declaration->IsCombinatorialOperation()){
+          if(node->declaration->info.infos[0].inputDelays.size == 1){
+            String identifier = PushString(temp,"comb_%.*s_%d",UNPACK_SS(node->name),node->id);
+            
+            Array<String> args = PushArray<String>(temp,1);
+            args[0] = OutputName(instances,node->inputs[0],temp);
+            // TODO: Proper update of the operations expressions
+            String expr = Format(node->declaration->operation + 10,args,temp);
+            m->Set(identifier,expr);
+          }
+          if(node->declaration->info.infos[0].inputDelays.size == 2){
+            String identifier = PushString(temp,"comb_%.*s_%d",UNPACK_SS(node->name),node->id);
+            
+            Array<String> args = PushArray<String>(temp,2);
+            args[0] = OutputName(instances,node->inputs[0],temp);
+            args[1] = OutputName(instances,node->inputs[1],temp);
+            // TODO: Proper update of the operations expressions
+            String expr = Format(node->declaration->operation + 10,args,temp);
+            m->Set(identifier,expr);
+          }
+        }
+      }
+    }
+    m->EndBlock();
+  }
+
+  // Instanciate the units
+  m->Blank();
+  {
+    int delaySeen = 0;
+    int statesSeen = 0;
+    int doneSeen = 0;
+    int ioSeen = 0;
+    int memoryMappedSeen = 0;
+    int externalSeen = 0;
+    
+    for(int instIndex = 0; instIndex < instances.Size(); instIndex++){
+      FUInstance* inst = instances.Get(instIndex);
+      FUDeclaration* decl = inst->declaration;
+      if(decl == BasicDeclaration::input || decl == BasicDeclaration::output || decl->IsCombinatorialOperation()){
+        continue;
+      }
+
+      String param = GenerateVerilogParameterization(inst,temp);
+      String nameWithParameters = PushString(temp,"%.*s %.*s",UNPACK_SS(decl->name),UNPACK_SS(param));
+      m->StartInstance(nameWithParameters,StaticFormat("%.*s_%d",UNPACK_SS(inst->name),instIndex));
+      // TODO: Parameters
+      
+      for(int i = 0; i < inst->outputs.size; i++){
+        if(inst->outputs[i]){
+          m->PortConnectIndexed("out%d",i,StaticFormat("output_%d_%d",instIndex,i));
+        } else {
+          m->PortConnectIndexed("out%d",i,"");
+        }
+      }
+
+      for(int i = 0; i < inst->inputs.size; i++){
+        if(inst->inputs[i].inst){
+          PortInstance other = GetAssociatedOutputPortInstance(inst,i);
+          m->PortConnectIndexed("in%d",i,OutputName(instances,other,temp));
+        } else {
+          m->PortConnectIndexed("in%d",i,"0");
+        }
+      }
+
+      // Configs and dealing with static configs if the unit is static
+      if(inst->isStatic){
+        for(Wire w : decl->configs){
+          m->PortConnect(w.name,PushString(temp,"%.*s_%.*s_%.*s",UNPACK_SS(module->name),UNPACK_SS(inst->name),UNPACK_SS(w.name)));
+        }
+      } else {
+        Array<int> ind = wireIndexByInstanceGood[instIndex];
+        for(int i = 0; i < ind.size; i++){
+          Wire wire = configs[ind[i]];
+
+          m->PortConnect(PushString(temp,"%.*s",UNPACK_SS(decl->configs[i].name)),configs[ind[i]].name);
+        }
+      }
+
+      // Static configs
+      for(Pair<StaticId,StaticData*> p : decl->staticUnits){
+        StaticId id = p.first;
+        for(Wire w : p.second->configs){
+          String wireStaticName = PushString(temp,"%.*s_%.*s_%.*s",UNPACK_SS(id.parent->name),UNPACK_SS(id.name),UNPACK_SS(w.name));
+          
+          m->PortConnect(wireStaticName,wireStaticName);
+        }
+      }
+
+      // State
+      for(Wire w : decl->states){
+        m->PortConnect(w.name,module->states[statesSeen++].name);
+      }
+      
+      // Delays
+      for(int i = 0; i < decl->numberDelays; i++){
+        m->PortConnectIndexed("delay%d",i,StaticFormat("delay%d",delaySeen++));
+      }
+
+      // External memories
+      for(int i = 0; i <  decl->externalMemory.size; i++){
+        ExternalMemoryInterface ext = decl->externalMemory[i];
+        if(ext.type == ExternalMemoryType::DP){
+          m->PortConnectIndexed("ext_dp_addr_%d_port_0",i,"ext_dp_addr_%d_port_0",externalSeen);
+          m->PortConnectIndexed("ext_dp_out_%d_port_0",i,"ext_dp_out_%d_port_0",externalSeen);
+          m->PortConnectIndexed("ext_dp_in_%d_port_0",i,"ext_dp_in_%d_port_0",externalSeen);
+          m->PortConnectIndexed("ext_dp_enable_%d_port_0",i,"ext_dp_enable_%d_port_0",externalSeen);
+          m->PortConnectIndexed("ext_dp_write_%d_port_0",i,"ext_dp_write_%d_port_0",externalSeen);
+
+          m->PortConnectIndexed("ext_dp_addr_%d_port_1",i,"ext_dp_addr_%d_port_1",externalSeen);
+          m->PortConnectIndexed("ext_dp_out_%d_port_1",i,"ext_dp_out_%d_port_1",externalSeen);
+          m->PortConnectIndexed("ext_dp_in_%d_port_1",i,"ext_dp_in_%d_port_1",externalSeen);
+          m->PortConnectIndexed("ext_dp_enable_%d_port_1",i,"ext_dp_enable_%d_port_1",externalSeen);
+          m->PortConnectIndexed("ext_dp_write_%d_port_1",i,"ext_dp_write_%d_port_1",externalSeen);
+        } else {
+          m->PortConnectIndexed("ext_2p_addr_out_%d",i,"ext_2p_addr_out_%d",externalSeen);
+          m->PortConnectIndexed("ext_2p_addr_in_%d",i,"ext_2p_addr_in_%d",externalSeen);
+          m->PortConnectIndexed("ext_2p_write_%d",i,"ext_2p_write_%d",externalSeen);
+          m->PortConnectIndexed("ext_2p_read_%d",i,"ext_2p_read_%d",externalSeen);
+          m->PortConnectIndexed("ext_2p_data_in_%d",i,"ext_2p_data_in_%d",externalSeen);
+          m->PortConnectIndexed("ext_2p_data_out_%d",i,"ext_2p_data_out_%d",externalSeen);
+        }
+        externalSeen += 1;
+      }
+
+      // Memory mapping
+      if(decl->memoryMapBits.has_value()){
+        m->PortConnect("valid",StaticFormat("memoryMappedEnable[%d]",memoryMappedSeen));
+        m->PortConnect("wstrb","wstrb");
+        m->PortConnect("addr",StaticFormat("addr[%d-1:0]",decl->memoryMapBits.value()));
+        m->PortConnect("rdata",StaticFormat("unitRData[%d]",memoryMappedSeen));
+        m->PortConnect("rvalid",StaticFormat("unitRValid[%d]",memoryMappedSeen));
+        m->PortConnect("wdata","wdata");
+        
+        memoryMappedSeen += 1;
+      }
+
+      // Databus
+      for(int i = 0; i < decl->nIOs; i++){
+        m->PortConnectIndexed("databus_ready_%d",i,"databus_ready_%d",ioSeen);
+        m->PortConnectIndexed("databus_valid_%d",i,"databus_valid_%d",ioSeen);
+        m->PortConnectIndexed("databus_addr_%d",i,"databus_addr_%d",ioSeen);
+        m->PortConnectIndexed("databus_rdata_%d",i,"databus_rdata_%d",ioSeen);
+        m->PortConnectIndexed("databus_wdata_%d",i,"databus_wdata_%d",ioSeen);
+        m->PortConnectIndexed("databus_wstrb_%d",i,"databus_wstrb_%d",ioSeen);
+        m->PortConnectIndexed("databus_len_%d",i,"databus_len_%d",ioSeen);
+        m->PortConnectIndexed("databus_last_%d",i,"databus_last_%d",ioSeen);
+
+        ioSeen += 1;
+      }
+
+      if(decl->signalLoop){
+        m->PortConnect("signal_loop","signal_loop");
+      }
+
+      m->PortConnect("running","running");
+      m->PortConnect("run","run");
+
+      if(decl->implementsDone){
+        m->PortConnect("done",StaticFormat("unitDone[%d]",doneSeen++));
+      }
+
+      m->PortConnect("clk","clk");
+      m->PortConnect("rst","rst");
+      
+      m->EndInstance();
+    }
+  }
+    
+  // Connect outputs to out
+  FUInstance* outNode = nullptr;
+  for(FUInstance* node : instances){
+    if(node->declaration == BasicDeclaration::output){
+      outNode = node;
+    }
+  }
+
+  if(outNode){
+    for(int i = 0; i < outNode->inputs.size; i++){
+      if(!outNode->inputs[i].inst){
+        continue;
+      }
+      
+      PortInstance other = GetAssociatedOutputPortInstance(outNode,i);
+      
+      // TODO: Test this section very throughly
+      m->Assign(PushString(temp,"out%d",i),OutputName(instances,other,temp));
+    }
+  }
+
   VAST* ast = EndVCode(m);
   StringBuilder* b = StartString(temp);
   Repr(ast,b);
@@ -427,50 +819,9 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
   return PushArrayFromList(out,elems);
 }
 
-String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
-  TEMP_REGION(temp,out);
-  FUDeclaration* decl = inst->declaration;
-  Array<String> parameters = decl->parameters;
-  int size = parameters.size;
-
-  if(size == 0){
-    return {};
-  }
-  
-  auto mark = MarkArena(out);
-  
-  auto builder = StartString(temp);
-  builder->PushString("#(");
-  bool insertedOnce = false;
-  for(int i = 0; i < size; i++){
-    ParameterValue v = inst->parameterValues[i];
-    String parameter = parameters[i];
-    
-    if(!v.val.size){
-      continue;
-    }
-
-    if(insertedOnce){
-      builder->PushString(",");
-    }
-    builder->PushString(".%.*s(%.*s)",UNPACK_SS(parameter),UNPACK_SS(v.val));
-    insertedOnce = true;
-  }
-  builder->PushString(")");
-
-  if(!insertedOnce){
-    PopMark(mark);
-    return {};
-  }
-
-  return EndString(out,builder);
-}
-
 void OutputCircuitSource(FUDeclaration* decl,FILE* file){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
-
-  EmitModule(decl,temp);
   
   Accelerator* accel = decl->fixedDelayCircuit;
   
@@ -514,20 +865,21 @@ void OutputCircuitSource(FUDeclaration* decl,FILE* file){
   Array<Wire> configs = decl->configs;
   
   Array<InstanceInfo*> allSameLevel = GetAllSameLevelUnits(&info,0,0,temp);
-
   auto builder = StartArray<Array<int>>(temp);
-
   for(InstanceInfo* p : allSameLevel){
     *builder.PushElem() = p->individualWiresGlobalConfigPos;
   }
   Array<Array<int>> wireIndexByInstanceGood = EndArray(builder);
   
-  Array<Array<int>> wireIndexByInstance = Extract(info.infos[0].info,temp,&InstanceInfo::individualWiresGlobalConfigPos);
+  //Array<Array<int>> wireIndexByInstance = Extract(info.infos[0].info,temp,&InstanceInfo::individualWiresGlobalConfigPos);
 
   TemplateSetCustom("configs",MakeValue(&configs));
   TemplateSetCustom("wireIndex",MakeValue(&wireIndexByInstanceGood));
   
-  ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
+  String content = EmitModule(decl,temp);
+  fprintf(file,"%.*s",UNPACK_SS(content));
+  
+  //ProcessTemplate(file,BasicTemplates::acceleratorTemplate);
 }
 
 void OutputIterativeSource(FUDeclaration* decl,FILE* file){

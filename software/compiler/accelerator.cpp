@@ -516,6 +516,23 @@ FUInstance* GetOutputInstance(Pool<FUInstance>* nodes){
   return nullptr;
 }
 
+PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex){
+  PortInstance inPort = unit->inputs[portIndex];
+  FUInstance* outInst = inPort.inst;
+
+  for(ConnectionNode* ptr = outInst->allOutputs; ptr; ptr = ptr->next){
+    if(ptr->instConnectedTo.inst == unit && ptr->instConnectedTo.port == portIndex && ptr->port == inPort.port){
+      PortInstance res = {};
+      res.inst = outInst;
+      res.port = ptr->port;
+
+      return res;
+    }
+  }
+  Assert(false); // This function is not supposed to fail
+  return {};
+}
+
 bool IsCombinatorial(Accelerator* accel){
   for(FUInstance* ptr : accel->allocated){
     if(ptr->declaration->fixedDelayCircuit == nullptr){
