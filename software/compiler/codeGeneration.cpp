@@ -26,6 +26,22 @@
 //       a check at Versat runtime that we are producing correct code, although it might take longer than the simple
 //       loop of making a change and checking if Verilator/Icarus complains about it.
 
+// TODO: Is there a way of describing the format of the wires for an interface and have the code generate it automatically? We would need to be able to describe the format of the wires, the place where the indexes change, the place where the port index changes, etc. So far, this would only be needed if we added more memory types or if we started generating more code.
+
+// TODO: Move all this stuff to a better place
+#include <filesystem>
+namespace fs = std::filesystem;
+
+String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out){
+  TEMP_REGION(temp,out);
+  fs::path source(StaticFormat("%.*s",UNPACK_SS(sourcePath)));
+  fs::path target(StaticFormat("%.*s",UNPACK_SS(targetPath)));
+
+  fs::path res = fs::relative(target,source);
+
+  return PushString(out,"%s",res.c_str());
+}
+
 Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
   auto builder = StartArray<String>(out);
   for(AccelInfoIterator iter = StartIteration(&info); iter.IsValid(); iter = iter.Next()){
@@ -80,6 +96,100 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   return EndString(out,builder);
 }
 
+String EmitMakefile(Accelerator* accel,Arena* out){
+  TEMP_REGION(temp,out);
+  StringBuilder* b = StartString(temp);
+
+  bool simulateLoops = true;
+  
+  String typeName = accel->name;
+
+  Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
+  for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
+    String filepath  =  globalOptions.verilogFiles[i];
+    fs::path path(SF("%.*s",UNPACK_SS(filepath)));
+    allFilenames[i] = PushString(temp,"%s",path.filename().c_str());
+  }
+  
+  String generatedUnitsLocation = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
+  
+  b->PushString("TYPE_NAME := %.*s\n\n",UNPACK_SS(typeName));
+  b->PushString("VHEADER := V$(TYPE_NAME).h\n");
+
+  if(simulateLoops){
+    b->PushString("VSIM_HEADER := VSuperAddress.h\n");
+  } else {
+    b->PushString("VSIM_HEADER := \n");
+  }
+  
+  b->PushString("HARDWARE_FOLDER := %.*s\n",UNPACK_SS(generatedUnitsLocation));
+  b->PushString("SOFTWARE_FOLDER := .\n");
+
+  b->PushString("HARDWARE_SRC := ");
+  for(String name : allFilenames){
+    b->PushString("$(HARDWARE_FOLDER)/%.*s ",UNPACK_SS(name));
+  }
+  b->PushString("\n");
+  
+  b->PushString("HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v)\n");
+  b->PushString("VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)\n\n");
+  b->PushString("INCLUDE := -I$(HARDWARE_FOLDER)\n\n");
+
+  b->PushString("VERILATOR_COMMON_ARGS := --report-unoptflat -GLEN_W=20 -CFLAGS \"-O2 -march=native\" $(INCLUDE)\n");
+  b->PushString("VERILATOR_COMMON_ARGS += -GAXI_ADDR_W=%d\n",globalOptions.databusAddrSize);
+  b->PushString("VERILATOR_COMMON_ARGS += -GAXI_DATA_W=%d\n",globalOptions.databusDataSize);
+
+  if(globalDebug.outputVCD){
+    if(globalOptions.generateFSTFormat){
+      b->PushString("VERILATOR_COMMON_ARGS += --trace-fst\n");
+    } else {
+      b->PushString("VERILATOR_COMMON_ARGS += --trace\n");
+    }
+  }
+
+  b->PushString("all: libaccel.a\n\n");
+
+  b->PushString("# Joins wrapper with verilator object files into a library\n");
+  b->PushString("libaccel.a: $(VHEADER) wrapper.o createVerilatorObjects $(VSIM_HEADER)\n");
+  b->PushString("\tar -rcs libaccel.a wrapper.o $(wildcard ./obj_dir/*.o)\n\n");
+
+  b->PushString("createVerilatorObjects: $(VHEADER) wrapper.o $(VSIM_HEADER)\n");
+  b->PushString("\t$(MAKE) verilatorObjects\n\n");
+
+  b->PushString("VUnitWireInfo.h: $(VHEADER)\n");
+  b->PushString("\t./ExtractVerilatedSignals.py $(VHEADER) > VUnitWireInfo.h\n\n");
+
+  b->PushString("$(VHEADER): $(HARDWARE_SRC)\n");
+  b->PushString("\tverilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_SRC) --top-module $(TYPE_NAME)\n");
+  b->PushString("\t$(MAKE) -C ./obj_dir -f V$(TYPE_NAME).mk\n");
+  b->PushString("\tcp ./obj_dir/*.h ./\n\n");
+
+  if(simulateLoops){
+    b->PushString("VSuperAddress.h: $(HARDWARE_SRC)\n");
+    b->PushString("\tverilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress\n");
+    b->PushString("\t$(MAKE) -C ./obj_dir -f VSuperAddress.mk\n");
+    b->PushString("\tcp ./obj_dir/*.h ./\n\n");
+  }
+
+  b->PushString("wrapper.o: $(VHEADER) VUnitWireInfo.h wrapper.cpp $(VSIM_HEADER)\n");
+  b->PushString("\tg++ -std=c++17 -march=native -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)\n\n");
+
+  b->PushString("# Created after calling verilator. Need to recall make to have access to the variables\n");
+  b->PushString("-include ./obj_dir/V$(TYPE_NAME)_classes.mk\n\n");
+  b->PushString("VERILATOR_SOURCE_DIR:=$(VERILATOR_ROOT)/include\n");
+  b->PushString("ALL_VERILATOR_FILES:=$(VM_GLOBAL_FAST) $(VM_GLOBAL_SLOW)\n");
+  b->PushString("ALL_VERILATOR_O:=$(patsubst %%,./obj_dir/%%.o,$(ALL_VERILATOR_FILES))\n\n");
+  b->PushString("./obj_dir/%%.o: $(VERILATOR_SOURCE_DIR)/%%.cpp\n");
+  b->PushString("\tg++ -w -march=native -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include\n\n");
+  b->PushString("verilatorObjects: $(ALL_VERILATOR_O)\n");
+
+  String content = EndString(out,b);
+
+  printf("%.*s\n",UNPACK_SS(content));
+  
+  return content;
+}
+
 String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -88,47 +198,50 @@ String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena
   for(int i = 0; i < external.size; i++){
     ExternalMemoryInterface ext = external[i];
 
-    if(ext.type == ExternalMemoryType::DP){
-      m->StartInstance("my_dp_asym_ram",StaticFormat("ext_dp_%d",i));
+    FULL_SWITCH(ext.type){
+    case ExternalMemoryType::DP:{
+      m->StartInstance("my_dp_asym_ram",SF("ext_dp_%d",i));
       {
         m->InstanceParam("A_DATA_W",ext.dp[0].dataSizeOut);
         m->InstanceParam("B_DATA_W",ext.dp[1].dataSizeOut);
         m->InstanceParam("ADDR_W",ext.dp[0].bitSize);
 
-        m->PortConnect("dinA_i",StaticFormat("VERSAT0_ext_dp_out_%d_port_0_o",i));
-        m->PortConnect("addrA_i",StaticFormat("VERSAT0_ext_dp_addr_%d_port_0_o",i));
-        m->PortConnect("enA_i",StaticFormat("VERSAT0_ext_dp_enable_%d_port_0_o",i));
-        m->PortConnect("weA_i",StaticFormat("VERSAT0_ext_dp_write_%d_port_0_o",i));
-        m->PortConnect("doutA_o",StaticFormat("VERSAT0_ext_dp_in_%d_port_0_i",i));
+        m->PortConnect("dinA_i",SF("VERSAT0_ext_dp_out_%d_port_0_o",i));
+        m->PortConnect("addrA_i",SF("VERSAT0_ext_dp_addr_%d_port_0_o",i));
+        m->PortConnect("enA_i",SF("VERSAT0_ext_dp_enable_%d_port_0_o",i));
+        m->PortConnect("weA_i",SF("VERSAT0_ext_dp_write_%d_port_0_o",i));
+        m->PortConnect("doutA_o",SF("VERSAT0_ext_dp_in_%d_port_0_i",i));
 
-        m->PortConnect("dinB_i",StaticFormat("VERSAT0_ext_dp_out_%d_port_1_o",i));
-        m->PortConnect("addrB_i",StaticFormat("VERSAT0_ext_dp_addr_%d_port_1_o",i));
-        m->PortConnect("enB_i",StaticFormat("VERSAT0_ext_dp_enable_%d_port_1_o",i));
-        m->PortConnect("weB_i",StaticFormat("VERSAT0_ext_dp_write_%d_port_1_o",i));
-        m->PortConnect("doutB_o",StaticFormat("VERSAT0_ext_dp_in_%d_port_1_i",i));
+        m->PortConnect("dinB_i",SF("VERSAT0_ext_dp_out_%d_port_1_o",i));
+        m->PortConnect("addrB_i",SF("VERSAT0_ext_dp_addr_%d_port_1_o",i));
+        m->PortConnect("enB_i",SF("VERSAT0_ext_dp_enable_%d_port_1_o",i));
+        m->PortConnect("weB_i",SF("VERSAT0_ext_dp_write_%d_port_1_o",i));
+        m->PortConnect("doutB_o",SF("VERSAT0_ext_dp_in_%d_port_1_i",i));
 
         m->PortConnect("clk_i","clk_i");
       }      
       m->EndInstance();
-    } else {
-      m->StartInstance("my_2p_asym_ram",StaticFormat("ext_2p_%d",i));
+    } break;
+    case ExternalMemoryType::TWO_P:{
+      m->StartInstance("my_2p_asym_ram",SF("ext_2p_%d",i));
       {
         m->InstanceParam("W_DATA_W",ext.tp.dataSizeOut);
         m->InstanceParam("R_DATA_W",ext.tp.dataSizeIn);
         m->InstanceParam("ADDR_W",ext.tp.bitSizeIn);
 
-        m->PortConnect("w_en_i",StaticFormat("VERSAT0_ext_2p_write_%d_o",i));
-        m->PortConnect("w_addr_i",StaticFormat("VERSAT0_ext_2p_addr_out_%d_o",i));
-        m->PortConnect("w_data_i",StaticFormat("VERSAT0_ext_2p_data_out_%d_o",i));
+        m->PortConnect("w_en_i",SF("VERSAT0_ext_2p_write_%d_o",i));
+        m->PortConnect("w_addr_i",SF("VERSAT0_ext_2p_addr_out_%d_o",i));
+        m->PortConnect("w_data_i",SF("VERSAT0_ext_2p_data_out_%d_o",i));
 
-        m->PortConnect("r_en_i",StaticFormat("VERSAT0_ext_2p_read_%d_o",i));
-        m->PortConnect("r_addr_i",StaticFormat("VERSAT0_ext_2p_addr_in_%d_o",i));
-        m->PortConnect("r_data_o",StaticFormat("VERSAT0_ext_2p_data_in_%d_i",i));
+        m->PortConnect("r_en_i",SF("VERSAT0_ext_2p_read_%d_o",i));
+        m->PortConnect("r_addr_i",SF("VERSAT0_ext_2p_addr_in_%d_o",i));
+        m->PortConnect("r_data_o",SF("VERSAT0_ext_2p_data_in_%d_i",i));
 
         m->PortConnect("clk_i","clk_i");
       }
       m->EndInstance();
     }
+  } END_SWITCH();
   }
 
   VAST* ast = EndVCode(m);
@@ -137,6 +250,143 @@ String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena
   String content = EndString(out,b);
   return content;
 }
+
+String EmitExternalMemoryPort(Array<ExternalMemoryInterface> external,Arena* out){
+  TEMP_REGION(temp,out);
+
+  VEmitter* m = StartVCode(temp);
+
+  for(int i = 0; i < external.size; i++){
+    ExternalMemoryInterface ext = external[i];
+
+    FULL_SWITCH(ext.type){
+    case ExternalMemoryType::DP:{
+      for(int k = 0; k < 2; k++){
+        m->Output(SF("ext_dp_addr_%d_port_%d_o",i,k),ext.dp[i].bitSize);
+        m->Output(SF("ext_dp_out_%d_port_%d_o",i,k),ext.dp[i].dataSizeOut);
+        m->Input(SF("ext_dp_in_%d_port_%d_i",i,k),ext.dp[i].dataSizeIn);
+        m->Output(SF("ext_dp_enable_%d_port_%d_o",i,k));
+        m->Output(SF("ext_dp_write_%d_port_%d_o",i,k));
+      }      
+    } break;
+    case ExternalMemoryType::TWO_P:{
+      m->Output(SF("ext_2p_write_%d_o",i));
+      m->Output(SF("ext_2p_addr_out_%d_o",i),ext.tp.bitSizeOut);
+      m->Output(SF("ext_2p_data_out_%d_o",i),ext.tp.dataSizeOut);
+
+      m->Output(SF("ext_2p_read_%d_o",i));
+      m->Output(SF("ext_2p_addr_in_%d_o",i),ext.tp.bitSizeIn);
+      m->Input(SF("ext_2p_data_in_%d_i",i),ext.tp.dataSizeIn);
+    } break;
+  } END_SWITCH()
+  }
+
+  VAST* ast = EndVCode(m);
+  StringBuilder* b = StartString(temp);
+  Repr(ast,b);
+  String content = EndString(out,b);
+  return content;
+}
+
+String EmitExternalMemoryInternalPortmap(Array<ExternalMemoryInterface> external,Arena* out){
+  TEMP_REGION(temp,out);
+
+  VEmitter* m = StartVCode(temp);
+
+  for(int i = 0; i < external.size; i++){
+    ExternalMemoryInterface ext = external[i];
+
+    FULL_SWITCH(ext.type){
+    case ExternalMemoryType::DP:{
+      for(int k = 0; k < 2; k++){
+        m->PortConnect(PushString(temp,"ext_dp_out_%d_port_%d_o",i,k),PushString(temp,"ext_dp_out_%d_port_%d_o",i,k));
+        m->PortConnect(PushString(temp,"ext_dp_addr_%d_port_%d_o",i,k),PushString(temp,"ext_dp_addr_%d_port_%d_o",i,k));
+        m->PortConnect(PushString(temp,"ext_dp_enable_%d_port_%d_o",i,k),PushString(temp,"ext_dp_enable_%d_port_%d_o",i,k));
+        m->PortConnect(PushString(temp,"ext_dp_write_%d_port_%d_o",i,k),PushString(temp,"ext_dp_write_%d_port_%d_o",i,k));
+        m->PortConnect(PushString(temp,"ext_dp_in_%d_port_%d_i",i,k),PushString(temp,"ext_dp_in_%d_port_%d_i",i,k));
+      }
+    } break;
+    case ExternalMemoryType::TWO_P:{
+      m->PortConnect(PushString(temp,"ext_2p_write_%d_o",i),PushString(temp,"ext_2p_write_%d_o",i));
+      m->PortConnect(PushString(temp,"ext_2p_addr_out_%d_o",i),PushString(temp,"ext_2p_addr_out_%d_o",i));
+      m->PortConnect(PushString(temp,"ext_2p_data_out_%d_o",i),PushString(temp,"ext_2p_data_out_%d_o",i));
+
+      m->PortConnect(PushString(temp,"ext_2p_read_%d_o",i),PushString(temp,"ext_2p_read_%d_o",i));
+      m->PortConnect(PushString(temp,"ext_2p_addr_in_%d_o",i),PushString(temp,"ext_2p_addr_in_%d_o",i));
+      m->PortConnect(PushString(temp,"ext_2p_data_in_%d_i",i),PushString(temp,"ext_2p_data_in_%d_i",i));
+    }
+  } END_SWITCH();
+  }
+
+  VAST* ast = EndVCode(m);
+  StringBuilder* b = StartString(temp);
+  Repr(ast,b);
+  String content = EndString(out,b);
+  return content;
+}
+
+String EmitInternalMemoryWires(Array<ExternalMemoryInterface> external,Arena* out){
+  TEMP_REGION(temp,out);
+
+  VEmitter* m = StartVCode(temp);
+
+  for(int i = 0; i < external.size; i++){
+    ExternalMemoryInterface ext = external[i];
+
+    FULL_SWITCH(ext.type){
+    case ExternalMemoryType::DP:{
+      for(int k = 0; k < 2; k++){
+        m->Wire(SF("ext_dp_addr_%d_port_%d_o",i,k),ext.dp[k].bitSize);
+        m->Wire(SF("ext_dp_out_%d_port_%d_o",i,k),ext.dp[k].dataSizeOut);
+        m->Wire(SF("ext_dp_in_%d_port_%d_i",i,k),ext.dp[k].dataSizeIn);
+        m->Wire(SF("ext_dp_enable_%d_port_%d_o",i,k));
+        m->Wire(SF("ext_dp_write_%d_port_%d_o",i,k));
+
+        m->Wire(SF("VERSAT0_ext_dp_addr_%d_port_%d_o",i,k),ext.dp[k].bitSize);
+        m->Wire(SF("VERSAT0_ext_dp_out_%d_port_%d_o",i,k),ext.dp[k].dataSizeOut);
+        m->Wire(SF("VERSAT0_ext_dp_in_%d_port_%d_i",i,k),ext.dp[k].dataSizeIn);
+        m->Wire(SF("VERSAT0_ext_dp_enable_%d_port_%d_o",i,k));
+        m->Wire(SF("VERSAT0_ext_dp_write_%d_port_%d_o",i,k));
+
+        m->Assign(PushString(temp,"VERSAT0_ext_dp_addr_%d_port_%d_o",i,k),PushString(temp,"ext_dp_addr_%d_port_%d_o",i,k));
+        m->Assign(PushString(temp,"VERSAT0_ext_dp_out_%d_port_%d_o",i,k),PushString(temp,"ext_dp_out_%d_port_%d_o",i,k));
+        m->Assign(PushString(temp,"ext_dp_in_%d_port_%d_i",i,k),PushString(temp,"VERSAT0_ext_dp_in_%d_port_%d_i",i,k));
+        m->Assign(PushString(temp,"VERSAT0_ext_dp_enable_%d_port_%d_o",i,k),PushString(temp,"ext_dp_enable_%d_port_%d_o",i,k));
+        m->Assign(PushString(temp,"VERSAT0_ext_dp_write_%d_port_%d_o",i,k),PushString(temp,"ext_dp_write_%d_port_%d_o",i,k));
+      }
+    } break;
+    case ExternalMemoryType::TWO_P:{
+      m->Wire(SF("ext_2p_addr_out_%d_o",i),ext.tp.bitSizeOut);
+      m->Wire(SF("ext_2p_addr_in_%d_o",i),ext.tp.bitSizeIn);
+      m->Wire(SF("ext_2p_data_in_%d_i",i),ext.tp.dataSizeIn);
+      m->Wire(SF("ext_2p_data_out_%d_o",i),ext.tp.dataSizeOut);
+      m->Wire(SF("ext_2p_write_%d_o",i));
+      m->Wire(SF("ext_2p_read_%d_o",i));
+
+      m->Wire(SF("VERSAT0_ext_2p_addr_out_%d_o",i),ext.tp.bitSizeOut);
+      m->Wire(SF("VERSAT0_ext_2p_addr_in_%d_o",i),ext.tp.bitSizeIn);
+      m->Wire(SF("VERSAT0_ext_2p_data_in_%d_i",i),ext.tp.dataSizeIn);
+      m->Wire(SF("VERSAT0_ext_2p_data_out_%d_o",i),ext.tp.dataSizeOut);
+      m->Wire(SF("VERSAT0_ext_2p_write_%d_o",i));
+      m->Wire(SF("VERSAT0_ext_2p_read_%d_o",i));
+
+      m->Assign(PushString(temp,"VERSAT0_ext_2p_addr_out_%d_o",i),PushString(temp,"ext_2p_addr_out_%d_o",i));
+      m->Assign(PushString(temp,"VERSAT0_ext_2p_addr_in_%d_o",i),PushString(temp,"ext_2p_addr_in_%d_o",i));
+      m->Assign(PushString(temp,"ext_2p_data_in_%d_i",i),PushString(temp,"VERSAT0_ext_2p_data_in_%d_i",i));
+      m->Assign(PushString(temp,"VERSAT0_ext_2p_data_out_%d_o",i),PushString(temp,"ext_2p_data_out_%d_o",i));
+      m->Assign(PushString(temp,"VERSAT0_ext_2p_write_%d_o",i),PushString(temp,"ext_2p_write_%d_o",i));
+      m->Assign(PushString(temp,"VERSAT0_ext_2p_read_%d_o",i),PushString(temp,"ext_2p_read_%d_o",i));
+    } break;
+    } END_SWITCH();
+  }
+
+  VAST* ast = EndVCode(m);
+  StringBuilder* b = StartString(temp);
+  Repr(ast,b);
+  String content = EndString(out,b);
+  return content;
+}
+
 
 String EmitModule(FUDeclaration* module,Arena* out){
   TEMP_REGION(temp,out);
@@ -272,37 +522,28 @@ String EmitModule(FUDeclaration* module,Arena* out){
     m->WireArray("unitRData",info.unitsMapped,32);
     m->WireAndAssignJoinBlock("unitRDataFinal","|",32);
     for(int i = 0; i < info.unitsMapped; i++){
-      m->Expression(StaticFormat("unitRData[%d]",i));
+      m->Expression(SF("unitRData[%d]",i));
     }
     m->EndBlock();
     m->Assign("rdata","unitRDataFinal");
 
     m->CombBlock();
     {
-      m->Set("memoryMappedEnable",StaticFormat("%d'b0",info.unitsMapped));
+      m->Set("memoryMappedEnable",SF("%d'b0",info.unitsMapped));
       m->If("valid");
       for(int i = 0; i <  memoryMasks.size; i++){
         String mask  =  memoryMasks[i];
         if(!Empty(mask)){
-          m->If(StaticFormat("addr[(%d-1) -: %d] == %d'b%.*s",module->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask)));
-          m->Set(StaticFormat("memoryMappedEnable[%d]",i),"1'b1");
+          m->If(SF("addr[(%d-1) -: %d] == %d'b%.*s",module->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask)));
+          m->Set(SF("memoryMappedEnable[%d]",i),"1'b1");
           m->EndIf();
         } else {
-          m->Set(StaticFormat("memoryMappedEnable[%d]",i),"1'b1");
+          m->Set(SF("memoryMappedEnable[%d]",i),"1'b1");
         }
       }
       m->EndIf();
     }
     m->EndBlock();
-#if 0
-    // TODO: Entity instancing needs to change if we want to support this.
-  } else if(info.unitsMapped == 1){
-    m->WireArray("unitRData",1,32);
-    m->Wire("unitRValid",1);
-
-    m->Assign("rdata","unitRData[0]");
-    m->Assign("rvalid","unitRValid");
-#endif
   }
 
   if(info.nDones){
@@ -316,7 +557,7 @@ String EmitModule(FUDeclaration* module,Arena* out){
       for(int k = 0; k < node->outputs.size; k++){
         bool out = node->outputs[k];
         if(out){
-          m->Wire(StaticFormat("output_%d_%d",i,k),32);
+          m->Wire(SF("output_%d_%d",i,k),32);
         }
       }
     }
@@ -402,7 +643,7 @@ String EmitModule(FUDeclaration* module,Arena* out){
   if(combOps){
     for(FUInstance* node : instances){
       if(node->declaration->IsCombinatorialOperation()){
-        m->Reg(StaticFormat("comb_%.*s_%d",UNPACK_SS(node->name),node->id),32);
+        m->Reg(SF("comb_%.*s_%d",UNPACK_SS(node->name),node->id),32);
       }
     }
 
@@ -455,12 +696,12 @@ String EmitModule(FUDeclaration* module,Arena* out){
 
       String param = GenerateVerilogParameterization(inst,temp);
       String nameWithParameters = PushString(temp,"%.*s %.*s",UNPACK_SS(decl->name),UNPACK_SS(param));
-      m->StartInstance(nameWithParameters,StaticFormat("%.*s_%d",UNPACK_SS(inst->name),instIndex));
+      m->StartInstance(nameWithParameters,SF("%.*s_%d",UNPACK_SS(inst->name),instIndex));
       // TODO: Parameters
       
       for(int i = 0; i < inst->outputs.size; i++){
         if(inst->outputs[i]){
-          m->PortConnectIndexed("out%d",i,StaticFormat("output_%d_%d",instIndex,i));
+          m->PortConnectIndexed("out%d",i,SF("output_%d_%d",instIndex,i));
         } else {
           m->PortConnectIndexed("out%d",i,"");
         }
@@ -506,7 +747,7 @@ String EmitModule(FUDeclaration* module,Arena* out){
       
       // Delays
       for(int i = 0; i < decl->numberDelays; i++){
-        m->PortConnectIndexed("delay%d",i,StaticFormat("delay%d",delaySeen++));
+        m->PortConnectIndexed("delay%d",i,SF("delay%d",delaySeen++));
       }
 
       // External memories
@@ -537,11 +778,11 @@ String EmitModule(FUDeclaration* module,Arena* out){
 
       // Memory mapping
       if(decl->memoryMapBits.has_value()){
-        m->PortConnect("valid",StaticFormat("memoryMappedEnable[%d]",memoryMappedSeen));
+        m->PortConnect("valid",SF("memoryMappedEnable[%d]",memoryMappedSeen));
         m->PortConnect("wstrb","wstrb");
-        m->PortConnect("addr",StaticFormat("addr[%d-1:0]",decl->memoryMapBits.value()));
-        m->PortConnect("rdata",StaticFormat("unitRData[%d]",memoryMappedSeen));
-        m->PortConnect("rvalid",StaticFormat("unitRValid[%d]",memoryMappedSeen));
+        m->PortConnect("addr",SF("addr[%d-1:0]",decl->memoryMapBits.value()));
+        m->PortConnect("rdata",SF("unitRData[%d]",memoryMappedSeen));
+        m->PortConnect("rvalid",SF("unitRValid[%d]",memoryMappedSeen));
         m->PortConnect("wdata","wdata");
         
         memoryMappedSeen += 1;
@@ -569,7 +810,7 @@ String EmitModule(FUDeclaration* module,Arena* out){
       m->PortConnect("run","run");
 
       if(decl->implementsDone){
-        m->PortConnect("done",StaticFormat("unitDone[%d]",doneSeen++));
+        m->PortConnect("done",SF("unitDone[%d]",doneSeen++));
       }
 
       m->PortConnect("clk","clk");
@@ -600,12 +841,188 @@ String EmitModule(FUDeclaration* module,Arena* out){
     }
   }
 
+  m->EndModule();
+  
   VAST* ast = EndVCode(m);
   StringBuilder* b = StartString(temp);
   Repr(ast,b);
   String content = EndString(out,b);
   printf("%.*s\n",UNPACK_SS(EndString(temp,b)));
   return content;
+}
+
+String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* out){
+  return {};
+#if 0
+  TEMP_REGION(temp,out);
+  TEMP_REGION(temp2,temp);
+
+  AccelInfo info = topLevelDecl->info;
+  Pool<FUInstance> instances = accel->allocated;
+  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
+
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  
+  Pool<FUInstance> nodes = accel->allocated;
+  for(FUInstance* node : nodes){
+    if(node->declaration->nIOs){
+      SetParameter(node,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"));
+      SetParameter(node,STRING("AXI_DATA_W"),STRING("AXI_DATA_W"));
+      SetParameter(node,STRING("LEN_W"),STRING("LEN_W"));
+    }
+  }
+  
+  Array<InstanceInfo*> allSameLevel = GetAllSameLevelUnits(&info,0,0,temp);
+  auto builder = StartArray<Array<int>>(temp);
+  for(InstanceInfo* p : allSameLevel){
+    *builder.PushElem() = p->individualWiresGlobalConfigPos;
+  }
+  Array<Array<int>> wireIndexByInstanceGood = EndArray(builder);
+  Array<Wire> configs = topLevelDecl->configs;
+  
+  int configBit = 0;
+  int addr = val.versatConfigs;
+  auto arr = StartArray<WireInformation>(temp);
+  for(auto n : nodes){
+    for(Wire w : n->declaration->configs){
+      WireInformation info = {};
+      info.wire = w;
+      info.configBitStart = configBit;
+      configBit += w.bitSize;
+      info.addr = 4 * addr++;
+      *arr.PushElem() = info;
+    }
+  }
+  for(Pair<StaticId,StaticData*> n : staticUnits){
+    for(Wire w : n.data->configs){
+      WireInformation info = {};
+      info.wire = w;
+      info.wire.name = ReprStaticConfig(n.first,&w,temp2);
+      info.configBitStart = configBit;
+      configBit += w.bitSize;
+      info.addr = 4 * addr++;
+      info.isStatic = true;
+      *arr.PushElem() = info;
+    }
+  }
+  int delaysInserted = 0;
+  for(auto n : nodes){
+    for(int i = 0; i < n->declaration->NumberDelays(); i++){
+      Wire wire = {};
+      wire.bitSize = DELAY_SIZE;
+      wire.name = PushString(temp2,"Delay%d",delaysInserted++);
+      wire.stage = VersatStage_COMPUTE;
+
+      WireInformation info = {};
+      info.wire = wire;
+      info.configBitStart = configBit;
+      configBit += DELAY_SIZE;
+      info.addr = 4 * addr++;
+      *arr.PushElem() = info;
+    }
+  }
+  
+  auto test = EndArray(arr);
+  //TemplateSetCustom("wireInfo",MakeValue(&test));
+
+  VEmitter* m = StartVCode(temp);
+
+  // VARS
+  int configurationsBits;
+  int configurationAddressBits;
+  
+  m->Timescale("1ns","1ps");
+
+  m->Include("versat_defs.vh");
+
+  m->Module(STRING("versat_configurations"));
+  {
+    m->DeclParam("ADDR_W",32);
+    m->DeclParam("DATA_W",32);
+    m->DeclParam("AXI_ADDR_W",32);
+    m->DeclParam("AXI_DATA_W",globalOptions.databusDataSize);
+    m->DeclParam("LEN_W",20);
+
+    if(configurationsBits){
+      m->Output("config_data_o",configurationsBits);
+    }
+
+    m->Input("memoryMappedAddr");
+    m->Input("data_write");
+
+    m->Input("address","ADDR_W");
+    m->Input("data_wstrb","(DATA_W/8)");
+    m->Input("data_data","DATA_W");
+
+    m->Input("change_config_pulse");
+
+    for(WireInformation info : test){
+      if(info.isStatic){
+        m->Output(info.wire.name,info.wire.bitSize);
+      }
+    }
+
+    m->Input("clk_i");
+    m->Input("rst_i");
+
+    m->Reg("configdata",configurationsBits);
+
+    if(globalOptions.shadowRegister){
+      m->Reg("shadow_configdata",configurationsBits);
+    }
+
+    m->Assign("config_data_o","configdata");
+
+    for(WireInformation info : test){
+      Wire w = info.wire;
+      if(w.stage == VersatStage_COMPUTE || w.stage == VersatStage_WRITE){
+        m->Reg(SF("Compute_%.*s",UN(w.name)),w.bitSize);
+      }
+      if(w.stage == VersatStage_WRITE){
+        m->Reg(SF("Write_%.*s",UN(w.name)),w.bitSize);
+      }
+    }
+
+// COMPUTE : 0, READ : 1, WRITE : 2
+
+    if(configurationsBits){
+      m->AlwaysBlock("clk_i","rst_i");
+      {
+        m->If("rst_i");
+        m->Set("shadow_configdata",0);
+        //m->ElseIf("data_write & !memoryMappedAddr");
+        for(WireInformation info : test){
+          m->If(SF("address[%d]:0 == %d",configurationAddressBits + 1,info.addr));
+          // HANDLE STROBE
+          m->EndIf();
+        }
+        m->EndIf();
+      }      
+      m->EndBlock();
+      
+      m->AlwaysBlock("clk_i","rst_i");
+      {
+        m->If("rst_i");
+        m->Set("configdata",0);
+        m->ElseIf("change_config_pulse");
+        for(WireInformation info : test){
+          if(info.wire.stage == VersatStage_READ){
+            m->Set(SF("configdata[%d+:%d]",info.configBitStart,info.wire.bitSize),SF("shadow_configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
+          }
+        }
+        for(WireInformation info : test){
+          if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
+            m->Set(SF("configdata[%d+:%d]",info.configBitStart,info.wire.bitSize),SF("Compute_%.*s",UN(info.wire.name)));
+          }
+        }
+        m->EndIf();
+      }
+      m->EndBlock();
+      
+    }
+  }
+  m->EndModule();
+#endif
 }
 
 // TODO: REMOVE: Remove after proper implementation of AddressGenerators
@@ -936,20 +1353,6 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file){
   TemplateSetNumber("special",lat);
 
   ProcessTemplate(file,BasicTemplates::iterativeTemplate);
-}
-
-// TODO: Move all this stuff to a better place
-#include <filesystem>
-namespace fs = std::filesystem;
-
-String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out){
-  TEMP_REGION(temp,out);
-  fs::path source(StaticFormat("%.*s",UNPACK_SS(sourcePath)));
-  fs::path target(StaticFormat("%.*s",UNPACK_SS(targetPath)));
-
-  fs::path res = fs::relative(target,source);
-
-  return PushString(out,"%s",res.c_str());
 }
 
 // TODO: Move to a better place
@@ -1909,23 +2312,34 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     fprintf(f,"%.*s",UNPACK_SS(content));
   }
 
-  // MARK
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_internal_memory_wires.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::internalWiresTemplate);
+    //ProcessTemplate(f,BasicTemplates::internalWiresTemplate);
+
+    String content = EmitInternalMemoryWires(external,temp);
+
+    fprintf(f,"%.*s",UNPACK_SS(content));
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_port.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::externalPortTemplate);
+    //ProcessTemplate(f,BasicTemplates::externalPortTemplate);
+ 
+    String content = EmitExternalMemoryPort(external,temp);
+
+    fprintf(f,"%.*s",UNPACK_SS(content));
   }
 
   {
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(f);
-    ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
+    //ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
+
+    String content = EmitExternalMemoryInternalPortmap(external,temp);
+
+    fprintf(f,"%.*s",UNPACK_SS(content));
  }
 
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
@@ -2014,6 +2428,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
 
   // Top configurations
+  // MARK
   {
     FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_configurations.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
@@ -2023,6 +2438,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       return;
     }
 
+    String content = EmitConfiguration(accel,topLevelDecl,temp);
+    printf("%.*s\n",UNPACK_SS(content));
     ProcessTemplate(s,BasicTemplates::topConfigurationsTemplate);
   }
   
@@ -2455,6 +2872,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
     DEFER_CLOSE_FILE(output);
   
+#if 0
     TemplateSetBool("traceEnabled",globalDebug.outputVCD);
     CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
 
@@ -2478,7 +2896,12 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   
     TemplateSetString("generatedUnitsLocation",relativePath);
     TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
-    ProcessTemplate(output,comp);
+#endif
+    
+    String content = EmitMakefile(accel,temp);
+
+    fprintf(output,"%.*s",UNPACK_SS(content));
+    //ProcessTemplate(output,comp);
 
     // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
     // TODO: Instead of hardcoding this, need to use the embedData approach used for the ExtractVerilatedSignals and use for this.

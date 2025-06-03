@@ -76,15 +76,10 @@ void LoadTemplates(Arena* perm){
   CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm);
   SetIncludeHeader(commonTpl,STRING("common"));
 
-  BasicTemplates::acceleratorTemplate = CompileTemplate(versat_accelerator_template,"accel",perm);
   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm);
   BasicTemplates::topConfigurationsTemplate = CompileTemplate(versat_configurations_template,"top_configurations",perm);
   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm);
-  BasicTemplates::externalInternalPortmapTemplate = CompileTemplate(external_memory_internal_portmap_template,"ext_internal_port",perm);
-  BasicTemplates::externalPortTemplate = CompileTemplate(external_memory_port_template,"ext_port",perm);
-  BasicTemplates::externalInstTemplate = CompileTemplate(external_memory_inst_template,"ext_inst",perm);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm);
-  BasicTemplates::internalWiresTemplate = CompileTemplate(versat_internal_memory_wires_template,"internal wires",perm);
   
   RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
     ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;

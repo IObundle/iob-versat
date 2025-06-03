@@ -76,11 +76,10 @@ inline float ABS(float f){return (f < 0.0f ? -f : f);};
 #define FULL_SWITCH(expr) _Pragma("GCC diagnostic error \"-Wswitch-enum\"") \
   switch(expr)
 
-
 #define SWITCH(expr) _Pragma("GCC diagnostic warning \"-Wswitch-enum\"") \
   switch(expr)
 
-#define END_SWITCH(expr) _Pragma("GCC diagnostic warning \"-Wswitch-enum\"")
+#define END_SWITCH() _Pragma("GCC diagnostic warning \"-Wswitch-enum\"")
 
 template<typename F>
 class _Defer{
@@ -355,6 +354,8 @@ typedef Array<const char> String;
 #define UNPACK_SS(STR) (STR).size,(STR).data
 #define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
+#define UN(STR) UNPACK_SS(STR)
+
 inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
@@ -440,9 +441,15 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
 
 // Returns a statically allocated string, instead of implementing varg for everything
-// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
+// Returned string uses statically allocated memory. Intended to be used to create quick small strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
+// Two calls to StaticFormat do not overwrite, but the third call will overwrite the result of the first one.
 // NOTE: Extra care when using this function. Use it mainly to interface with C code style strings otherwise real risk of overwriting contents with other data
+
+
+// TODO: I wonder if it would be better to have a arena backed region where we can dump strings and it acts globally, meaning that we must call functions to init it and to clear it everytime we want to use it.
 char* StaticFormat(const char* format,...);
+// Shorthand
+#define SF(...) StaticFormat(__VA_ARGS__) 
 
 // Array useful functions
 int CountNonZeros(Array<int> arr);

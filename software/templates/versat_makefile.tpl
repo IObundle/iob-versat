@@ -28,8 +28,6 @@ libaccel.a: V@{typeName}.h wrapper.o createVerilatorObjects #{if simulateLoops} 
 createVerilatorObjects: V@{typeName}.h wrapper.o #{if simulateLoops} VSuperAddress.h #{end}
 	$(MAKE) verilatorObjects
 
-#./obj_dir/V@{typeName}_classes.mk: V@{typeName}.h
-
 VUnitWireInfo.h: V@{typeName}.h
 	./ExtractVerilatedSignals.py V@{typeName}.h > VUnitWireInfo.h
 
@@ -54,12 +52,8 @@ wrapper.o: V@{typeName}.h VUnitWireInfo.h wrapper.cpp  #{if simulateLoops} VSupe
 VERILATOR_SOURCE_DIR:=$(VERILATOR_ROOT)/include
 ALL_VERILATOR_FILES:=$(VM_GLOBAL_FAST) $(VM_GLOBAL_SLOW)
 ALL_VERILATOR_O:=$(patsubst %,./obj_dir/%.o,$(ALL_VERILATOR_FILES))
-ALL_VERILATOR_CPPS:=$(patsubst %,$(VERILATOR_SOURCE_DIR)/%.cpp,$(ALL_VERILATOR_FILES))
 
 ./obj_dir/%.o: $(VERILATOR_SOURCE_DIR)/%.cpp
 	g++ -w -march=native -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include
 
 verilatorObjects: $(ALL_VERILATOR_O)
-#	@echo $(ALL_VERILATOR_FILES)
-#	@echo $(ALL_VERILATOR_CPPS)
-#	@echo $(ALL_VERILATOR_O)

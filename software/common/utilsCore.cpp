@@ -39,18 +39,32 @@ String Offset(String base,int amount){
 char* StaticFormat(const char* format,...){
   static const int BUFFER_SIZE = 1024*4;
   static char buffer[BUFFER_SIZE];
-
+  static char buffer2[BUFFER_SIZE];
+  static int currentBuffer = 0;
+  
   va_list args;
   va_start(args,format);
-
-  int written = vsprintf(buffer,format,args);
-
+  int written;
+  if(currentBuffer == 0){
+    written = vsnprintf(buffer,BUFFER_SIZE,format,args);
+  } else {
+    written = vsnprintf(buffer2,BUFFER_SIZE,format,args);
+  }
+    
   va_end(args);
 
-  Assert(written < BUFFER_SIZE);
-  buffer[written] = '\0';
+  if(written == BUFFER_SIZE - 1){
+    Assert(false); // NOTE: We are probably using StaticFormat in a situation where we shouldn't.
+  }
+
+  char* toReturn = buffer;
+  if(currentBuffer == 1){
+    toReturn = buffer2;
+  }
+
+  currentBuffer = 1 - currentBuffer;
   
-  return buffer;
+  return toReturn;
 }
 
 int CountNonZeros(Array<int> arr){

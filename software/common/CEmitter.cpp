@@ -11,9 +11,9 @@ String Repr(CASTType type){
   case CASTType_STRUCT_DEF: return STRING("CASTType_STRUCT_DEF");
   case CASTType_STATEMENT: return STRING("CASTType_STATEMENT");
   case CASTType_MEMBER_DECL: return STRING("CASTType_MEMBER_DECL");
-  case CASTType_VAR_DECL: return STRING("VAR_DECL");
-  case CASTType_VAR_DECL_STMT: return STRING("VAR_DECL_STMT"); 
-  case CASTType_IF: return STRING("IF");
+  case CASTType_VAR_DECL: return STRING("CASTType_VAR_DECL");
+  case CASTType_VAR_DECL_STMT: return STRING("CASTType_VAR_DECL_STMT"); 
+  case CASTType_IF: return STRING("CASTType_IF");
   }
 
   return STRING("No repr for the given type, check if forgot to implement it: %d\n",(int) type);

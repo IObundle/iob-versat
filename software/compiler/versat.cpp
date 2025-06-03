@@ -24,16 +24,9 @@
 #include "declaration.hpp"
 
 namespace BasicTemplates{
-  CompiledTemplate* acceleratorTemplate;
   CompiledTemplate* topAcceleratorTemplate;
   CompiledTemplate* topConfigurationsTemplate;
-  CompiledTemplate* dataTemplate;
-  CompiledTemplate* wrapperTemplate;
   CompiledTemplate* acceleratorHeaderTemplate;
-  CompiledTemplate* externalInternalPortmapTemplate;
-  CompiledTemplate* externalPortTemplate;
-  CompiledTemplate* externalInstTemplate;
-  CompiledTemplate* internalWiresTemplate;
   CompiledTemplate* iterativeTemplate;
 }
 

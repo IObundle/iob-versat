@@ -9,10 +9,11 @@ enum VASTType{
   VASTType_VAR_DECL,
   VASTType_WIRE_ASSIGN_BLOCK,
   VASTType_ASSIGN_DECL,
+  VASTType_PORT_CONNECT,
   VASTType_IF,
   VASTType_SET,
   VASTType_EXPR,
-  VASTType_COMB_DECL,
+  VASTType_ALWAYS_DECL,
   VASTType_INSTANCE,
   VASTType_BLANK
 };
@@ -25,7 +26,9 @@ struct VAST{
   union{
     struct{
       String timescaleExpression;
+      ArenaList<String>* includes;
       ArenaList<VAST*>* declarations;
+      ArenaList<VAST*>* portConnections;
     } top;
 
     struct{
@@ -46,9 +49,14 @@ struct VAST{
     } expr;
 
     struct {
-      ArenaList<String>* sensitivity;
+      Array<String> sensitivity;
       ArenaList<VAST*>* declarations;
     } alwaysBlock;
+
+    struct {
+      String portName;
+      String connectExpr;
+    } portConnect;
     
     struct {
       String name;
@@ -78,7 +86,7 @@ struct VAST{
       String moduleName;
       String name;
       ArenaList<Pair<String,String>>* parameters;
-      ArenaList<Pair<String,String>>* portConnections;
+      ArenaList<VAST*>* portConnections;
     } instance;
   };
 };
@@ -93,14 +101,18 @@ struct VEmitter{
   void PushLevel(VAST* level);
   void PopLevel();
   void InsertDeclaration(VAST* decl);
+  void InsertPortDeclaration(VAST* decl);
+  void InsertPortConnect(VAST* decl);
   VAST* FindFirstVASTType(VASTType type,bool errorIfNotFound = true);
 
   void Timescale(const char* timeUnit,const char* timePrecision);
-
+  void Include(const char* name);
+  
   // Module definition
   void Module(String name);
   void DeclParam(const char* name,int value); // A global param of a module
-  
+  void EndModule();
+
   void Input(const char* name,int bitsize = 1);
   void Input(String name,int bitsize = 1);
   void Input(const char* name,const char* expr);
@@ -124,6 +136,8 @@ struct VEmitter{
   void Blank();
   void Expression(const char* expr);
 
+  // Kinda hardcoded for now, we mostly only care about clk and rst signals.
+  void AlwaysBlock(const char* posedge1,const char* posedge2);
   void CombBlock();
   void Set(const char* identifier,int val);
   void Set(const char* identifier,const char* expr);

@@ -45,15 +45,10 @@ struct DelayToAdd{
 };
 
 namespace BasicTemplates{
-  extern CompiledTemplate* acceleratorTemplate;
   extern CompiledTemplate* iterativeTemplate;
   extern CompiledTemplate* topAcceleratorTemplate;
   extern CompiledTemplate* topConfigurationsTemplate;
   extern CompiledTemplate* acceleratorHeaderTemplate;
-  extern CompiledTemplate* externalInternalPortmapTemplate;
-  extern CompiledTemplate* externalPortTemplate;
-  extern CompiledTemplate* externalInstTemplate;
-  extern CompiledTemplate* internalWiresTemplate;
 }
 
 struct GraphMapping;

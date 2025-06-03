@@ -28,6 +28,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_VAR_DECL:
     case VASTType_SET:
     case VASTType_EXPR:
+    case VASTType_PORT_CONNECT:
     case VASTType_ASSIGN_DECL:
     case VASTType_INSTANCE:;
     case VASTType_BLANK:
@@ -43,7 +44,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
       return;
     } break;
       
-    case VASTType_COMB_DECL: {
+    case VASTType_ALWAYS_DECL: {
       *cast->alwaysBlock.declarations->PushElem() = declarationAST;
       return;
     } break;
@@ -58,6 +59,78 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     } END_SWITCH();
   }
 }
+
+void VEmitter::InsertPortDeclaration(VAST* portAST){
+  if(top == 0){
+    *topLevel->top.declarations->PushElem() = portAST;
+    return;
+  }
+
+  for(int i = top - 1; i >= 0; i--){
+    VAST* cast = buffer[i];
+    VASTType type = cast->type;
+
+    FULL_SWITCH(type){
+    case VASTType_VAR_DECL:
+    case VASTType_SET:
+    case VASTType_EXPR:
+    case VASTType_ASSIGN_DECL:
+    case VASTType_INSTANCE:;
+    case VASTType_PORT_CONNECT:
+    case VASTType_BLANK:
+    case VASTType_ALWAYS_DECL:
+    case VASTType_IF:
+    case VASTType_WIRE_ASSIGN_BLOCK:
+    case VASTType_PORT_DECL: continue;
+
+    case VASTType_MODULE_DECL: {
+      *cast->module.portDeclarations->PushElem() = portAST;
+      return; 
+    } break;
+    case VASTType_TOP_LEVEL: {
+      Assert(false);
+    } break;
+    } END_SWITCH();
+  }
+};
+
+void VEmitter::InsertPortConnect(VAST* portAST){
+  if(top == 0){
+    *topLevel->top.portConnections->PushElem() = portAST;
+    return;
+  }
+
+  for(int i = top - 1; i >= 0; i--){
+    VAST* cast = buffer[i];
+    VASTType type = cast->type;
+
+    FULL_SWITCH(type){
+    case VASTType_VAR_DECL:
+    case VASTType_SET:
+    case VASTType_EXPR:
+    case VASTType_ASSIGN_DECL:
+    case VASTType_BLANK:
+    case VASTType_ALWAYS_DECL:
+    case VASTType_PORT_CONNECT:
+    case VASTType_IF:
+    case VASTType_WIRE_ASSIGN_BLOCK:
+    case VASTType_PORT_DECL: continue;
+
+    case VASTType_INSTANCE:{
+      *cast->instance.portConnections->PushElem() = portAST;
+      return;
+    } break;
+
+    case VASTType_MODULE_DECL: {
+      Assert(false);
+      return; 
+    } break;
+    case VASTType_TOP_LEVEL: {
+      Assert(false);
+    } break;
+    } END_SWITCH();
+  }
+};
 
 VAST* VEmitter::FindFirstVASTType(VASTType type,bool errorIfNotFound){
   if(type == VASTType_TOP_LEVEL){
@@ -78,12 +151,16 @@ VAST* VEmitter::FindFirstVASTType(VASTType type,bool errorIfNotFound){
     }
     DEBUG_BREAK();
   }
-    
+  
   return nullptr;
 }
 
 void VEmitter::Timescale(const char* timeUnit,const char* timePrecision){
   topLevel->top.timescaleExpression = PushString(arena,"%s / %s",timeUnit,timePrecision);
+}
+
+void VEmitter::Include(const char* name){
+  *topLevel->top.includes->PushElem() = PushString(arena,"%s",name);
 }
 
   // Module definition
@@ -106,16 +183,21 @@ void VEmitter::DeclParam(const char* name,int value){
   p->first = PushString(arena,"%s",name);
   p->second = PushString(arena,"%d",value);
 }
-  
-void VEmitter::Input(const char* name,int bitsize){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
 
+void VEmitter::EndModule(){
+  while(buffer[top-1]->type != VASTType_MODULE_DECL){
+    PopLevel();
+  }
+  PopLevel();
+}
+
+void VEmitter::Input(const char* name,int bitsize){
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,"%s",name);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%d-1:0]",bitsize);
   decl->portDecl.isInput = true;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::Input(String name,int bitsize){
@@ -123,14 +205,12 @@ void VEmitter::Input(String name,int bitsize){
 }
 
 void VEmitter::Input(const char* name,const char* expr){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
-
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,"%s",name);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expr);
   decl->portDecl.isInput = true;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::InputIndexed(const char* format,int index,int bitsize){
@@ -138,47 +218,39 @@ void VEmitter::InputIndexed(const char* format,int index,int bitsize){
 }
 
 void VEmitter::InputIndexed(const char* format,int index,const char* expression){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
-
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,format,index);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expression);
   decl->portDecl.isInput = true;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::Output(const char* name,int bitsize){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
-
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,"%s",name);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%d-1:0]",bitsize);
   decl->portDecl.isInput = false;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::Output(const char* name,const char* expr){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
-
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,"%s",name);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expr);
   decl->portDecl.isInput = false;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::Output(String name,int bitsize){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
-
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,"%.*s",UNPACK_SS(name));
   decl->portDecl.bitSizeExpr = PushString(arena,"[%d-1:0]",bitsize);
   decl->portDecl.isInput = false;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::OutputIndexed(const char* format,int index,int bitsize){
@@ -186,14 +258,12 @@ void VEmitter::OutputIndexed(const char* format,int index,int bitsize){
 }
 
 void VEmitter::OutputIndexed(const char* format,int index,const char* expression){
-  VAST* moduleDecl = FindFirstVASTType(VASTType_MODULE_DECL,true);
-
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,format,index);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expression);
   decl->portDecl.isInput = false;
 
-  *moduleDecl->module.portDeclarations->PushElem() = decl;
+  InsertPortDeclaration(decl);
 }
 
 void VEmitter::Wire(const char* name,int bitsize){
@@ -271,10 +341,23 @@ void VEmitter::Expression(const char* expr){
   *assignBlock->wireAssignBlock.expressions->PushElem() = exprDecl;
 }
 
-void VEmitter::CombBlock(){
-  VAST* combDecl = PushVAST(VASTType_COMB_DECL,arena);
+void VEmitter::AlwaysBlock(const char* posedge1,const char* posedge2){
+  VAST* combDecl = PushVAST(VASTType_ALWAYS_DECL,arena);
 
-  combDecl->alwaysBlock.sensitivity = nullptr;
+  combDecl->alwaysBlock.sensitivity = PushArray<String>(arena,2);
+  combDecl->alwaysBlock.sensitivity[0] = PushString(arena,"%s",posedge1);
+  combDecl->alwaysBlock.sensitivity[1] = PushString(arena,"%s",posedge2);
+
+  combDecl->alwaysBlock.declarations = PushArenaList<VAST*>(arena);
+  
+  InsertDeclaration(combDecl);
+  PushLevel(combDecl);
+}
+
+void VEmitter::CombBlock(){
+  VAST* combDecl = PushVAST(VASTType_ALWAYS_DECL,arena);
+
+  combDecl->alwaysBlock.sensitivity = {};
   combDecl->alwaysBlock.declarations = PushArenaList<VAST*>(arena);
   
   InsertDeclaration(combDecl);
@@ -330,8 +413,8 @@ void VEmitter::StartInstance(const char* moduleName,const char* instanceName){
   instanceAST->instance.moduleName = PushString(arena,"%s",moduleName);
   instanceAST->instance.name = PushString(arena,"%s",instanceName);
   instanceAST->instance.parameters = PushArenaList<Pair<String,String>>(arena);
-  instanceAST->instance.portConnections = PushArenaList<Pair<String,String>>(arena);
-
+  instanceAST->instance.portConnections = PushArenaList<VAST*>(arena);
+  
   InsertDeclaration(instanceAST);
   PushLevel(instanceAST);
 }
@@ -342,7 +425,7 @@ void VEmitter::StartInstance(String moduleName,const char* instanceName){
   instanceAST->instance.moduleName = PushString(arena,moduleName);
   instanceAST->instance.name = PushString(arena,"%s",instanceName);
   instanceAST->instance.parameters = PushArenaList<Pair<String,String>>(arena);
-  instanceAST->instance.portConnections = PushArenaList<Pair<String,String>>(arena);
+  instanceAST->instance.portConnections = PushArenaList<VAST*>(arena);
 
   InsertDeclaration(instanceAST);
   PushLevel(instanceAST);
@@ -357,43 +440,43 @@ void VEmitter::InstanceParam(const char* paramName,int paramValue){
 }
   
 void VEmitter::PortConnect(const char* portName,const char* connectionExpr){
-  VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
+  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
+  portInfo->portConnect.portName = PushString(arena,"%s",portName);
+  portInfo->portConnect.connectExpr = PushString(arena,"%s",connectionExpr);
 
-  Pair<String,String>* p = decl->instance.portConnections->PushElem();
-  p->first = PushString(arena,"%s",portName);
-  p->second = PushString(arena,"%s",connectionExpr);
+  InsertPortConnect(portInfo);
 }
 
 void VEmitter::PortConnect(String portName,String connectionExpr){
-  VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
+  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
+  portInfo->portConnect.portName = PushString(arena,portName);
+  portInfo->portConnect.connectExpr = PushString(arena,connectionExpr);
 
-  Pair<String,String>* p = decl->instance.portConnections->PushElem();
-  p->first = PushString(arena,portName);
-  p->second = PushString(arena,connectionExpr);
+  InsertPortConnect(portInfo);
 }
 
 void VEmitter::PortConnectIndexed(const char* portFormat,int index,const char* connectionExpr){
-  VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
+  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
+  portInfo->portConnect.portName = PushString(arena,portFormat,index);
+  portInfo->portConnect.connectExpr = PushString(arena,"%s",connectionExpr);
 
-  Pair<String,String>* p = decl->instance.portConnections->PushElem();
-  p->first = PushString(arena,portFormat,index);
-  p->second = PushString(arena,"%s",connectionExpr);
+  InsertPortConnect(portInfo);
 }
 
 void VEmitter::PortConnectIndexed(const char* portFormat,int index,const char* connectFormat,int connectIndex){
-  VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
+  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
+  portInfo->portConnect.portName = PushString(arena,portFormat,index);
+  portInfo->portConnect.connectExpr = PushString(arena,connectFormat,connectIndex);
 
-  Pair<String,String>* p = decl->instance.portConnections->PushElem();
-  p->first = PushString(arena,portFormat,index);
-  p->second = PushString(arena,connectFormat,connectIndex);
+  InsertPortConnect(portInfo);
 }
 
 void VEmitter::PortConnectIndexed(const char* portFormat,int index,String connectionExpr){
-  VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
+  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
+  portInfo->portConnect.portName = PushString(arena,portFormat,index);
+  portInfo->portConnect.connectExpr = PushString(arena,connectionExpr);
 
-  Pair<String,String>* p = decl->instance.portConnections->PushElem();
-  p->first = PushString(arena,portFormat,index);
-  p->second = PushString(arena,connectionExpr);
+  InsertPortConnect(portInfo);
 }
 
 void VEmitter::EndInstance(){
@@ -413,7 +496,9 @@ VEmitter* StartVCode(Arena* out){
   emitter->buffer = PushArray<VAST*>(out,16);
   emitter->topLevel = PushVAST(VASTType_TOP_LEVEL,out);
   emitter->topLevel->top.declarations = PushArenaList<VAST*>(out);
-  
+  emitter->topLevel->top.portConnections = PushArenaList<VAST*>(out);
+  emitter->topLevel->top.includes = PushArenaList<String>(out);
+
   return emitter;
 }
 
@@ -427,10 +512,21 @@ void Repr(VAST* top,StringBuilder* b,int level){
     if(!Empty(top->top.timescaleExpression)){
       b->PushString("`timescale %.*s\n\n",UNPACK_SS(top->top.timescaleExpression));
     }
-      
+
+    for(String name : top->top.includes){
+      b->PushString("`include \"%.*s\"\n",UNPACK_SS(name));
+    }
+    
     for(VAST* ast : top->top.declarations){
       Repr(ast,b,level);
       b->PushString("\n");
+    }
+
+    // Top level port connections are expected to always end in a ','. 
+    for(VAST* ast : top->top.portConnections){
+      printf("here\n");
+      Repr(ast,b,level + 1);
+      b->PushString(",\n");
     }
   } break;
   
@@ -510,14 +606,12 @@ void Repr(VAST* top,StringBuilder* b,int level){
     b->PushString("(\n");
 
     bool first = true;
-    for(auto p : top->instance.portConnections){
+    for(VAST* ast : top->instance.portConnections){
       if(!first){
         b->PushString(",\n");
       }
         
-      b->PushSpaces((level + 1) * 2);
-
-      b->PushString(".%.*s(%.*s)",UNPACK_SS(p.first),UNPACK_SS(p.second));
+      Repr(ast,b,level + 1);
       first = false;
     }
     b->PushString("\n");
@@ -604,12 +698,26 @@ void Repr(VAST* top,StringBuilder* b,int level){
     // Do nothing. Outer code should add a new line by itself since we are a declaration
   } break;
 
+  case VASTType_PORT_CONNECT: {
+    b->PushSpaces(level * 2);
+    b->PushString(".%.*s(%.*s)",UNPACK_SS(top->portConnect.portName),UNPACK_SS(top->portConnect.connectExpr));
+  } break;
+  
   case VASTType_EXPR:{
     b->PushString("%.*s",UNPACK_SS(top->expr.content));
   } break;
   
-  case VASTType_COMB_DECL:{
-    b->PushString("always @* begin\n");
+  case VASTType_ALWAYS_DECL:{
+
+    if(top->alwaysBlock.sensitivity.size == 0){
+      b->PushString("always @* begin\n");
+    } else if(top->alwaysBlock.sensitivity.size == 2){
+      String edge0 = top->alwaysBlock.sensitivity[0];
+      String edge1 = top->alwaysBlock.sensitivity[1];
+      b->PushString("always @(posedge %.*s,posedge %.*s) begin\n",UN(edge0),UN(edge1));
+    } else {
+      NOT_IMPLEMENTED("yet");
+    }
 
     for(VAST* ast : top->alwaysBlock.declarations){
       Repr(ast,b,level + 1);
