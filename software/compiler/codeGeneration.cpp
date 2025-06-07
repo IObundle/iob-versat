@@ -22,11 +22,15 @@
 
 #include "versatSpecificationParser.hpp"
 
+- LEFT HERE - We want to remove the heavy template usage but we probably want to keep a very simple template format where we can notate a mostly static file with a very simple @{str} that substitutes the string by a string of our own. This is mostly because of the fact that the wrapper,header and top accelerator have a decent amount of mostly static code. Also probably want to simplify some of the code inside the accelerator: separate the DMA into its own module and stuff like that.
+
 // TODO: If we could find a way of describing the format of verilog modules that we care about, we could also perform
 //       a check at Versat runtime that we are producing correct code, although it might take longer than the simple
 //       loop of making a change and checking if Verilator/Icarus complains about it.
 
 // TODO: Is there a way of describing the format of the wires for an interface and have the code generate it automatically? We would need to be able to describe the format of the wires, the place where the indexes change, the place where the port index changes, etc. So far, this would only be needed if we added more memory types or if we started generating more code.
+
+// TODO: Emit functions do not need to return a String. They could just write directly the result to a file and skip having to push a new string for no reason.
 
 // TODO: Move all this stuff to a better place
 #include <filesystem>
@@ -184,8 +188,6 @@ String EmitMakefile(Accelerator* accel,Arena* out){
   b->PushString("verilatorObjects: $(ALL_VERILATOR_O)\n");
 
   String content = EndString(out,b);
-
-  printf("%.*s\n",UNPACK_SS(content));
   
   return content;
 }
@@ -437,11 +439,11 @@ String EmitModule(FUDeclaration* module,Arena* out){
     m->Input("signal_loop");
   }
   
-  for(int i = 0; i < module->info.infos[0].inputDelays.size; i++){
+  for(int i = 0; i < module->NumberInputs(); i++){
     m->InputIndexed("in%d",i,"DATA_W");
   }
 
-  for(int i = 0; i < module->info.infos[0].outputLatencies.size; i++){
+  for(int i = 0; i < module->NumberOutputs(); i++){
     m->OutputIndexed("out%d",i,"DATA_W");
   }
 
@@ -847,17 +849,14 @@ String EmitModule(FUDeclaration* module,Arena* out){
   StringBuilder* b = StartString(temp);
   Repr(ast,b);
   String content = EndString(out,b);
-  printf("%.*s\n",UNPACK_SS(EndString(temp,b)));
   return content;
 }
 
 String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* out){
-  return {};
-#if 0
   TEMP_REGION(temp,out);
   TEMP_REGION(temp2,temp);
 
-  AccelInfo info = topLevelDecl->info;
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
   Pool<FUInstance> instances = accel->allocated;
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
 
@@ -923,13 +922,12 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
   }
   
   auto test = EndArray(arr);
-  //TemplateSetCustom("wireInfo",MakeValue(&test));
 
   VEmitter* m = StartVCode(temp);
 
   // VARS
-  int configurationsBits;
-  int configurationAddressBits;
+  int configurationsBits = val.configurationBits;
+  int configurationAddressBits = val.configurationAddressBits;
   
   m->Timescale("1ns","1ps");
 
@@ -942,6 +940,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     m->DeclParam("AXI_ADDR_W",32);
     m->DeclParam("AXI_DATA_W",globalOptions.databusDataSize);
     m->DeclParam("LEN_W",20);
+
 
     if(configurationsBits){
       m->Output("config_data_o",configurationsBits);
@@ -983,17 +982,28 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
       }
     }
 
-// COMPUTE : 0, READ : 1, WRITE : 2
-
+    auto EmitStrobe = [](VEmitter* m,const char* strobeWire,const char* leftReg,int leftIndexStart,const char* rightReg,int regSize){
+      for(int i = 0; i < regSize; i += 8){
+        int left = 8;
+        if(i + left > regSize){
+          left = regSize % 8;
+        }
+        
+        m->If(SF("%s[%d]",strobeWire,i/8));
+        m->Set(SF("%s[%d+:%d]",leftReg,leftIndexStart + i,left),SF("%s[%d+:%d]",rightReg,i,left));
+        m->EndIf();
+      }
+    };
+    
     if(configurationsBits){
       m->AlwaysBlock("clk_i","rst_i");
       {
         m->If("rst_i");
         m->Set("shadow_configdata",0);
-        //m->ElseIf("data_write & !memoryMappedAddr");
+        m->ElseIf("data_write & !memoryMappedAddr");
         for(WireInformation info : test){
-          m->If(SF("address[%d]:0 == %d",configurationAddressBits + 1,info.addr));
-          // HANDLE STROBE
+          m->If(SF("address[%d:0] == %d",configurationAddressBits + 1,info.addr));
+          EmitStrobe(m,"data_wstrb","shadow_configdata",info.configBitStart,"data_data",info.wire.bitSize);
           m->EndIf();
         }
         m->EndIf();
@@ -1018,11 +1028,62 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
         m->EndIf();
       }
       m->EndBlock();
-      
+    }
+
+    m->AlwaysBlock("clk_i","rst_i");
+    {
+      m->If("rst_i");
+      for(WireInformation info : test){
+        if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
+          m->Set(SF("Compute_%.*s",UN(info.wire.name)),"0");
+        }
+      }
+      m->ElseIf("change_config_pulse");
+      for(WireInformation info : test){
+        if(info.wire.stage == VersatStage_COMPUTE){
+          m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("shadow_configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
+        }
+      }
+      for(WireInformation info : test){
+        if(info.wire.stage == VersatStage_WRITE){
+          m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("Write_%.*s",UN(info.wire.name)));
+        }
+      }
+      m->EndIf();
+    }
+    m->EndBlock();
+
+    m->AlwaysBlock("clk_i","rst_i");
+    {
+      m->If("rst_i");
+      for(WireInformation info : test){
+        if(info.wire.stage == VersatStage_WRITE){
+          m->Set(SF("Write_%.*s",UN(info.wire.name)),"0");
+        }
+      }
+      m->ElseIf("change_config_pulse");
+      for(WireInformation info : test){
+        if(info.wire.stage == VersatStage_WRITE){
+          m->Set(SF("Write_%.*s",UN(info.wire.name)),SF("shadow_configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
+        }
+      }
+      m->EndIf();
+    }
+    m->EndBlock();
+
+    for(WireInformation info : test){
+      if(info.isStatic){
+        m->Assign(info.wire.name,PushString(temp,"configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
+      }
     }
   }
   m->EndModule();
-#endif
+  
+  VAST* ast = EndVCode(m);
+  StringBuilder* b = StartString(temp);
+  Repr(ast,b);
+  String content = EndString(out,b);
+  return content;
 }
 
 // TODO: REMOVE: Remove after proper implementation of AddressGenerators
@@ -1918,7 +1979,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       StringBuilder* b = StartString(temp);
       Repr(b,doubleLoop);
       String repr = EndString(temp,b);
-      c->Comment(repr);
+      //c->Comment(repr);
 
       AddressVParameters parameters = InstantiateAccess(doubleLoop,loopIndex,true,temp);
       EmitStoreAddressGenIntoConfig(c,parameters);
@@ -1930,7 +1991,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
       StringBuilder* b = StartString(temp);
       Repr(b,singleLoop);
       String repr = EndString(temp,b);
-      c->Comment(repr);
+      //c->Comment(repr);
 
       AddressVParameters parameters = InstantiateAccess(singleLoop,-1,false,temp);
       EmitStoreAddressGenIntoConfig(c,parameters);
@@ -1993,7 +2054,7 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
   CEmitter* m = StartCCode(temp);
 
   String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
-  m->Function(STRING("static AddressVArguments"),functionName);
+  m->FunctionBlock(STRING("static AddressVArguments"),functionName);
 
   m->Argument(STRING("void*"),STRING("ext"));
 
@@ -2017,12 +2078,13 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
   } else {
     EmitDoubleOrSingleLoopCode(m,0,initial);
   }
-
+  
   m->Return(varName);
+  m->EndBlock();
   CAST* ast = EndCCode(m);
 
   StringBuilder* b = StartString(temp);
-  Repr(ast,b);
+  Repr(ast,b,false);
   String data = EndString(out,b);
 
   return data;
@@ -2124,14 +2186,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   };
 
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
-  printf("Some stats\n");
-  printf("CONFIG_BITS: %d\n",val.configurationBits);
-  printf("STATE_BITS: %d\n",val.stateBits);
-  printf("MEM_USED: ");
-  PrettyPrintMemory(val.totalExternalMemory);
-  printf("\n");
-
-  printf("UNITS: %d\n",val.nUnits);
   
   // TODO: A lot of cruft in this function
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
@@ -2147,18 +2201,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
   allStaticsVerilatorSide.size = index;
 
-  // All these are common to all the following templates usages
-  // Since templates only check if data exists at runtime, we want to pass data using C code as much as possible
-  // (Because any change to the structs leads to a compile error instead of a runtime error).
-  // This is not enforced and its fine if we get a few template errors. Since the tests are fast
-  // we likely wont have many problems with this approach.
-
-  // NOTE: Either compile to C or we create a proper backend to emit Verilog code and C code (and keep templates for things like makefiles and such).
-  // NOTE2: Need to run some tests to verify which is easier to code in and to maintain. I like the templates since it is helpful to see the structure of the generated code. It is also easier to organize the generic code with the specific code.
-  //       I am not a fan of C printfs or C++ ostreams, mainly because it is more difficult to organize the code and because we have to worry about escaping stuff (although maybe not as big as a problem, since verilog and C do not have a lot to escape).
-  //       I am also not a fan of emitting code. It is more stable but I lose the ability to see directly how the general code will look like. Trading stability for easy of prototyping and changing things.
-  
-  // TODO: If free time this should be a weekend project since we are basically just making a different backend.
   TemplateSetString("typeName",accel->name);
 
   // Dependent on val.
@@ -2187,9 +2229,17 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   // NOTE: This data is printed so it can be captured by the IOB python setup.
   // TODO: Probably want a more robust way of doing this. Eventually want to printout some stats so we can
   //       actually visualize what we are producing.
-  printf("ADDR_W - %d\n",val.memoryConfigDecisionBit + 1);
+  printf("Some stats\n");
+  printf("CONFIG_BITS: %d\n",val.configurationBits);
+  printf("STATE_BITS: %d\n",val.stateBits);
+  printf("MEM_USED: ");
+  PrettyPrintMemory(val.totalExternalMemory);
+  printf("\n");
+
+  printf("UNITS: %d\n",val.nUnits);
+  printf("ADDR_W:%d\n",val.memoryConfigDecisionBit + 1);
   if(val.nUnitsIO){
-    printf("HAS_AXI - True\n");
+    printf("HAS_AXI:True\n");
   }
 
   // Verilog includes for parameters and such
@@ -2305,41 +2355,47 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   // All dependent on external
   TemplateSetCustom("external",MakeValue(&external));
   {
-    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_inst.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-    DEFER_CLOSE_FILE(f);
+    String path = PushString(temp,"%s/versat_external_memory_inst.vh",hardwarePath);
+    FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
+    if(!f){
+      // TODO
+    }
     String content = EmitExternalMemoryInstances(external,temp);
-
     fprintf(f,"%.*s",UNPACK_SS(content));
+    fclose(f);
   }
 
   {
-    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_internal_memory_wires.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-    DEFER_CLOSE_FILE(f);
-    //ProcessTemplate(f,BasicTemplates::internalWiresTemplate);
-
+    String path = PushString(temp,"%s/versat_internal_memory_wires.vh",hardwarePath);
+    FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
+    if(!f){
+      // TODO
+    }
     String content = EmitInternalMemoryWires(external,temp);
-
     fprintf(f,"%.*s",UNPACK_SS(content));
+    fclose(f);
   }
 
   {
-    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_port.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-    DEFER_CLOSE_FILE(f);
-    //ProcessTemplate(f,BasicTemplates::externalPortTemplate);
- 
+    String path = PushString(temp,"%s/versat_external_memory_port.vh",hardwarePath);
+    FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
+    if(!f){
+      // TODO
+    }
     String content = EmitExternalMemoryPort(external,temp);
-
     fprintf(f,"%.*s",UNPACK_SS(content));
+    fclose(f);
   }
 
   {
-    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_external_memory_internal_portmap.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-    DEFER_CLOSE_FILE(f);
-    //ProcessTemplate(f,BasicTemplates::externalInternalPortmapTemplate);
-
+    String path = PushString(temp,"%s/versat_external_memory_internal_portmap.vh",hardwarePath);
+    FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
+    if(!f){
+      // TODO
+    }
     String content = EmitExternalMemoryInternalPortmap(external,temp);
-
     fprintf(f,"%.*s",UNPACK_SS(content));
+    fclose(f);
  }
 
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
@@ -2439,8 +2495,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     }
 
     String content = EmitConfiguration(accel,topLevelDecl,temp);
-    printf("%.*s\n",UNPACK_SS(content));
-    ProcessTemplate(s,BasicTemplates::topConfigurationsTemplate);
+    fprintf(s,"%.*s\n",UNPACK_SS(content));
   }
   
   TemplateSetBool("isSimple",isSimple);
@@ -2721,7 +2776,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       {
         CEmitter* m = StartCCode(temp);
       
-        m->Function(STRING("static void"),loadFunctionName);
+        m->FunctionBlock(STRING("static void"),loadFunctionName);
         m->Argument(argName,varName);
         m->Argument(STRING("AddressVArguments"),STRING("args"));
 
@@ -2762,7 +2817,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       {
         CEmitter* m = StartCCode(temp);
       
-        m->Function(STRING("static void"),functionName);
+        m->FunctionBlock(STRING("static void"),functionName);
 
         m->Argument(argName,varName);
         m->Argument(STRING("void*"),STRING("ext"));
@@ -2802,6 +2857,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
     DEFER_CLOSE_FILE(f);
+    
     ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate);
   }
 

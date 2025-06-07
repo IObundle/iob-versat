@@ -48,7 +48,6 @@ void Free(Arena* arena);
 size_t MemoryUsage(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
-String PushString(Arena* arena,int size);
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
@@ -221,7 +220,7 @@ struct StringBuilder{
 };
 
 StringBuilder* StartString(Arena* arena);
-String EndString(Arena* out,StringBuilder* builder,bool addFinalNullByte = false);
+String EndString(Arena* out,StringBuilder* builder);
 
 template<typename T>
 class Stack{

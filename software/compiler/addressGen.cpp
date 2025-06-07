@@ -437,30 +437,16 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
     res.incr = PushString(out,l.incrementExpression);
     res.duty = PushString(out,l.dutyExpression);
 
-//    if(highestExternalLoop == 0){
-//      res.incr = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.incrementExpression));
-//    }
-
     res.iter = PushString(out,l.iterationExpression);
     res.shift = PushString(out,l.shiftExpression);
-//    if(highestExternalLoop == 1){
-//      res.shift = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.shiftExpression));
-//    }
     }
     
   if(internal.size > 1){
     InternalMemoryAccess l = internal[1]; 
     res.per2 = PushString(out,l.periodExpression);
     res.incr2 = PushString(out,l.incrementExpression);
-//    if(highestExternalLoop == 2){
-//      res.incr2 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.incrementExpression));
-//    }
-    
     res.iter2 = PushString(out,l.iterationExpression);
     res.shift2 = PushString(out,l.shiftExpression);
-//    if(highestExternalLoop == 3){
-//      res.shift2 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.shiftExpression));
-//    }
   } else {
     res.per2 = STRING("0");
     res.incr2 = STRING("0");
@@ -474,14 +460,8 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
     InternalMemoryAccess l = internal[2]; 
     res.per3 = PushString(out,l.periodExpression);
     res.incr3 = PushString(out,l.incrementExpression);
-//    if(highestExternalLoop == 4){
-//      res.incr3 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.incrementExpression));
-//    }
     res.iter3 = PushString(out,l.iterationExpression);
     res.shift3 = PushString(out,l.shiftExpression);
-//    if(highestExternalLoop == 5){
-//      res.shift3 = PushString(out,"ALIGN(%.*s,VERSAT_DIFF_W)",UNPACK_SS(l.shiftExpression));
-//    }
   } else {
     res.per3 = STRING("0");
     res.incr3 = STRING("0");

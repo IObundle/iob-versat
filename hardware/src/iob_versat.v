@@ -39,7 +39,6 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    input cke_i,
    input clk_i,
    input arst_i
-   //input                   rst_i
 );
 
    assign iob_ready_o = 1'b1;

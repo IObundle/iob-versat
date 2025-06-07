@@ -2,6 +2,8 @@
 
 #include "utils.hpp"
 
+// TODO: Because the way verilog tools work and how certain linters expect code to follow a certain format, try to abstract the rules on this level and inside the Repr function. This means that, if, for example, linter demands that a signal is cleared in a certain way, then implement a Clear function that makes sure that we always clear the signal that way, instead of pushing the logic outwards. Try to consolidate as much of verilog logic on this Emitter as much as possible and abstract the actual Verilog generation from the rest of the code.
+
 enum VASTType{
   VASTType_TOP_LEVEL,
   VASTType_MODULE_DECL,
@@ -19,6 +21,14 @@ enum VASTType{
 };
 
 String Repr(VASTType type);
+
+struct VAST;
+
+struct VASTIf{
+  // TODO: Probably should be an expression but we are not doing expressions right now.
+  String ifExpression;
+  ArenaList<VAST*>* statements;
+};
 
 struct VAST{
   VASTType type;
@@ -64,8 +74,8 @@ struct VAST{
     } assignOrSet; 
 
     struct {
-      String expr;
-      ArenaList<VAST*>* declarations;
+      ArenaList<VASTIf>* ifExpressions;
+      ArenaList<VAST*>* elseStatements; // If nullptr then no else clause
     } ifExpr; 
     
     struct{
@@ -138,11 +148,15 @@ struct VEmitter{
 
   // Kinda hardcoded for now, we mostly only care about clk and rst signals.
   void AlwaysBlock(const char* posedge1,const char* posedge2);
+
   void CombBlock();
   void Set(const char* identifier,int val);
   void Set(const char* identifier,const char* expr);
   void Set(String identifier,String expr);
+
   void If(const char* expr);
+  void ElseIf(const char* expr);
+  void Else();
   void EndIf();
   
   void EndBlock();
@@ -164,5 +178,4 @@ VAST* PushVAST(VASTType type,Arena* out);
 VEmitter* StartVCode(Arena* out);
 VAST* EndVCode(VEmitter* m);
 
-void Repr(VAST* top,StringBuilder* b,int level = 0);
-
+void Repr(VAST* top,StringBuilder* b);

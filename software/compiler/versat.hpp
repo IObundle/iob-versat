@@ -47,7 +47,6 @@ struct DelayToAdd{
 namespace BasicTemplates{
   extern CompiledTemplate* iterativeTemplate;
   extern CompiledTemplate* topAcceleratorTemplate;
-  extern CompiledTemplate* topConfigurationsTemplate;
   extern CompiledTemplate* acceleratorHeaderTemplate;
 }
 

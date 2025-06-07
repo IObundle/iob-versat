@@ -215,11 +215,11 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,axi_
     HAS_AXI = False
 
     for line in lines:
-        tokens = line.split()
+        tokens = line.split(":")
 
-        if(len(tokens) == 3 and tokens[1] == '-'):
+        if(len(tokens) == 2):
             if(tokens[0] == "ADDR_W"):
-                ADDR_W = int(tokens[2])
+                ADDR_W = int(tokens[1])
             if(tokens[0] == "HAS_AXI"):
                 HAS_AXI = True
 

@@ -101,8 +101,21 @@ struct FUDeclaration{
   bool signalLoop;
 
   // Simple access functions
-  int NumberInputs(){return info.infos[0].inputDelays.size;};
-  int NumberOutputs(){return info.infos[0].outputLatencies.size;};
+  int NumberInputs(){
+    if(info.infos.size > 0){
+      return info.infos[0].inputDelays.size;
+    } else {
+      return 0;
+    }
+  };
+
+  int NumberOutputs(){
+    if(info.infos.size > 0){
+      return info.infos[0].outputLatencies.size;
+    } else {
+      return 0;
+    }
+  };
 
   // This only works for base units.
   // TODO: When things start settling in, need to move all these calculations to a specific file.
@@ -126,22 +139,19 @@ struct FUDeclaration{
   }
   
   Array<int> GetOutputLatencies(){
-    return info.infos[0].outputLatencies;
+    if(info.infos.size > 0){
+      return info.infos[0].outputLatencies;
+    } else {
+      return {};
+    }
   }
 
   Array<int> GetInputDelays(){
-    return info.infos[0].inputDelays;
-  }
-
-  int MaxConfigs(){
-    int max = 0;
-    for(AccelInfoIterator iter = StartIteration(&this->info); iter.IsValid(); iter = iter.Next()){
-      InstanceInfo* unit = iter.CurrentUnit();
-      if(unit->globalConfigPos.has_value()){
-        max = std::max(max,unit->globalConfigPos.value());
-      }
+    if(info.infos.size > 0){
+      return info.infos[0].inputDelays;
+    } else {
+      return {};
     }
-    return max + 1;
   }
 };
 

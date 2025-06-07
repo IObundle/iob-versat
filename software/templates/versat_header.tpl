@@ -14,6 +14,11 @@ typedef intptr_t iptr;
 
 // Config
 
+#{if configStructures.size == 0}
+typedef struct{
+} @{typeName}Config;
+#{end}
+
 #{for type configStructures}
 #define VERSAT_DEFINED_@{type.name}
 typedef struct {
@@ -40,6 +45,11 @@ typedef struct {
 #{end}
 
 // State
+
+#{if stateStructures.size == 0}
+typedef struct{
+} @{typeName}State;
+#{end}
 
 #{for type stateStructures}
 #define VERSAT_DEFINED_@{type.name}
@@ -201,11 +211,9 @@ static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);
 static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
 static const int stateStart = @{versatState |> Hex} * sizeof(int);
 
-#{if configStructures.size > 0}
 static const unsigned int AcceleratorConfigSize = sizeof(@{typeName}Config);
 
 extern volatile @{typeName}Config* accelConfig; // @{nConfigs}
-#{end}
 
 #{if stateStructures.size > 0}
 extern volatile @{typeName}State* accelState; // @{nStates}

@@ -77,7 +77,6 @@ void LoadTemplates(Arena* perm){
   SetIncludeHeader(commonTpl,STRING("common"));
 
   BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm);
-  BasicTemplates::topConfigurationsTemplate = CompileTemplate(versat_configurations_template,"top_configurations",perm);
   BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm);
   BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm);
   
@@ -246,7 +245,7 @@ struct argp_option options[] =
 
 int main(int argc,char* argv[]){
   InitDebug();
-
+  
   void SetTemplateNameToContent(Array<Pair<String,String>> val); // Kinda of an hack.
   SetTemplateNameToContent(generated_templateNameToContent);
   
@@ -375,8 +374,6 @@ int main(int argc,char* argv[]){
   String specFilepath = globalOptions.specificationFilepath;
   String topLevelTypeStr = globalOptions.topName;
 
-  // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
-
   // TODO: Simplify this part. 
   FUDeclaration* simpleType = GetTypeByName(topLevelTypeStr);
   
@@ -409,6 +406,7 @@ int main(int argc,char* argv[]){
     }
     Array<Pair<int,int>> edges = EndArray(arr);
     
+    // Basically using a simple DAG approach to detect the modules that we only care about. We do not process modules that are not needed
     Array<int> order = CalculateDAG(size,edges,typeToId->GetOrFail(topLevelTypeStr),temp);
 
     // Represents all the work that we need to do.

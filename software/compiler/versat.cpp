@@ -25,7 +25,6 @@
 
 namespace BasicTemplates{
   CompiledTemplate* topAcceleratorTemplate;
-  CompiledTemplate* topConfigurationsTemplate;
   CompiledTemplate* acceleratorHeaderTemplate;
   CompiledTemplate* iterativeTemplate;
 }

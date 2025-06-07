@@ -40,7 +40,13 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     } break;
 
     case VASTType_IF:{
-      *cast->ifExpr.declarations->PushElem() = declarationAST;
+      if(cast->ifExpr.elseStatements){
+        *cast->ifExpr.elseStatements->PushElem() = declarationAST;
+      } else {
+        *cast->ifExpr.ifExpressions->tail->elem.statements->PushElem() = declarationAST;
+      }
+
+      //*cast->ifExpr.declarations->PushElem() = declarationAST;
       return;
     } break;
       
@@ -386,14 +392,55 @@ void VEmitter::Set(const char* identifier,int val){
   Set(identifier,StaticFormat("%d",val));
 }
 
-void VEmitter::If(const char* expr){
-  VAST* ifDecl = PushVAST(VASTType_IF,arena);
+void VEmitter::If(const char* expression){
+  VAST* ifAST = PushVAST(VASTType_IF,arena);
+
+  ifAST->ifExpr.ifExpressions = PushArenaList<VASTIf>(arena);
   
-  ifDecl->ifExpr.expr = PushString(arena,"%s",expr);
-  ifDecl->ifExpr.declarations = PushArenaList<VAST*>(arena);
+  // Pushes the first expr+statement combo
+  VASTIf expr = {};
+  expr.ifExpression = PushString(arena,"%s",expression);
+  expr.statements = PushArenaList<VAST*>(arena);
+
+  *ifAST->ifExpr.ifExpressions->PushElem() = expr;
   
-  InsertDeclaration(ifDecl);
-  PushLevel(ifDecl);
+  InsertDeclaration(ifAST);
+  PushLevel(ifAST);
+}
+
+void VEmitter::ElseIf(const char* expression){
+  while(buffer[top-1]->type != VASTType_IF){
+    EndBlock();
+  }
+
+  VAST* ifAst = buffer[top-1];
+
+  VASTIf expr = {};
+  expr.ifExpression = PushString(arena,"%s",expression);
+  expr.statements = PushArenaList<VAST*>(arena);
+
+  *ifAst->ifExpr.ifExpressions->PushElem() = expr;
+}
+
+void VEmitter::Else(){
+  // NOTE: Kinda expect this to work but not sure. 
+  //       It might just be better to force user to call EndBlock everytime
+  while(buffer[top-1]->type != VASTType_IF){
+    EndBlock();
+  }
+  
+  VAST* ifAst = buffer[top-1];
+
+  // If the top 'if' already has an else, then we must look further up the chain
+  if(ifAst->ifExpr.elseStatements){
+    EndBlock();
+    while(buffer[top-1]->type != VASTType_IF){
+      EndBlock();
+    }
+    ifAst = buffer[top-1];
+  }
+  
+  ifAst->ifExpr.elseStatements = PushArenaList<VAST*>(arena);
 }
 
 void VEmitter::EndIf(){
@@ -506,7 +553,11 @@ VAST* EndVCode(VEmitter* m){
   return m->topLevel; 
 }
 
-void Repr(VAST* top,StringBuilder* b,int level){
+struct VState{
+  bool isComb;
+};
+
+void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   FULL_SWITCH(top->type){
   case VASTType_TOP_LEVEL:{
     if(!Empty(top->top.timescaleExpression)){
@@ -518,14 +569,13 @@ void Repr(VAST* top,StringBuilder* b,int level){
     }
     
     for(VAST* ast : top->top.declarations){
-      Repr(ast,b,level);
+      Repr(ast,b,state,level);
       b->PushString("\n");
     }
 
     // Top level port connections are expected to always end in a ','. 
     for(VAST* ast : top->top.portConnections){
-      printf("here\n");
-      Repr(ast,b,level + 1);
+      Repr(ast,b,state,level + 1);
       b->PushString(",\n");
     }
   } break;
@@ -561,7 +611,7 @@ void Repr(VAST* top,StringBuilder* b,int level){
         b->PushString(",\n");
       }
 
-      Repr(ast,b,level + 1);
+      Repr(ast,b,state,level + 1);
       first = false;
     }
     b->PushString("\n");
@@ -569,7 +619,7 @@ void Repr(VAST* top,StringBuilder* b,int level){
     b->PushString(");\n");
 
     for(VAST* ast : top->module.declarations){
-      Repr(ast,b,level + 1);
+      Repr(ast,b,state,level + 1);
       b->PushString("\n");
     }
 
@@ -599,11 +649,7 @@ void Repr(VAST* top,StringBuilder* b,int level){
       b->PushString(")\n");
     }
     
-    b->PushSpaces(level * 2);
-    b->PushString("%.*s\n",UNPACK_SS(top->instance.name));
-    
-    b->PushSpaces(level * 2);
-    b->PushString("(\n");
+    b->PushString("%.*s (\n",UNPACK_SS(top->instance.name));
 
     bool first = true;
     for(VAST* ast : top->instance.portConnections){
@@ -611,7 +657,7 @@ void Repr(VAST* top,StringBuilder* b,int level){
         b->PushString(",\n");
       }
         
-      Repr(ast,b,level + 1);
+      Repr(ast,b,state,level + 1);
       first = false;
     }
     b->PushString("\n");
@@ -664,7 +710,7 @@ void Repr(VAST* top,StringBuilder* b,int level){
         b->PushString(" %.*s ",UNPACK_SS(top->wireAssignBlock.joinElem));
       }
 
-      Repr(vast,b,level);
+      Repr(vast,b,state,level);
       first = false;
     }
 
@@ -677,21 +723,73 @@ void Repr(VAST* top,StringBuilder* b,int level){
   } break;
   
   case VASTType_IF:{
-    b->PushSpaces(level * 2);
-    b->PushString("if(%.*s) begin\n",UNPACK_SS(top->ifExpr.expr));
+    SingleLink<VASTIf>* iter = top->ifExpr.ifExpressions->head;
+    VASTIf ifExpr = iter->elem;
 
-    for(VAST* ast : top->ifExpr.declarations){
-      Repr(ast,b,level + 1);
-      b->PushString("\n");
+    b->PushSpaces(level * 2);
+
+    if(OnlyOneElement(ifExpr.statements) && OnlyOneElement(top->ifExpr.ifExpressions) && Empty(top->ifExpr.elseStatements)){
+      b->PushString("if(%.*s) begin ",UNPACK_SS(ifExpr.ifExpression));
+      Repr(ifExpr.statements->head->elem,b,state,0);
+      b->PushString(" end ");
+    } else {
+      b->PushString("if(%.*s) begin\n",UNPACK_SS(ifExpr.ifExpression));
+
+      if(ifExpr.statements){
+        for(SingleLink<VAST*>* iter = ifExpr.statements->head; iter; iter = iter->next){
+          VAST* ast = iter->elem;
+
+          Repr(ast,b,state,level + 1);
+          b->PushString("\n");
+        }
+      }
+   
+      b->PushSpaces(level * 2);
+      b->PushString("end ");
+    }
+      
+    for(SingleLink<VASTIf>* otherIter = iter->next; otherIter; otherIter = otherIter->next){
+      VASTIf ifExpr = otherIter->elem;
+      
+      b->PushString("else if(%.*s) begin\n",UNPACK_SS(ifExpr.ifExpression));
+
+      if(ifExpr.statements){
+        for(SingleLink<VAST*>* subIter = ifExpr.statements->head; subIter; subIter = subIter->next){
+          VAST* ast = subIter->elem;
+
+          Repr(ast,b,state,level + 1);
+          b->PushString("\n");
+        }
+      }
+        
+      b->PushSpaces(level * 2);
+      b->PushString("end ");
     }
     
-    b->PushSpaces(level * 2);
-    b->PushString("end");
+    if(top->ifExpr.elseStatements){
+      b->PushString("else {\n");
+
+      if(top->ifExpr.elseStatements){
+        for(SingleLink<VAST*>* iter = top->ifExpr.elseStatements->head; iter; iter = iter->next){
+          VAST* ast = iter->elem;
+
+          Repr(ast,b,state,level + 1);
+          b->PushString("\n");
+        }
+      }
+      
+      b->PushSpaces(level * 2);
+      b->PushString("end");
+    }
   } break;
   
   case VASTType_SET:{
     b->PushSpaces(level * 2);
-    b->PushString("%.*s = %.*s;",UNPACK_SS(top->assignOrSet.name),UNPACK_SS(top->assignOrSet.expr));
+    if(state->isComb){
+      b->PushString("%.*s = %.*s;",UNPACK_SS(top->assignOrSet.name),UNPACK_SS(top->assignOrSet.expr));
+    } else {
+      b->PushString("%.*s <= %.*s;",UNPACK_SS(top->assignOrSet.name),UNPACK_SS(top->assignOrSet.expr));
+    }
   } break;
   
   case VASTType_BLANK: {
@@ -708,24 +806,34 @@ void Repr(VAST* top,StringBuilder* b,int level){
   } break;
   
   case VASTType_ALWAYS_DECL:{
-
+    bool oldIsComb = state->isComb;
+    
     if(top->alwaysBlock.sensitivity.size == 0){
       b->PushString("always @* begin\n");
+      state->isComb = true;
     } else if(top->alwaysBlock.sensitivity.size == 2){
       String edge0 = top->alwaysBlock.sensitivity[0];
       String edge1 = top->alwaysBlock.sensitivity[1];
       b->PushString("always @(posedge %.*s,posedge %.*s) begin\n",UN(edge0),UN(edge1));
+      state->isComb = false;
     } else {
       NOT_IMPLEMENTED("yet");
     }
 
     for(VAST* ast : top->alwaysBlock.declarations){
-      Repr(ast,b,level + 1);
+      Repr(ast,b,state,level + 1);
       b->PushString("\n");
     }
     b->PushString("end\n");
+
+    state->isComb = oldIsComb;
   } break;
-  
 
   } END_SWITCH();
+}
+
+void Repr(VAST* top,StringBuilder* b){
+  VState state = {};
+
+  Repr(top,b,&state,0);
 }

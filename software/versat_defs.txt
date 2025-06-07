@@ -101,3 +101,5 @@ define_map possibleAttributes{
 };
 
 file ExtractVerilatedSignals = ./scripts/ExtractVerilatedSignals.py;
+
+fileGroup defaultVerilogFiles = ./hardware/src | ./hardware/src/units;

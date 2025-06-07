@@ -239,15 +239,13 @@ void StringBuilder::PushString(const char* format,...){
   va_end(args);
 }
 
-String EndString(Arena* out,StringBuilder* builder,bool addFinalNullByte){
+String EndString(Arena* out,StringBuilder* builder){
   int totalSize = 0;
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
     totalSize += ptr->used;
   }
 
-  if(addFinalNullByte){
-    totalSize += 1;
-  }
+  totalSize += 1;
   
   Byte* data = PushBytes(out,totalSize);
 
@@ -255,9 +253,7 @@ String EndString(Arena* out,StringBuilder* builder,bool addFinalNullByte){
   res.data = (const char*) data;
   res.size = totalSize;
 
-  if(addFinalNullByte){
-    res.size -= 1;
-  }
+  res.size -= 1;
   
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
     memcpy(data,ptr->buffer,ptr->used);
@@ -311,19 +307,18 @@ String PushFile(Arena* out,const char* filepath){
   return res;
 }
 
-String PushString(Arena* arena,int size){
-  Byte* mem = PushBytes(arena,size);
+String PushString(Arena* arena,String ss){
+  int size = ss.size;
+  
+  Byte* mem = PushBytes(arena,size + 1);
 
   String res = {};
   res.data = (const char*) mem;
   res.size = size;
 
-  return res;
-}
-
-String PushString(Arena* arena,String ss){
-  String res = PushString(arena,ss.size);
   memcpy((void*) res.data,ss.data,ss.size);
+  mem[size] = '\0';
+
   return res;
 }
 
@@ -332,10 +327,13 @@ String vPushString(Arena* arena,const char* format,va_list args){
   size_t maximum = arena->totalAllocated - arena->used;
   int size = vsnprintf(buffer,maximum,format,args);
 
+  int trueSize = size + 1;
+  buffer[size] = '\0';
+  
   Assert(size >= 0);
-  Assert(((size_t) size) < maximum);
+  Assert(((size_t) trueSize) < maximum);
 
-  arena->used += (size_t) (size);
+  arena->used += (size_t) (trueSize);
 
   String res = STRING(buffer,size);
 

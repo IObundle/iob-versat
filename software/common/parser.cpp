@@ -742,6 +742,8 @@ bool Tokenizer::IsSpecialOrSingle(String toTest){
 }
 
 TokenizerTemplate* Tokenizer::SetTemplate(TokenizerTemplate* tmpl){
+  // TODO(major): Need to flush any parsed token.
+
   TokenizerTemplate* old = this->tmpl;
   this->tmpl = tmpl;
   return old;

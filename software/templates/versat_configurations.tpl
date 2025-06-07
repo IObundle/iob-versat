@@ -160,4 +160,6 @@ assign @{info.wire.name} = configdata[@{info.configBitStart}+:@{info.wire.bitSiz
 #{end}
 #{end}
 
+#{end}
+
 endmodule

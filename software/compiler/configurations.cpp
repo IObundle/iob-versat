@@ -33,7 +33,7 @@ String AccelInfoIterator::GetMergeName(){
 }
 
 bool AccelInfoIterator::IsValid(){
-  bool res = (info && index >= 0 && index < GetCurrentMerge().size);
+  bool res = (info && info->infos.size > 0 && index >= 0 && index < GetCurrentMerge().size);
   return res;
 }
 
