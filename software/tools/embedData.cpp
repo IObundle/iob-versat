@@ -708,7 +708,11 @@ String EscapeCString(String content,Arena* out){
     case '\\': b->PushString("\\"); break;
     case '\r': b->PushString("\\r"); break;
     case '\'': b->PushString("\'"); break;
-    default: b->PushString("%c",ch);
+    default:{
+      Assert(ch >= 32 && ch < 127);
+
+      b->PushString("%c",ch);
+    } break;
     }
   }
 
@@ -864,6 +868,17 @@ int main(int argc,const char* argv[]){
       h->Extern("String",SF("META_%.*s_Content",UN(def->name)));
     }
 
+    h->Struct(S8("FileContent"));
+    h->Member(S8("String"),S8("fileName"));
+    h->Comment(S8("Without filename"));
+    h->Member(S8("String"),S8("originalRelativePath"));
+    h->Member(S8("String"),S8("content"));
+    h->EndStruct();
+
+    for(FileGroupDef* def : fileGroups){
+      h->Extern("Array<FileContent>",CS(def->name));
+    }
+    
     CAST* end = EndCCode(h);
     StringBuilder* b = StartString(temp);
     Repr(end,b,true,0);
@@ -1090,40 +1105,76 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
     }
 
-    - LEFT HERE - Finish the file group implementation and then implement the build time embedding of the versat source code.
+    c->Comment(S8("Embed File Groups"));
     
-#if 0
+    struct FileGroupInfo{
+      String originalRelativePath;
+      String filename;
+      String contentRawArrayName;
+    };
+
     for(FileGroupDef* def : fileGroups){
-      auto list = PushArenaList<String>(temp);
+      auto list = PushArenaList<FileGroupInfo>(temp);
 
       for(String folderPath : def->foldersFromRoot){
         DIR* directory = opendir(SF("%.*s",UN(folderPath)));
         Assert(directory);
-
-        printf("Directory: %.*s\n",UN(folderPath));
         
         dirent* entry = nullptr;
         while ((entry = readdir(directory)) != NULL){
-          String fullPath = PushString(temp,"%.*s/%s", UN(folderPath), entry->d_name);
-
           if (entry->d_type == DT_DIR) {
             continue;
           }
 
-          *list->PushElem() = fullPath;
+          String fileName = PushString(temp,"%s",entry->d_name);
+          *list->PushElem() = {folderPath,fileName};
         }
         
         closedir(directory);
       }
 
-      Array<String> allFilePaths = PushArrayFromList(temp,list);
+      Array<FileGroupInfo> allFilePaths = PushArrayFromList(temp,list);
+     
+      static int index = 0;
+      // Emit temp var to store escaped string content
+      for(FileGroupInfo& info : allFilePaths){
+        String dirPath = info.originalRelativePath;
+        String fileName = info.filename;
 
-      for(String path : allFilePaths){
-        String content = PushFile(temp,path);
+        String fullPath = PushString(temp,"%.*s/%.*s",UN(dirPath),UN(fileName));
+        
+        String content = PushFile(temp,fullPath);
+        String escapedString = EscapeCString(content,temp);
+
+        const char* name = SF("temp_%d_CONTENT",index++);
+        info.contentRawArrayName = PushString(temp,"%s",name);
+        
+        c->VarDeclareBlock("String",name,false);
+        c->StringElem(escapedString);
+        c->EndBlock();
       }
-    }
-#endif
 
+      // Emit raw array
+      c->ArrayDeclareBlock("FileContent",SF("%.*s_Raw",UN(def->name)));
+      for(FileGroupInfo& info : allFilePaths){
+        String dirPath = info.originalRelativePath;
+        String fileName = info.filename;
+        String rawArray = info.contentRawArrayName;
+
+        c->VarBlock();
+        c->StringElem(fileName);
+        c->StringElem(dirPath);
+        c->Elem(rawArray);
+        c->EndBlock();
+      }
+      c->EndBlock();
+
+      // Emit array
+      c->VarDeclareBlock("Array<FileContent>",CS(def->name));
+      EmitRawArray(c,def->name);
+      c->EndBlock();
+    }
+    
     CAST* end = EndCCode(c);
     StringBuilder* b = StartString(temp);
     Repr(end,b,true,0);

@@ -22,7 +22,7 @@
 
 #include "versatSpecificationParser.hpp"
 
-- LEFT HERE - We want to remove the heavy template usage but we probably want to keep a very simple template format where we can notate a mostly static file with a very simple @{str} that substitutes the string by a string of our own. This is mostly because of the fact that the wrapper,header and top accelerator have a decent amount of mostly static code. Also probably want to simplify some of the code inside the accelerator: separate the DMA into its own module and stuff like that.
+//- LEFT HERE - We want to remove the heavy template usage but we probably want to keep a very simple template format where we can notate a mostly static file with a very simple @{str} that substitutes the string by a string of our own. This is mostly because of the fact that the wrapper,header and top accelerator have a decent amount of mostly static code. Also probably want to simplify some of the code inside the accelerator: separate the DMA into its own module and stuff like that.
 
 // TODO: If we could find a way of describing the format of verilog modules that we care about, we could also perform
 //       a check at Versat runtime that we are producing correct code, although it might take longer than the simple

@@ -507,8 +507,8 @@ uint GetRandomNumber();
 
 void OS_SetScriptPermissions(FILE* file);
 
+// TODO: Prefix these with a OS_ in the name and potentially use fs to implement this. 
 bool RemoveDirectory(const char* path);
-//bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
