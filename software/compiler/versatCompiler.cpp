@@ -634,6 +634,20 @@ int main(int argc,char* argv[]){
     }
   }
 
+  for(FileContent content : defaultVerilogFiles){
+    printf("%s\n",CS(content.fileName));
+    
+    FILE* file = fopen(CS(content.fileName),"w");
+    String data = content.content;
+    
+    if(!file){
+      // TODO(Error)
+    }
+    
+    fwrite(data.data,sizeof(char),data.size,file);
+    fclose(file);
+  }
+  
   // TODO: We probably need to move this to a better place since we also need to copy include files in order to separate build from setup. We need a lot of file copying and it's probably best to put all in one place.
   fs::path hardwareDestinationPath(StaticFormat("%.*s",UNPACK_SS(globalOptions.hardwareOutputFilepath)));
   auto options = fs::copy_options::update_existing;

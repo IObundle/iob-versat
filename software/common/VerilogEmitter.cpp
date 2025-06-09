@@ -283,12 +283,34 @@ void VEmitter::Wire(const char* name,int bitsize){
   InsertDeclaration(wireDecl);
 }
 
+void VEmitter::Wire(const char* name,const char* bitsizeExpr){
+  VAST* wireDecl = PushVAST(VASTType_VAR_DECL,arena);
+
+  wireDecl->varDecl.name = PushString(arena,"%s",name);
+  wireDecl->varDecl.arrayDim = {};
+  wireDecl->varDecl.bitSize = PushString(arena,"%s",bitsizeExpr);
+  wireDecl->varDecl.isWire = true;
+  
+  InsertDeclaration(wireDecl);
+}
+
 void VEmitter::WireArray(const char* name,int count,int bitsize){
   VAST* wireArray = PushVAST(VASTType_VAR_DECL,arena);
 
   wireArray->varDecl.name = PushString(arena,"%s",name);
   wireArray->varDecl.arrayDim = PushString(arena,"%d",count);
   wireArray->varDecl.bitSize = PushString(arena,"%d",bitsize);
+  wireArray->varDecl.isWire = true;
+  
+  InsertDeclaration(wireArray);
+}
+
+void VEmitter::WireArray(const char* name,int count,const char* bitsizeExpr){
+  VAST* wireArray = PushVAST(VASTType_VAR_DECL,arena);
+
+  wireArray->varDecl.name = PushString(arena,"%s",name);
+  wireArray->varDecl.arrayDim = PushString(arena,"%d",count);
+  wireArray->varDecl.bitSize = PushString(arena,"%s",bitsizeExpr);
   wireArray->varDecl.isWire = true;
   
   InsertDeclaration(wireArray);
@@ -691,7 +713,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushString(top->varDecl.name);
 
     if(!Empty(top->varDecl.arrayDim)){
-      b->PushString("[%.*s-1:0]",UNPACK_SS(top->varDecl.arrayDim));
+      b->PushString("[%.*s]",UNPACK_SS(top->varDecl.arrayDim));
     }
     b->PushString(";");
   } break;

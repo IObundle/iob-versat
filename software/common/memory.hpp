@@ -48,11 +48,13 @@ void Free(Arena* arena);
 size_t MemoryUsage(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
+
+// All push strings append a null byte. Do not rely on this behaviour.
 String PushString(Arena* arena,String ss);
 String PushString(Arena* arena,const char* format,...) __attribute__ ((format (printf, 2, 3)));
 String vPushString(Arena* arena,const char* format,va_list args);
 
-// TODO: This is bad. The push string functions should have a parameter if we want to push a null byte or not.
+// TODO: Remove this, since all the push functions now append a null byte regardless.
 void PushNullByte(Arena* arena);
 
 struct ArenaMark{

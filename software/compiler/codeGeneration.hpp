@@ -9,6 +9,7 @@ static const int DELAY_SIZE = 7;
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
+struct VEmitter;
 
 // Type can differ because of Merge.
 struct SingleTypeStructElement{
@@ -154,6 +155,15 @@ static bool operator==(StructInfo& l,StructInfo& r){
 
   return true;
 }
+
+struct VerilogInterfaceSpec{
+  String name;
+  String sizeExpr;
+  bool isInput;
+  bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
+};
+
+void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,String unpackBase,String packedBase);
 
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out);
 

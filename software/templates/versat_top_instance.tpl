@@ -3,7 +3,6 @@
 #{include "versat_common.tpl"}
 
 #{set nDones #{call CountDones instances}}
-#{set nOperations #{call CountOperations instances}}
 #{set nCombOperations #{call CountCombOperations instances}}
 #{set nSeqOperations  #{call CountSeqOperations instances}}
 
@@ -74,7 +73,20 @@ output [@{dp.bitSize}-1:0]  ext_dp_addr_@{i}_port_@{index}_o,
    input                           rst
    );
 
+#{if nDones}
+wire [@{nDones - 1}:0] unitDone;
+#{else}
+wire unitDone = 1'b1;
+#{end}
+
 wire wor_rvalid;
+
+wire data_valid;
+wire [ADDR_W-1:0] address;
+wire [DATA_W-1:0] data_data;
+wire [(DATA_W/8)-1:0] data_wstrb;
+
+reg running;
 
 wire done;
 reg [30:0] runCounter;
@@ -93,10 +105,27 @@ reg [31:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
+wire canRun = |runCounter && (&unitDone);
+reg canRun1;
+
 wire rst_int = (rst | soft_reset);
 
+always @(posedge clk,posedge rst)
+begin
+   if(rst) begin
+       canRun1 <= 0;
+   end else begin
+       canRun1 <= canRun;
+   end
+end
+
+wire run = (canRun && canRun1);
+wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
+
+assign done = (!(|runCounter) && (&unitDone));
+
 #{if useDMA}
-reg [1:0] dma_state;
+wire dma_running;
 #{end}
 
 // Interface does not use soft_rest
@@ -131,70 +160,13 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
 #{if useDMA}
          if(addr == 4) begin
             if(wstrb == 0) versat_rvalid <= 1'b1;
-            versat_rdata <= {31'h0,dma_state == 0};
+            versat_rdata <= {31'h0,!dma_running};
          end
 #{end}
       end
    end
 
-#{if nIO}
-wire databus_ready[@{nIO}];
-wire databus_valid[@{nIO}];
-wire [AXI_ADDR_W-1:0]   databus_addr[@{nIO}];
-wire [AXI_DATA_W-1:0]   databus_rdata[@{nIO}];
-wire [AXI_DATA_W-1:0]   databus_wdata[@{nIO}];
-wire [AXI_DATA_W/8-1:0] databus_wstrb[@{nIO}];
-wire [LEN_W-1:0]        databus_len[@{nIO}];
-wire databus_last[@{nIO}];
-
-#{set numberIOs nIO}
-#{if useDMA}
-#{set numberIOs (nIO - 1)}
-#{end}
-#{for i numberIOs}
-assign databus_ready[@{databusCounter}] = m_databus_ready[@{i}];
-assign m_databus_valid[@{databusCounter}] = databus_valid[@{i}];
-assign m_databus_addr[(@{(databusCounter)} * AXI_ADDR_W) +: AXI_ADDR_W] = databus_addr[@{i}];
-assign databus_rdata[@{databusCounter}] = m_databus_rdata;
-assign m_databus_wdata[@{(databusCounter)} * AXI_DATA_W +: AXI_DATA_W] = databus_wdata[@{i}];
-assign m_databus_wstrb[@{(databusCounter)} * (AXI_DATA_W/8) +: (AXI_DATA_W/8)] = databus_wstrb[@{i}];
-assign m_databus_len[@{(databusCounter)} * LEN_W +: LEN_W] = databus_len[@{i}];
-assign databus_last[@{databusCounter}] = m_databus_last[@{i}];
-#{inc databusCounter}
-#{end}
-#{end}
-
-#{if nDones}
-wire [@{nDones - 1}:0] unitDone;
-#{else}
-wire unitDone = 1'b1;
-#{end}
-
-wire canRun = |runCounter && (&unitDone);
-reg canRun1;
-
-always @(posedge clk,posedge rst)
-begin
-   if(rst) begin
-       canRun1 <= 0;
-   end else begin
-       canRun1 <= canRun;
-   end
-end
-
-wire run = (canRun && canRun1);
-wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
-
-assign done = (!(|runCounter) && (&unitDone));
-
-reg lastCycleDone;
-
-always @(posedge clk)
-begin
-    lastCycleDone <= done;
-end
-
-reg running;
+@{emitIO}
 
 always @(posedge clk,posedge rst)
 begin
@@ -209,123 +181,92 @@ end
 
 #{if useDMA}
 reg [LEN_W-1:0] dma_length;
-reg [AXI_ADDR_W-1:0] dma_addr_in;
-reg [AXI_ADDR_W-1:0] dma_addr_read;
-
-reg dma_valid;
-reg [AXI_ADDR_W-1:0] dma_addr;
-reg [DATA_W-1:0] dma_wdata;
-reg [(DATA_W/8)-1:0] dma_wstrb;
-reg [LEN_W-1:0] dma_len;
+reg [ADDR_W-1:0] dma_internal_address_start;
+reg [AXI_ADDR_W-1:0] dma_external_addr_start;
 
 wire dma_ready;
+wire [ADDR_W-1:0] dma_addr_in;
 wire [AXI_DATA_W-1:0] dma_rdata;
-wire dma_last;
 
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      dma_length <= 0;
-      dma_addr_in <= 0;
-      dma_addr_read <= 0;
-      dma_state <= 0;
-      runCounter <= 0;
-   end else begin
-      if(run)
-         runCounter <= runCounter - 1;
+SimpleDMA #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_ADDR_W(AXI_ADDR_W)) dma (
+  .m_databus_ready(databus_ready[@{nIO - 1}]),
+  .m_databus_valid(databus_valid[@{nIO - 1}]),
+  .m_databus_addr(databus_addr[@{nIO - 1}]),
+  .m_databus_rdata(databus_rdata[@{nIO - 1}]),
+  .m_databus_wdata(databus_wdata[@{nIO - 1}]),
+  .m_databus_wstrb(databus_wstrb[@{nIO - 1}]),
+  .m_databus_len(databus_len[@{nIO - 1}]),
+  .m_databus_last(databus_last[@{nIO - 1}]),
 
-      case(dma_state)
-      2'b00: ;
-      2'b01: begin
-         if(dma_ready && dma_last) begin
-            dma_state <= 0;
-         end
-         if(dma_ready) begin
-            dma_addr_in <= dma_addr_in + 4;
-         end
-      end
-      2'b10: begin
-      end
-      2'b11: begin
-      end
-      endcase
+  .addr_internal(dma_internal_address_start),
+  .addr_read(dma_external_addr_start),
+  .length(dma_length),
 
-      if(valid && we) begin
-         if(addr == 0)
-            runCounter <= runCounter + wdata[15:0];
-         if(addr == 4)
-            dma_addr_in <= wdata;
-         if(addr == 8)
-            dma_addr_read <= wdata;
-         if(addr == 12)
-            dma_length <= wdata[LEN_W-1:0];
-         if(addr == 16)
-            dma_state <= 2'b01;
-      end
-   end
-end
+  .run(valid && we && addr == 16),
+  .running(dma_running),
 
-assign dma_ready = m_databus_ready[@{databusCounter}];
-assign m_databus_valid[@{databusCounter}] = dma_valid;
-assign m_databus_addr[@{databusCounter} * AXI_ADDR_W +: AXI_ADDR_W] = dma_addr;
-assign dma_rdata = m_databus_rdata[AXI_DATA_W-1:0];
-assign m_databus_wdata[@{databusCounter} * AXI_DATA_W +: AXI_DATA_W] = dma_wdata;
-assign m_databus_wstrb[@{databusCounter} * (AXI_DATA_W/8) +: (AXI_DATA_W/8)] = dma_wstrb;
-assign m_databus_len[@{databusCounter} * LEN_W +: LEN_W] = dma_len;
-assign dma_last = m_databus_last[@{databusCounter}];
-#{inc databusCounter}
+  .valid(dma_ready),
+  .address(dma_addr_in),
+  .data(dma_rdata),
 
-always @*
-begin
-   dma_valid = 1'b0;
-   dma_addr = dma_addr_read;
-   dma_wdata = 0;
-   dma_wstrb = 0; // Only read, for now
-   dma_len = dma_length;
-
-   case(dma_state)
-   2'b00: ;
-   2'b01: begin
-      dma_valid = 1'b1;
-   end
-   2'b10: begin
-   end
-   2'b11: begin
-   end
-   endcase
-end
-#{else}
-// No DMA
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      runCounter <= 0;
-   end else begin
-      if(run)
-         runCounter <= runCounter - 1;
-
-      if(valid && we) begin
-         if(addr == 0)
-            runCounter <= runCounter + wdata[15:0];
-      end
-   end
-end
-
+  .clk(clk),
+  .rst(rst_int)
+);
 
 #{end}
 
+always @(posedge clk,posedge rst_int)
+begin
+   if(rst_int) begin
+      runCounter <= 0;
+
+#{if useDMA}            
+      dma_length <= 0;
+      dma_internal_address_start <= 0;
+      dma_external_addr_start <= 0;
+#{end}      
+   end else begin
+      if(run)
+         runCounter <= runCounter - 1;
+
+      if(valid && we) begin
+         if(addr == 0)
+            runCounter <= runCounter + wdata[15:0];
+#{if useDMA}            
+         if(addr == 4)
+            dma_internal_address_start <= wdata;
+         if(addr == 8)
+            dma_external_addr_start <= wdata;
+         if(addr == 12)
+            dma_length <= wdata[LEN_W-1:0];
+         // addr == 16 being used to start dma
+#{end}         
+      end
+   end
+end
+
 #{if useDMA}
-wire data_valid = (dma_ready || valid);
-wire data_write = (dma_ready || (valid && we && addr >= 20)); // Dma ready is always a write, dma cannot be used to read, for now
-wire [ADDR_W-1:0] address = dma_ready ? dma_addr_in : addr;
-wire [DATA_W-1:0] data_data = dma_ready ? dma_rdata : wdata;
-wire [(DATA_W/8)-1:0] data_wstrb = dma_ready ? ~0 : wstrb;
+JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
+  .m0_valid(dma_ready),
+  .m0_data(dma_rdata),
+  .m0_addr(dma_addr_in),
+  .m0_wstrb(~0),
+
+  .m1_valid(valid),
+  .m1_data(wdata),
+  .m1_addr(addr),
+  .m1_wstrb(wstrb),
+
+  .s_valid(data_valid),
+  .s_data(data_data),
+  .s_addr(address),
+  .s_wstrb(data_wstrb)
+);
 #{else}
-wire data_valid = valid;
-wire data_write = valid && we;
-wire [ADDR_W-1:0] address = addr;
-wire [DATA_W-1:0] data_data = wdata;
-wire [(DATA_W/8)-1:0] data_wstrb = wstrb;
+assign data_valid = valid;
+assign address = addr;
+assign data_data = wdata;
+assign data_wstrb = wstrb;
 #{end}
 
 #{if memoryMappedBytes == 0}
@@ -334,29 +275,11 @@ assign memoryMappedAddr = 1'b0;
 assign memoryMappedAddr = address[@{memoryConfigDecisionBit}];
 #{end}
 
-reg [31:0] latency_counter;
-reg enableCounter;
-always @(posedge clk,posedge rst)
-begin
-   if(rst) begin
-      latency_counter <= 0;
-      enableCounter <= 0;
-   end else if(run) begin
-      latency_counter <= 0;
-      enableCounter <= 1;
-   end else if(done) begin
-      enableCounter <= 0;
-   end else if(enableCounter) begin
-      latency_counter <= latency_counter + 1;
-   end
-end
-
 #{if unitsMapped}
 assign rdata = (versat_rvalid ? versat_rdata : unitRdataFinal);
 #{else}
 assign rdata = versat_rdata;
 #{end}
-
 #{if unitsMapped}
 assign rvalid = versat_rvalid | wor_rvalid;
 #{else}
@@ -412,7 +335,7 @@ versat_configurations #(
    .config_data_o(configdata),
 
    .memoryMappedAddr(memoryMappedAddr),
-   .data_write(data_write),
+   .data_write(valid && we),
 
    .address(address),
    .data_wstrb(data_wstrb),

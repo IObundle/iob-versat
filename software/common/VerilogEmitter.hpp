@@ -137,7 +137,9 @@ struct VEmitter{
 
   // Module declarations
   void Wire(const char* name,int bitsize = 1);
+  void Wire(const char* name,const char* bitsizeExpr);
   void WireArray(const char* name,int count,int bitsize = 1);
+  void WireArray(const char* name,int count,const char* bitsizeExpr);
   void WireAndAssignJoinBlock(const char* name,const char* joinElem,int bitsize = 1);
   void Reg(const char* name,int bitsize = 1);
   void Assign(const char* name,const char* expr);

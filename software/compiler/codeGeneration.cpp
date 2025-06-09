@@ -22,7 +22,7 @@
 
 #include "versatSpecificationParser.hpp"
 
-//- LEFT HERE - We want to remove the heavy template usage but we probably want to keep a very simple template format where we can notate a mostly static file with a very simple @{str} that substitutes the string by a string of our own. This is mostly because of the fact that the wrapper,header and top accelerator have a decent amount of mostly static code. Also probably want to simplify some of the code inside the accelerator: separate the DMA into its own module and stuff like that.
+// - LEFT HERE - We want to remove the heavy template usage but we probably want to keep a very simple template format where we can notate a mostly static file with a very simple @{str} that substitutes the string by a string of our own. This is mostly because of the fact that the wrapper,header and top accelerator have a decent amount of mostly static code. Also probably want to simplify some of the code inside the accelerator: separate the DMA into its own module and stuff like that.
 
 // TODO: If we could find a way of describing the format of verilog modules that we care about, we could also perform
 //       a check at Versat runtime that we are producing correct code, although it might take longer than the simple
@@ -116,9 +116,8 @@ String EmitMakefile(Accelerator* accel,Arena* out){
   }
   
   String generatedUnitsLocation = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
-  
+
   b->PushString("TYPE_NAME := %.*s\n\n",UNPACK_SS(typeName));
-  b->PushString("VHEADER := V$(TYPE_NAME).h\n");
 
   if(simulateLoops){
     b->PushString("VSIM_HEADER := VSuperAddress.h\n");
@@ -127,6 +126,7 @@ String EmitMakefile(Accelerator* accel,Arena* out){
   }
   
   b->PushString("HARDWARE_FOLDER := %.*s\n",UNPACK_SS(generatedUnitsLocation));
+  b->PushString("VHEADER := V$(TYPE_NAME).h\n");
   b->PushString("SOFTWARE_FOLDER := .\n");
 
   b->PushString("HARDWARE_SRC := ");
@@ -134,12 +134,15 @@ String EmitMakefile(Accelerator* accel,Arena* out){
     b->PushString("$(HARDWARE_FOLDER)/%.*s ",UNPACK_SS(name));
   }
   b->PushString("\n");
-  
-  b->PushString("HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v)\n");
-  b->PushString("VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)\n\n");
-  b->PushString("INCLUDE := -I$(HARDWARE_FOLDER)\n\n");
 
-  b->PushString("VERILATOR_COMMON_ARGS := --report-unoptflat -GLEN_W=20 -CFLAGS \"-O2 -march=native\" $(INCLUDE)\n");
+  b->PushString(R"FOO(
+HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v)
+VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)
+INCLUDE := -I$(HARDWARE_FOLDER)
+
+VERILATOR_COMMON_ARGS := --report-unoptflat -GLEN_W=20 -CFLAGS "-O2 -march=native" $(INCLUDE)
+)FOO");
+  
   b->PushString("VERILATOR_COMMON_ARGS += -GAXI_ADDR_W=%d\n",globalOptions.databusAddrSize);
   b->PushString("VERILATOR_COMMON_ARGS += -GAXI_DATA_W=%d\n",globalOptions.databusDataSize);
 
@@ -151,41 +154,50 @@ String EmitMakefile(Accelerator* accel,Arena* out){
     }
   }
 
-  b->PushString("all: libaccel.a\n\n");
+  b->PushString(R"FOO(
+all: libaccel.a
 
-  b->PushString("# Joins wrapper with verilator object files into a library\n");
-  b->PushString("libaccel.a: $(VHEADER) wrapper.o createVerilatorObjects $(VSIM_HEADER)\n");
-  b->PushString("\tar -rcs libaccel.a wrapper.o $(wildcard ./obj_dir/*.o)\n\n");
+# Joins wrapper with verilator object files into a library
+libaccel.a: $(VHEADER) wrapper.o createVerilatorObjects $(VSIM_HEADER)
+	ar -rcs libaccel.a wrapper.o $(wildcard ./obj_dir/*.o)
 
-  b->PushString("createVerilatorObjects: $(VHEADER) wrapper.o $(VSIM_HEADER)\n");
-  b->PushString("\t$(MAKE) verilatorObjects\n\n");
+createVerilatorObjects: $(VHEADER) wrapper.o $(VSIM_HEADER)
+	$(MAKE) verilatorObjects
 
-  b->PushString("VUnitWireInfo.h: $(VHEADER)\n");
-  b->PushString("\t./ExtractVerilatedSignals.py $(VHEADER) > VUnitWireInfo.h\n\n");
+VUnitWireInfo.h: $(VHEADER)
+	./ExtractVerilatedSignals.py $(VHEADER) > VUnitWireInfo.h
 
-  b->PushString("$(VHEADER): $(HARDWARE_SRC)\n");
-  b->PushString("\tverilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_SRC) --top-module $(TYPE_NAME)\n");
-  b->PushString("\t$(MAKE) -C ./obj_dir -f V$(TYPE_NAME).mk\n");
-  b->PushString("\tcp ./obj_dir/*.h ./\n\n");
+$(VHEADER): $(HARDWARE_SRC)
+	verilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_SRC) --top-module $(TYPE_NAME)
+	$(MAKE) -C ./obj_dir -f V$(TYPE_NAME).mk
+	cp ./obj_dir/*.h ./
+)FOO");
 
   if(simulateLoops){
-    b->PushString("VSuperAddress.h: $(HARDWARE_SRC)\n");
-    b->PushString("\tverilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress\n");
-    b->PushString("\t$(MAKE) -C ./obj_dir -f VSuperAddress.mk\n");
-    b->PushString("\tcp ./obj_dir/*.h ./\n\n");
+    b->PushString(R"FOO(
+VSuperAddress.h: $(HARDWARE_SRC)
+	verilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress
+	$(MAKE) -C ./obj_dir -f VSuperAddress.mk
+	cp ./obj_dir/*.h ./
+)FOO");
   }
 
-  b->PushString("wrapper.o: $(VHEADER) VUnitWireInfo.h wrapper.cpp $(VSIM_HEADER)\n");
-  b->PushString("\tg++ -std=c++17 -march=native -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)\n\n");
+  b->PushString(R"FOO(
+wrapper.o: $(VHEADER) VUnitWireInfo.h wrapper.cpp $(VSIM_HEADER)
+	g++ -std=c++17 -march=native -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)
 
-  b->PushString("# Created after calling verilator. Need to recall make to have access to the variables\n");
-  b->PushString("-include ./obj_dir/V$(TYPE_NAME)_classes.mk\n\n");
-  b->PushString("VERILATOR_SOURCE_DIR:=$(VERILATOR_ROOT)/include\n");
-  b->PushString("ALL_VERILATOR_FILES:=$(VM_GLOBAL_FAST) $(VM_GLOBAL_SLOW)\n");
-  b->PushString("ALL_VERILATOR_O:=$(patsubst %%,./obj_dir/%%.o,$(ALL_VERILATOR_FILES))\n\n");
-  b->PushString("./obj_dir/%%.o: $(VERILATOR_SOURCE_DIR)/%%.cpp\n");
-  b->PushString("\tg++ -w -march=native -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include\n\n");
-  b->PushString("verilatorObjects: $(ALL_VERILATOR_O)\n");
+# Created after calling verilator. Need to recall make to have access to the variables
+-include ./obj_dir/V$(TYPE_NAME)_classes.mk
+
+VERILATOR_SOURCE_DIR:=$(VERILATOR_ROOT)/include
+ALL_VERILATOR_FILES:=$(VM_GLOBAL_FAST) $(VM_GLOBAL_SLOW)
+ALL_VERILATOR_O:=$(patsubst %%,./obj_dir/%%.o,$(ALL_VERILATOR_FILES))
+
+./obj_dir/%%.o: $(VERILATOR_SOURCE_DIR)/%%.cpp
+	g++ -w -march=native -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include
+
+verilatorObjects: $(ALL_VERILATOR_O)
+)FOO");
 
   String content = EndString(out,b);
   
@@ -940,7 +952,6 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     m->DeclParam("AXI_ADDR_W",32);
     m->DeclParam("AXI_DATA_W",globalOptions.databusDataSize);
     m->DeclParam("LEN_W",20);
-
 
     if(configurationsBits){
       m->Output("config_data_o",configurationsBits);
@@ -2090,6 +2101,72 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
   return data;
 }
 
+void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,String unpackBase,String packedBase){
+  if(arraySize == 0){
+    return;
+  }
+
+  TEMP_REGION(temp,m->arena);
+      
+  for(VerilogInterfaceSpec info : spec){
+    String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
+
+    if(Empty(info.sizeExpr)){
+      m->WireArray(CS(unpackedName),arraySize,1);
+    } else {
+      m->WireArray(CS(unpackedName),arraySize,CS(info.sizeExpr));
+    }
+  }
+      
+  for(int i = 0; i < arraySize; i++){
+    for(VerilogInterfaceSpec info : spec){
+
+      String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
+      String packedName = PushString(temp,"%.*s_%.*s",UN(packedBase),UN(info.name));
+          
+      if(Empty(info.sizeExpr)){
+        if(info.isShared){
+          String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+          if(info.isInput){
+            m->Assign(fullUnpacked,packedName);
+          } else {
+            m->Assign(packedName,fullUnpacked);
+          }
+        } else {
+          if(info.isInput){
+            String fullPacked = PushString(temp,"%.*s[%d]",UN(packedName),i);
+            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+            m->Assign(fullUnpacked,fullPacked);
+          } else {
+            String fullPacked = PushString(temp,"%.*s[%d]",UN(packedName),i);
+            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+            m->Assign(fullPacked,fullUnpacked);
+          }
+        }
+      } else {
+        if(info.isShared){
+          String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+          if(info.isInput){
+            m->Assign(fullUnpacked,packedName);
+          } else {
+            m->Assign(packedName,fullUnpacked);
+          }
+        } else {
+          if(info.isInput){
+            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(info.sizeExpr),UN(info.sizeExpr));
+            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+            m->Assign(fullUnpacked,fullPacked);
+          } else {
+            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(info.sizeExpr),UN(info.sizeExpr));
+            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+            m->Assign(fullPacked,fullUnpacked);
+          }
+        }
+      }
+    }
+  }
+}
+
 void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -2480,11 +2557,37 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       return;
     }
 
+    // MARK
+
+    VEmitter* m = StartVCode(temp);
+
+    VerilogInterfaceSpec databus[] = {
+      {S8("ready"),{},true},
+      {S8("valid"),{}},
+      {S8("addr"),S8("AXI_ADDR_W")},
+      {S8("rdata"),S8("AXI_DATA_W"),true,true},
+      {S8("wdata"),S8("AXI_DATA_W")},
+      {S8("wstrb"),S8("(AXI_DATA_W/8)")},
+      {S8("len"),S8("LEN_W")},
+      {S8("last"),{},true},
+    };
+    
+    Array<VerilogInterfaceSpec> data = {databus,ARRAY_SIZE(databus)};
+    
+    EmitIOUnpacking(m,val.nUnitsIO,data,S8("databus"),S8("m_databus"));
+    
+    VAST* ast = EndVCode(m);
+
+    auto b = StartString(temp);
+    Repr(ast,b);
+    String content = EndString(temp,b);
+
+    TemplateSetString("emitIO",content);
+    
     ProcessTemplate(s,BasicTemplates::topAcceleratorTemplate);
   }
 
   // Top configurations
-  // MARK
   {
     FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_configurations.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
