@@ -1244,7 +1244,7 @@ static Array<TypeStructInfo> GetMemMappedStructInfo(AccelInfo* info,Arena* out){
 Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,Arena* out){
   TEMP_REGION(temp,out);
 
-  Hashmap<int,ArenaList<String>*>* map = PushHashmap<int,ArenaList<String>*>(temp,9999);
+  TrieMap<int,ArenaList<String>*>* map = PushTrieMap<int,ArenaList<String>*>(temp);
   
   int maxConfig = 0;
   for(InstanceInfo& in : info){
@@ -2245,22 +2245,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     structs = GenerateStructs(allStructs,STRING("Config"),true,temp);
   }
-  
-  auto PrettyPrintMemory = [](int val){
-    if(val < 1024){
-      printf("%d bytes",val);
-    } else if(val < Megabyte(1)){
-      int leftover = val % 1024;
-      printf("%d.%.3d kilobytes",val / 1024,leftover);
-    } else if(val < Gigabyte(1)){
-      int leftover = val % (1024 * 1024);
-      
-      printf("%d.%.3d megabytes",val / (1024 * 1024),leftover);
-    } else {
-      int leftover = val % (1024 * 1024 * 1024);
-      printf("%d.%.3d gigabytes",val / (1024 * 1024 * 1024),leftover);
-    }
-  };
 
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
   
@@ -2309,8 +2293,10 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   printf("Some stats\n");
   printf("CONFIG_BITS: %d\n",val.configurationBits);
   printf("STATE_BITS: %d\n",val.stateBits);
+
   printf("MEM_USED: ");
-  PrettyPrintMemory(val.totalExternalMemory);
+  String content = ReprMemorySize(val.totalExternalMemory,temp);
+  printf("%.*s",UN(content));
   printf("\n");
 
   printf("UNITS: %d\n",val.nUnits);

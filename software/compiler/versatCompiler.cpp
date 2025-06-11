@@ -7,6 +7,7 @@
 
 #include "debugVersat.hpp"
 #include "declaration.hpp"
+#include "embeddedData.hpp"
 #include "filesystem.hpp"
 #include "globals.hpp"
 #include "logger.hpp"
@@ -180,11 +181,50 @@ void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,TypeDefinition type)
   }
 }
 
+int CopyFileGroup(Array<FileContent> fileGroup,String filepathBase,FilePurpose purpose){
+  TEMP_REGION(temp,nullptr);
+    
+  String common = fileGroup[0].originalRelativePath;
+  for(FileContent content : fileGroup){
+    common = GetCommonPath(common,content.originalRelativePath,temp);
+  }
+  
+  for(FileContent content : fileGroup){
+    String pathWithoutCommon = Offset(content.originalRelativePath,common.size);
+
+    String pathWithExpectedCommon = {};
+    if(Empty(content.commonFolder)){
+      pathWithExpectedCommon = PushString(temp,".%.*s",UN(pathWithoutCommon));
+      // Nothing
+    } else {
+      pathWithExpectedCommon = PushString(temp,"%.*s/%.*s",UN(content.commonFolder),UN(pathWithoutCommon));
+    }
+    
+    String fullPath = PushString(temp,"%.*s/%.*s",UN(filepathBase),UN(pathWithExpectedCommon));
+    fullPath = OS_NormalizePath(fullPath,temp);
+    fullPath = PushString(temp,"%.*s/%.*s",UN(fullPath),UN(content.fileName));
+
+    FILE* file = OpenFileAndCreateDirectories(fullPath,"w",purpose);
+    
+    if(!file){
+      printf("Error opening file for output: %.*s\n",UN(fullPath));
+      return -1;
+      // TODO(Error)
+    }
+    
+    String data = content.content;
+    fwrite(data.data,sizeof(char),data.size,file);
+    fclose(file);
+  }
+
+  return 0;
+};
+
 struct OptionsGather{
-  ArenaList<String>* verilogFiles;
+  ArenaList<String>* verilogFiles; // Individual files, for cases where we want specific files inside a folder.
+  ArenaList<String>* unitFolderPaths;
   ArenaList<String>* extraSources;
   ArenaList<String>* includePaths;
-  ArenaList<String>* unitPaths;
 
   Options* options;
 };
@@ -200,7 +240,9 @@ parse_opt (int key, char *arg,
     {
     case 'S': *opts->extraSources->PushElem() = STRING(arg); break;
     case 'I': *opts->includePaths->PushElem() = STRING(arg); break;
-    case 'u': *opts->unitPaths->PushElem() = STRING(arg); break;
+
+    // TODO: All the filepaths should be inserted into verilogFiles while this only takes in folders.
+    case 'u': *opts->unitFolderPaths->PushElem() = STRING(arg); break;
 
     case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
     case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;
@@ -244,6 +286,10 @@ struct argp_option options[] =
   };
 
 int main(int argc,char* argv[]){
+#ifdef VERSAT_DEBUG
+  printf("Running in debug mode\n");
+#endif
+
   InitDebug();
   
   void SetTemplateNameToContent(Array<Pair<String,String>> val); // Kinda of an hack.
@@ -256,9 +302,10 @@ int main(int argc,char* argv[]){
 
   contextArenas[0] = &tempInst;
   contextArenas[1] = &temp2Inst;
-
+  
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
+  
   Arena* perm = globalPermanent;
 
 #if 0
@@ -271,7 +318,7 @@ int main(int argc,char* argv[]){
   gather.verilogFiles = PushArenaList<String>(temp);
   gather.extraSources = PushArenaList<String>(temp);
   gather.includePaths = PushArenaList<String>(temp);
-  gather.unitPaths = PushArenaList<String>(temp);
+  gather.unitFolderPaths = PushArenaList<String>(temp);
 
   globalOptions = DefaultOptions(perm);
   gather.options = &globalOptions;
@@ -289,7 +336,7 @@ int main(int argc,char* argv[]){
   globalOptions.verilogFiles = PushArrayFromList(perm,gather.verilogFiles);
   globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
-  globalOptions.unitPaths = PushArrayFromList(perm,gather.unitPaths);
+  globalOptions.unitFolderPaths = PushArrayFromList(perm,gather.unitFolderPaths);
 
   // Type stuff needed by templates
   RegisterTypes();
@@ -309,16 +356,42 @@ int main(int argc,char* argv[]){
   globalDebug.outputGraphs = true;
   globalDebug.outputConsolidationGraphs = true;
   globalDebug.outputVCD = true;
+  
+  // Register Versat common files. 
+  for(FileContent file : defaultVerilogUnits){
+    String content = file.content;
+    
+    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp);
+    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp);
+    
+    for(Module& mod : modules){
+      ModuleInfo info = ExtractModuleInfo(mod,perm);
+      RegisterModuleInfo(&info);
+    }
+  }
 
-  // Collect all verilog source files.
+  // We need to do this after parsing the modules because the majority of these special types come from verilog files
+  // NOTE: This should never fail since the verilog files are embedded into the exe. A fail in here means that we failed to embed the necessary files at build time
+  BasicDeclaration::buffer = GetTypeByNameOrFail(S8("Buffer"));
+  BasicDeclaration::fixedBuffer = GetTypeByNameOrFail(S8("FixedBuffer"));
+  BasicDeclaration::pipelineRegister = GetTypeByNameOrFail(S8("PipelineRegister"));
+  BasicDeclaration::multiplexer = GetTypeByNameOrFail(S8("Mux2"));
+  BasicDeclaration::combMultiplexer = GetTypeByNameOrFail(S8("CombMux2"));
+  BasicDeclaration::stridedMerge = GetTypeByNameOrFail(S8("StridedMerge"));
+  BasicDeclaration::timedMultiplexer = GetTypeByNameOrFail(S8("TimedMux"));
+  BasicDeclaration::input = GetTypeByNameOrFail(S8("CircuitInput"));
+  BasicDeclaration::output = GetTypeByNameOrFail(S8("CircuitOutput"));
+
+  // Collect all user verilog source files.
   Array<String> allVerilogFiles = {};
   region(temp){
-    Set<String>* allVerilogFilesSet = PushSet<String>(temp,999);
+    TrieSet<String>* allVerilogFilesSet = PushTrieSet<String>(temp);
 
     for(String str : globalOptions.verilogFiles){
       allVerilogFilesSet->Insert(str);
     }
-    for(String& path : globalOptions.unitPaths){
+    
+    for(String& path : globalOptions.unitFolderPaths){
       String dirPaths = path;
       Tokenizer pathSplitter(dirPaths,"",{});
 
@@ -339,12 +412,14 @@ int main(int argc,char* argv[]){
 
     allVerilogFiles = PushArrayFromSet(perm,allVerilogFilesSet);
   }
-  globalOptions.verilogFiles = allVerilogFiles; // TODO: Kind of an hack. We lose information about file origin (from user vs from us)
+  // NOTE: We process all the folders and just replace verilogFiles with all the filepaths in here.
+  globalOptions.verilogFiles = allVerilogFiles;
   
-  // Parse verilog files and register all the simple units.
+  // Parse verilog files and register all the user supplied units.
+  bool error = false;
   for(String filepath : globalOptions.verilogFiles){
     String content = PushFile(temp,filepath);
-
+    
     if(Empty(content)){
       printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(filepath));
       exit(-1);
@@ -355,22 +430,25 @@ int main(int argc,char* argv[]){
     
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm);
+
+      FUDeclaration* decl = GetTypeByName(info.name);
+      if(decl){
+        once(){
+          fprintf(stderr,"Error, naming conflict that must be resolved by user\n");
+        };
+        fprintf(stderr,"Module '%.*s' already exists\n",UN(info.name));
+
+        error = true;
+        continue;
+      }
+      
       RegisterModuleInfo(&info);
     }
   }
-
-  // We need to do this after parsing the modules because the majority of these special types come from verilog files
-  // More robust impl would embed this files at build time to simplify setup. Only need the exe to run Versat at that point. 
-  BasicDeclaration::buffer = GetTypeByName(STRING("Buffer"));
-  BasicDeclaration::fixedBuffer = GetTypeByName(STRING("FixedBuffer"));
-  BasicDeclaration::pipelineRegister = GetTypeByName(STRING("PipelineRegister"));
-  BasicDeclaration::multiplexer = GetTypeByName(STRING("Mux2"));
-  BasicDeclaration::combMultiplexer = GetTypeByName(STRING("CombMux2"));
-  BasicDeclaration::stridedMerge = GetTypeByName(STRING("StridedMerge"));
-  BasicDeclaration::timedMultiplexer = GetTypeByName(STRING("TimedMux"));
-  BasicDeclaration::input = GetTypeByName(STRING("CircuitInput"));
-  BasicDeclaration::output = GetTypeByName(STRING("CircuitOutput"));
-
+  if(error){
+    return -1;
+  }
+  
   String specFilepath = globalOptions.specificationFilepath;
   String topLevelTypeStr = globalOptions.topName;
 
@@ -590,6 +668,7 @@ int main(int argc,char* argv[]){
     }
   }
 
+  // TODO: Parameters need to be revised. We are kinda hacking this stuff for too long.
   if(!SetParameter(TOP,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"))){
     printf("Error\n");
   }
@@ -634,21 +713,16 @@ int main(int argc,char* argv[]){
     }
   }
 
-  for(FileContent content : defaultVerilogFiles){
-    printf("%s\n",CS(content.fileName));
-    
-    FILE* file = fopen(CS(content.fileName),"w");
-    String data = content.content;
-    
-    if(!file){
-      // TODO(Error)
-    }
-    
-    fwrite(data.data,sizeof(char),data.size,file);
-    fclose(file);
+  int res = CopyFileGroup(defaultVerilogFiles,globalOptions.hardwareOutputFilepath,FilePurpose_VERILOG_COMMON_CODE);
+  if(res){
+    return res;
+  }
+  res = CopyFileGroup(defaultSoftwareFiles,globalOptions.softwareOutputFilepath,FilePurpose_SOFTWARE);
+  if(res){
+    return res;
   }
   
-  // TODO: We probably need to move this to a better place since we also need to copy include files in order to separate build from setup. We need a lot of file copying and it's probably best to put all in one place.
+  // TODO: We probably need to move this to a better place
   fs::path hardwareDestinationPath(StaticFormat("%.*s",UNPACK_SS(globalOptions.hardwareOutputFilepath)));
   auto options = fs::copy_options::update_existing;
   for(String filepath : globalOptions.verilogFiles){
@@ -664,6 +738,8 @@ int main(int argc,char* argv[]){
       printf("Filename: %.*s Type: %s\n",UNPACK_SS(f.filepath),type);
     }
   }
+  
+  ReportArenaUsage();
 
   return 0;
 }

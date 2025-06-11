@@ -18,6 +18,8 @@ String GetAbsolutePath(String path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
+String ReprMemorySize(int val,Arena* out);
+
 String JoinStrings(Array<String> strings,String separator,Arena* out);
 
 template<typename Value,typename Error>
@@ -103,7 +105,7 @@ struct ArenaList{
 
 // Implement C++ style foreach 
 template<typename T>
-ArenaListIterator<T> begin(ArenaList<T>* list){return ArenaListIterator<T>{list->head};};
+ArenaListIterator<T> begin(ArenaList<T>* list){if(!list){return end(list);};return ArenaListIterator<T>{list->head};};
 
 template<typename T>
 ArenaListIterator<T> end(ArenaList<T>* list){return ArenaListIterator<T>{nullptr};};

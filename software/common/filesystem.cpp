@@ -7,6 +7,7 @@ static ArenaList<FileInfo>* storeFileInfo;
 
 const char* FilePurpose_Name(FilePurpose p){
   switch(p){
+  case FilePurpose_VERILOG_COMMON_CODE: return "VERILOG_COMMON_CODE";
   case FilePurpose_VERILOG_CODE: return "VERILOG_CODE";
   case FilePurpose_VERILOG_INCLUDE: return "VERILOG_INCLUDE";
   case FilePurpose_MAKEFILE: return "MAKEFILE";

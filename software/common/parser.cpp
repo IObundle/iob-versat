@@ -920,7 +920,7 @@ Array<String> Split(String content,char sep,Arena* out){
     if(start >= size){
       break;
     } else if(index >= size){
-      line = {&content[start],end - start + 1};
+      line = {&content[start],end - start};
       *arr.PushElem() = line;
       break;
     } else if(content[index] == sep){

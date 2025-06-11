@@ -53,8 +53,8 @@ CPP_OBJ += $(BUILD_DIR)/templateData.o
 CPP_OBJ += $(BUILD_DIR)/typeInfo.o
 CPP_OBJ += $(BUILD_DIR)/embeddedData.o
 
-COMPILE_TOOL = g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $(VERSAT_COMMON_OBJS)
-COMPILE_OBJ  = g++ -DPC -rdynamic -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -c -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -g $(VERSAT_COMMON_INCLUDE) $(VERSAT_INCLUDE)
+COMPILE_TOOL = g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $(VERSAT_COMMON_OBJS)
+COMPILE_OBJ  = g++ -DPC -rdynamic -std=c++17 -MMD -MP -DVERSAT_DEBUG -c -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -g $(VERSAT_COMMON_INCLUDE) $(VERSAT_INCLUDE)
 
 # Common objects (used by Versat and tools)
 $(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp $(VERSAT_COMMON_HEADERS)
@@ -95,7 +95,7 @@ $(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(VERSAT_ALL_HEADERS)
 
 # Versat
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
-	g++ -MMD -std=c++17 -DVERSAT_DIR="$(VERSAT_DIR)" -rdynamic -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) -lstdc++ -lm -lgcc -lc -pthread -ldl 
+	g++ -MMD -std=c++17 -DVERSAT_DEBUG -DVERSAT_DIR="$(VERSAT_DIR)" -rdynamic -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) -lstdc++ -lm -lgcc -lc -pthread -ldl 
 
 versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash
 

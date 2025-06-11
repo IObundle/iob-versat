@@ -10,7 +10,7 @@ struct Options{
   Array<String> verilogFiles;
   Array<String> extraSources;
   Array<String> includePaths;
-  Array<String> unitPaths;
+  Array<String> unitFolderPaths;
   
   String hardwareOutputFilepath;
   String softwareOutputFilepath;

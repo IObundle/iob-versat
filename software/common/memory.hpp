@@ -29,18 +29,20 @@ void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
 long PagesAvailable();
 
-#undef VERSAT_DEBUG
-
 struct Arena{
   Byte* mem;
   size_t used;
   size_t totalAllocated;
   size_t maximum;
+
+  const char* fileCreationPlace;
+  int lineCreationPlace;
 }; 
 
+#define InitArena(SIZE) InitArena_(SIZE,__FILE__,__LINE__);
+Arena InitArena_(size_t size,const char* file,int line);
+
 void AlignArena(Arena* arena,int alignment);
-Arena InitArena(size_t size);
-Arena InitLargeArena(); //
 Arena SubArena(Arena* arena,size_t size);
 void PopToSubArena(Arena* top,Arena subArena);
 void Reset(Arena* arena);
@@ -48,6 +50,10 @@ void Free(Arena* arena);
 size_t MemoryUsage(Arena* arena);
 Byte* PushBytes(Arena* arena, size_t size);
 size_t SpaceAvailable(Arena* arena);
+
+void ReportArenaUsage();
+void DebugInitRegion(Arena* arena,const char* file,const char* function,int line);
+void DebugEndRegion(Arena* arena,const char* file,const char* function,int line);
 
 // All push strings append a null byte. Do not rely on this behaviour.
 String PushString(Arena* arena,String ss);
@@ -73,18 +79,27 @@ String PushFile(Arena* arena,const char* filepath);
 
 struct ArenaMarker{
   ArenaMark mark;
+  const char* functionName;
+  const char* file;
+  int line;
   
-  ArenaMarker(Arena* arena){this->mark = MarkArena(arena);};
-  ~ArenaMarker(){PopMark(this->mark);};
-  void Pop(){PopMark(this->mark);};
+  ArenaMarker(Arena* arena,const char* file,const char* functionName,int line){
+    this->mark = MarkArena(arena);
+    this->functionName = functionName;
+    this->line = line;
+    this->file = file;
+    DebugInitRegion(arena,file,functionName,line);
+  };
+  ~ArenaMarker(){
+    DebugEndRegion(mark.arena,file,functionName,line); PopMark(this->mark);};
   operator bool(){return true;}; // For the region trick
 };
 
 #define __marker(LINE) marker_ ## LINE
 #define _marker(LINE) __marker( LINE )
-#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA)
+#define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA,__FILE__,__FUNCTION__,__LINE__)
 
-#define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA})
+#define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA,__FILE__,__FUNCTION__,__LINE__})
 
 #define TEMP_REGION(NAME,OUT_ARENA) \
   Arena* NAME = GetArena(OUT_ARENA); \

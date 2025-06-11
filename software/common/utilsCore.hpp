@@ -507,7 +507,9 @@ uint GetRandomNumber();
 
 void OS_SetScriptPermissions(FILE* file);
 
-// TODO: Prefix these with a OS_ in the name and potentially use fs to implement this. 
+// Path OS related functions
+// TODO: Prefix these with a OS_ in the name and potentially use fs to implement this (or something that agrees with the POSIX standard)
+// TODO: We need to put some work in here, even if just calling fs on the other side. The path related functions are kinda of a mess
 bool RemoveDirectory(const char* path);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
@@ -515,6 +517,8 @@ void MakeDirectory(const char* path);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
 String PathGoUp(char* pathBuffer);
+String GetCommonPath(String path1,String path2,Arena* out);
+String OS_NormalizePath(String in,Arena* out);
 
 void FixedStringCpy(char* dest,String src);
 

@@ -15,6 +15,106 @@
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
 
+// Arena Usage recording and reporting. Mostly some statistics to figure out how much memory our program is used and if some function is doing something odd
+
+//static Arena debugArena; 
+
+struct ArenaInfo{
+  Arena* arena;
+  size_t used;
+};
+  
+struct FunctionPos{
+  const char* file;
+  const char* functionName;
+  int line;
+};
+
+struct FunctionAllocationInfo{
+  FunctionPos pos;
+  size_t memoryUsed;
+};
+
+static Arena debugMemoryArena;
+static Array<ArenaInfo> debugArenaStack;
+static int debugArenaIndex;
+static ArenaList<FunctionAllocationInfo>* debugInfo;
+
+static void InitMemoryDebug(){
+  static bool init = false;
+  if(init){
+    return;
+  }
+  init = true;
+
+  debugMemoryArena = InitArena(Megabyte(16));
+  debugArenaStack = PushArray<ArenaInfo>(&debugMemoryArena,50); // NOTE: 50 shoud be enough
+  debugArenaIndex = 0;
+
+  debugInfo = PushArenaList<FunctionAllocationInfo>(&debugMemoryArena);
+}
+
+void ReportArenaUsage(){
+  Array<FunctionAllocationInfo> asArray = PushArrayFromList(&debugMemoryArena,debugInfo);
+
+  auto CompareFunction = [](const void* f1,const void* f2) -> int{
+    FunctionAllocationInfo* v1 = (FunctionAllocationInfo*) f1;
+    FunctionAllocationInfo* v2 = (FunctionAllocationInfo*) f2;
+
+    if(v2->memoryUsed > v1->memoryUsed){
+      return 1;
+    } else if(v2->memoryUsed < v1->memoryUsed){
+      return -1;
+    } else {
+      return 0;
+    }
+  };
+  
+  qsort(asArray.data,asArray.size,sizeof(FunctionAllocationInfo),CompareFunction);
+
+  asArray.size = MIN(asArray.size,10);
+  
+  for(FunctionAllocationInfo info : asArray){
+    String prettyMemoryStr = ReprMemorySize(info.memoryUsed,&debugMemoryArena); // NOTE: Leaking
+    printf("%s:%s:%d : %.*s\n",info.pos.file,info.pos.functionName,info.pos.line,UN(prettyMemoryStr));
+  }
+}
+
+void DebugInitRegion(Arena* arena,const char* file,const char* function,int line){
+#ifndef VERSAT_DEBUG
+  return;
+#endif
+
+  InitMemoryDebug();
+  
+  debugArenaStack[debugArenaIndex].arena = arena;
+  debugArenaStack[debugArenaIndex].used = arena->used;
+
+  debugArenaIndex += 1;
+}
+
+void DebugEndRegion(Arena* arena,const char* file,const char* function,int line){
+#ifndef VERSAT_DEBUG
+  return;
+#endif
+
+  Assert(debugArenaIndex > 0);
+  debugArenaIndex -= 1;
+
+  ArenaInfo startInfo = debugArenaStack[debugArenaIndex];
+
+  size_t memoryUsed = arena->used - startInfo.used;
+
+  // NOTE: We currently do not store any small usages, otherwise we could easily overflow our debug arena
+  if(memoryUsed > 1024){
+    FunctionAllocationInfo* info = debugInfo->PushElem();
+    info->pos.file = file;
+    info->pos.functionName = function;
+    info->pos.line = line;
+    info->memoryUsed = memoryUsed;
+  }
+}
+
 Arena* contextArenas[2];
 
 Arena* GetArena(Arena* diff){
@@ -76,30 +176,21 @@ void AlignArena(Arena* arena,int alignment){
   }
 }
 
-Arena InitArena(size_t size){
+Arena InitArena_(size_t size,const char* file,int line){
   Arena arena = {};
 
   arena.used = 0;
   arena.totalAllocated = size;
   arena.mem = (Byte*) calloc(size,sizeof(Byte));
-  
+  arena.fileCreationPlace = file;
+  arena.lineCreationPlace = line;
+
   if(arena.mem == nullptr){
     fprintf(stderr,"Error allocating memory. Make sure enough memory is available\n");
     exit(1);
   }
 
   Assert(IS_ALIGNED_64(arena.mem));
-
-  return arena;
-}
-
-Arena InitLargeArena(){
-  Arena arena = {};
-
-  arena.used = 0;
-  arena.totalAllocated = Gigabyte(1);
-  arena.mem = (Byte*) AllocatePages(arena.totalAllocated / GetPageSize());
-  Assert(arena.mem);
 
   return arena;
 }
@@ -245,15 +336,11 @@ String EndString(Arena* out,StringBuilder* builder){
     totalSize += ptr->used;
   }
 
-  totalSize += 1;
-  
-  Byte* data = PushBytes(out,totalSize);
+  Byte* data = PushBytes(out,totalSize + 1); // Null byte appended
 
   String res = {};
   res.data = (const char*) data;
   res.size = totalSize;
-
-  res.size -= 1;
   
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
     memcpy(data,ptr->buffer,ptr->used);

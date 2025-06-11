@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include "memory.hpp"
+#include "utilsCore.hpp"
 
 #include <dirent.h>
 
@@ -152,6 +153,23 @@ Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
   }
 
   return EndArray(array);
+}
+
+String ReprMemorySize(int val,Arena* out){
+  if(val < 1024){
+    return PushString(out,"%d bytes",val);
+  } else if(val < Megabyte(1)){
+    int leftover = val % 1024;
+    return PushString(out,"%d.%.3d kilobytes",val / 1024,leftover);
+  } else if(val < Gigabyte(1)){
+    int leftover = val % (1024 * 1024);
+    return PushString(out,"%d.%.3d megabytes",val / (1024 * 1024),leftover);
+  } else {
+    int leftover = val % (1024 * 1024 * 1024);
+    return PushString(out,"%d.%.3d gigabytes",val / (1024 * 1024 * 1024),leftover);
+  }
+  NOT_IMPLEMENTED("");
+  return {};
 }
 
 String JoinStrings(Array<String> strings,String separator,Arena* out){

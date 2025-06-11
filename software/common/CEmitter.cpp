@@ -420,7 +420,7 @@ void CEmitter::Include(const char* filename){
 void CEmitter::Line(){
   CAST* emptyLine = PushCAST(CASTType_RAW_STATEMENT,arena);
 
-  emptyLine->rawData = PushString(arena,"");
+  emptyLine->rawData = {};
   
   InsertStatement(emptyLine);
 }

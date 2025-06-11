@@ -661,7 +661,7 @@ void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,Stri
 
       MappingNode* node2 = &graph.nodes[ii];
 
-      ArenaMarker marker(temp);
+      BLOCK_REGION(temp);
       String str1 = Repr(node1,temp);
       String str2 = Repr(node2,temp);
 

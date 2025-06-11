@@ -159,6 +159,7 @@ struct FileDef{
 
 struct FileGroupDef{
   String name;
+  String commonFolder;
   Array<String> foldersFromRoot;
 };
 
@@ -515,11 +516,18 @@ FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
   AssertToken(tok,"fileGroup");
 
-  TokenizerTemplate* tmpl = CreateTokenizerTemplate(temp,"|=;",{});
+  TokenizerTemplate* tmpl = CreateTokenizerTemplate(temp,"|=;()",{});
   TOKENIZER_REGION(tok,tmpl);
   
   String groupName = tok->NextToken();
 
+  String commonFolder = {};
+  if(tok->IfNextToken("(")){
+    commonFolder = tok->NextToken();
+    
+    AssertToken(tok,")");
+  }
+  
   AssertToken(tok,"=");
 
   auto mark = tok->Mark();
@@ -541,6 +549,7 @@ FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
 
   FileGroupDef* def = fileGroups.Alloc();
   def->name = groupName;
+  def->commonFolder = commonFolder;
   def->foldersFromRoot = PushArrayFromList(out,list);
 
   return def;
@@ -872,6 +881,7 @@ int main(int argc,const char* argv[]){
     h->Member(S8("String"),S8("fileName"));
     h->Comment(S8("Without filename"));
     h->Member(S8("String"),S8("originalRelativePath"));
+    h->Member(S8("String"),S8("commonFolder")); // TODO: We could push this outwards, since right now this is common to all the files.
     h->Member(S8("String"),S8("content"));
     h->EndStruct();
 
@@ -1110,6 +1120,7 @@ int main(int argc,const char* argv[]){
     struct FileGroupInfo{
       String originalRelativePath;
       String filename;
+      String commonFolder;
       String contentRawArrayName;
     };
 
@@ -1127,7 +1138,11 @@ int main(int argc,const char* argv[]){
           }
 
           String fileName = PushString(temp,"%s",entry->d_name);
-          *list->PushElem() = {folderPath,fileName};
+
+          FileGroupInfo* info = list->PushElem();
+          info->originalRelativePath = folderPath;
+          info->filename = fileName;
+          info->commonFolder = def->commonFolder;
         }
         
         closedir(directory);
@@ -1159,11 +1174,13 @@ int main(int argc,const char* argv[]){
       for(FileGroupInfo& info : allFilePaths){
         String dirPath = info.originalRelativePath;
         String fileName = info.filename;
+        String commonFolder = info.commonFolder;
         String rawArray = info.contentRawArrayName;
 
         c->VarBlock();
         c->StringElem(fileName);
         c->StringElem(dirPath);
+        c->StringElem(commonFolder);
         c->Elem(rawArray);
         c->EndBlock();
       }

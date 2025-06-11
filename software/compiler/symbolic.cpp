@@ -201,7 +201,7 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
   int val = 0;
   switch(expr->type){
   case SymbolicExpressionType_FUNC: {
-    WARN_CODE();
+    //WARN_CODE();
 
     return 0;
   } break;
@@ -217,7 +217,7 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
 
     if(right == 0){
       PRINTF_WITH_LOCATION("Division by zero");
-      WARN_CODE();
+      //WARN_CODE();
       return 0;
       //DEBUG_BREAK();
     }
@@ -1165,7 +1165,7 @@ MultPartition CollectTermsWithLiteralMultiplier(SymbolicExpression* expr,Arena* 
     return res;
   } break;
   case SymbolicExpressionType_FUNC:
-    WARN_CODE();
+    //WARN_CODE();
     // Treating this the same as a variable
   case SymbolicExpressionType_VARIABLE: {
     MultPartition res = {};
@@ -1556,7 +1556,7 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
   TEMP_REGION(temp,out);
   switch(expr->type){
   case SymbolicExpressionType_FUNC:{
-    WARN_CODE();
+    //WARN_CODE();
 
     return PushLiteral(out,0); // Treating this as a literal.
   } break;
@@ -1701,7 +1701,7 @@ SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace
     }
   } break;
   case SymbolicExpressionType_FUNC:
-    WARN_CODE(); // Treating this the same as the sum or mul case.
+    //WARN_CODE(); // Treating this the same as the sum or mul case.
   case SymbolicExpressionType_SUM:
   case SymbolicExpressionType_MUL: {
     Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,base->terms.size);
