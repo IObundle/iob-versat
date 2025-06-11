@@ -708,7 +708,6 @@ static DataValue* EvaluateFunction(FunctionValue func,Arena* out){
 String EscapeCString(String content,Arena* out){
   TEMP_REGION(temp,out);
   StringBuilder* b = StartString(temp);
-  // TODO(perf): Kinda slow calling fprintf a time per character
   for(char ch : content){
     switch(ch){
     case '\n': b->PushString("\\n"); break;
@@ -832,7 +831,7 @@ int main(int argc,const char* argv[]){
       }
 
       for(Array<DataValue*> p : def->dataTable){
-        // TODO: Only implement for single type. Waht would an array define map look like?
+        // TODO: Only implement for single type. What would an array define map look like?
         
         Assert(p[1]->type == DataValueType_SINGLE);
         h->RawLine(PushString(temp,"#define %.*s STRING(\"%.*s\")",UNPACK_SS(p[0]->asStr),UNPACK_SS(p[1]->asStr)));

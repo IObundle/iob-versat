@@ -15,7 +15,26 @@ module SimpleAXItoAXIWrite #(
    input      [           LEN_W-1:0] m_wlen_i,
    output reg                        m_wlast_o,
 
-   `include "axi_m_write_port.vs"
+   output [AXI_ID_W-1:0] axi_awid_o,
+   output [AXI_ADDR_W-1:0] axi_awaddr_o,
+   output [AXI_LEN_W-1:0] axi_awlen_o,
+   output [3-1:0] axi_awsize_o,
+   output [2-1:0] axi_awburst_o,
+   output [2-1:0] axi_awlock_o,
+   output [4-1:0] axi_awcache_o,
+   output [3-1:0] axi_awprot_o,
+   output [4-1:0] axi_awqos_o,
+   output [1-1:0] axi_awvalid_o,
+   input [1-1:0] axi_awready_i,
+   output [AXI_DATA_W-1:0] axi_wdata_o,
+   output [(AXI_DATA_W/8)-1:0] axi_wstrb_o,
+   output [1-1:0] axi_wlast_o,
+   output [1-1:0] axi_wvalid_o,
+   input [1-1:0] axi_wready_i,
+   input [AXI_ID_W-1:0] axi_bid_i,
+   input [2-1:0] axi_bresp_i,
+   input [1-1:0] axi_bvalid_i,
+   output [1-1:0] axi_bready_o,
 
    input clk_i,
    input rst_i

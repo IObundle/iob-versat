@@ -3,7 +3,7 @@
 #include <sys/wait.h>
 #include <ftw.h>
 
-// TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build althoug the main problem to solve is organization.
+// TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
 
 #include "debugVersat.hpp"
 #include "declaration.hpp"

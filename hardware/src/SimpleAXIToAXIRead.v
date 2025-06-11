@@ -21,7 +21,23 @@ module SimpleAXItoAXIRead #(
       It is therefore easier to calculate the number of transfers from the length and to control the transfer logic from that aspect.
    */ 
 
-   `include "axi_m_read_port.vs"
+   output [AXI_ID_W-1:0] axi_arid_o,
+   output [AXI_ADDR_W-1:0] axi_araddr_o,
+   output [AXI_LEN_W-1:0] axi_arlen_o,
+   output [3-1:0] axi_arsize_o,
+   output [2-1:0] axi_arburst_o,
+   output [2-1:0] axi_arlock_o,
+   output [4-1:0] axi_arcache_o,
+   output [3-1:0] axi_arprot_o,
+   output [4-1:0] axi_arqos_o,
+   output [1-1:0] axi_arvalid_o,
+   input [1-1:0] axi_arready_i,
+   input [AXI_ID_W-1:0] axi_rid_i,
+   input [AXI_DATA_W-1:0] axi_rdata_i,
+   input [2-1:0] axi_rresp_i,
+   input [1-1:0] axi_rlast_i,
+   input [1-1:0] axi_rvalid_i,
+   output [1-1:0] axi_rready_o,
 
    input clk_i,
    input rst_i
