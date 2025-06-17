@@ -1275,6 +1275,11 @@ void TemplateSetString(const char* id,String str){
   SetValue(globalFrame,STRING(id),MakeValue(str));
 }
 
+void TemplateSetHex(const char* id,int number){
+  // TODO: Need to indicate that this is a hexadecimal number
+  SetValue(globalFrame,STRING(id),MakeValue(number));
+}
+
 void TemplateSetBool(const char* id,bool boolean){
   SetValue(globalFrame,STRING(id),MakeValue(boolean));
 }

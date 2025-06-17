@@ -101,6 +101,7 @@ define_map possibleAttributes{
 };
 
 file ExtractVerilatedSignals = ./scripts/ExtractVerilatedSignals.py;
+file GetVerilatorRoot = ./scripts/GetVerilatorRoot.sh;
 
 fileGroup defaultVerilogUnits = ./hardware/src/units;
 fileGroup defaultVerilogFiles = ./hardware/src | ./hardware/src/units;

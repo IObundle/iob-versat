@@ -12,6 +12,7 @@ enum CASTType{
   CASTType_FUNCTION,
   CASTType_COMMENT,
   CASTType_STRUCT_DEF,
+  CASTType_UNION_DEF,
   CASTType_MEMBER_DECL,
   CASTType_VAR_DECL, // No special ending, mostly for functions arguments right now, I think
   CASTType_VAR_DECL_STMT, // Ends in a ';'
@@ -59,7 +60,7 @@ struct CAST{
     struct{
       String name;
       ArenaList<CAST*>* declarations;
-    } structDef;
+    } structDef; // Also unions
 
     struct{
       String name;
@@ -107,6 +108,7 @@ struct CAST{
       String typeName;
       String varName;
       String defaultValue;
+      int arraySize;
       bool isExtern;
     } varDecl;
   };
@@ -129,11 +131,15 @@ struct CEmitter{
   void Once(); // Insert preprocessor directive so that file is only processed once
   void Include(const char* filename);
   void RawLine(String content);
-  
+
+  void Define(String name);
+  void Define(String name,String content);
+
   void Line(); // Empty line
   
-  void Struct(String structName);
-  void Member(String type,String memberName);
+  void Struct(String structName = {});
+  void Union(String unionName = {});
+  void Member(String type,String memberName,int arraySize = 0);
   void EndStruct();
 
   void Enum(String name);
@@ -176,9 +182,8 @@ struct CEmitter{
 CEmitter* StartCCode(Arena* out);
 CAST* EndCCode(CEmitter* m);
 
+String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle = false);
+
 // TODO: cppStyle is just one styling choice, if we end up having more make a struct that is easier to pass around.
 void Repr(CAST* top,StringBuilder* b,bool cppStyle = false,int level = 0);
-
-void ReprHeader(CAST* top,StringBuilder* b,bool cppStyle,int level = 0);
-void ReprSource(CAST* top,StringBuilder* b,bool cppStyle,int level = 0);
 

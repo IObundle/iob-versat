@@ -136,5 +136,6 @@ void TemplateSetNumber(const char* id,int number);
 void TemplateSet(const char* id,void* ptr);
 void TemplateSetString(const char* id,const char* str);
 void TemplateSetString(const char* id,String str);
+void TemplateSetHex(const char* id,int number);
 void TemplateSetArray(const char* id,const char* baseType,int size,void* array);
 void TemplateSetBool(const char* id,bool boolean);

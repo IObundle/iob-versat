@@ -101,6 +101,7 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
 }
 
 String EmitMakefile(Accelerator* accel,Arena* out){
+#if 0
   TEMP_REGION(temp,out);
   StringBuilder* b = StartString(temp);
 
@@ -117,91 +118,43 @@ String EmitMakefile(Accelerator* accel,Arena* out){
   
   String generatedUnitsLocation = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
 
-  b->PushString("TYPE_NAME := %.*s\n\n",UNPACK_SS(typeName));
-
+  TemplateSetString("typeName",typeName);
+  
+  String simLoopHeader = {};
   if(simulateLoops){
-    b->PushString("VSIM_HEADER := VSuperAddress.h\n");
-  } else {
-    b->PushString("VSIM_HEADER := \n");
+    simLoopHeader = S8("VSuperAddress.h");
   }
+  TemplateSetString("simLoopHeader",simLoopHeader);
+  TemplateSetString("hardwareFolder",generatedUnitsLocation);
   
-  b->PushString("HARDWARE_FOLDER := %.*s\n",UNPACK_SS(generatedUnitsLocation));
-  b->PushString("VHEADER := V$(TYPE_NAME).h\n");
-  b->PushString("SOFTWARE_FOLDER := .\n");
-
-  b->PushString("HARDWARE_SRC := ");
-  for(String name : allFilenames){
-    b->PushString("$(HARDWARE_FOLDER)/%.*s ",UNPACK_SS(name));
-  }
-  b->PushString("\n");
-
-  b->PushString(R"FOO(
-HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v)
-VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)
-INCLUDE := -I$(HARDWARE_FOLDER)
-
-VERILATOR_COMMON_ARGS := --report-unoptflat -GLEN_W=20 -CFLAGS "-O2 -march=native" $(INCLUDE)
-)FOO");
-  
-  b->PushString("VERILATOR_COMMON_ARGS += -GAXI_ADDR_W=%d\n",globalOptions.databusAddrSize);
-  b->PushString("VERILATOR_COMMON_ARGS += -GAXI_DATA_W=%d\n",globalOptions.databusDataSize);
-
-  if(globalDebug.outputVCD){
-    if(globalOptions.generateFSTFormat){
-      b->PushString("VERILATOR_COMMON_ARGS += --trace-fst\n");
-    } else {
-      b->PushString("VERILATOR_COMMON_ARGS += --trace\n");
+  {
+    auto s = StartString(temp);
+    for(String name : allFilenames){
+      s->PushString("$(HARDWARE_FOLDER)/%.*s ",UNPACK_SS(name));
     }
+
+    TemplateSetString("hardwareUnits",EndString(temp,s));
   }
+  
+  TemplateSetNumber("databusAddrSize",globalOptions.databusAddrSize);
+  TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
 
-  b->PushString(R"FOO(
-all: libaccel.a
+  String traceType = {};
+  if(globalDebug.outputVCD){
+    traceType = S8("--trace");
+    if(globalOptions.generateFSTFormat){
+      traceType = S8("--trace-fst");
+    }
 
-# Joins wrapper with verilator object files into a library
-libaccel.a: $(VHEADER) wrapper.o createVerilatorObjects $(VSIM_HEADER)
-	ar -rcs libaccel.a wrapper.o $(wildcard ./obj_dir/*.o)
-
-createVerilatorObjects: $(VHEADER) wrapper.o $(VSIM_HEADER)
-	$(MAKE) verilatorObjects
-
-VUnitWireInfo.h: $(VHEADER)
-	./ExtractVerilatedSignals.py $(VHEADER) > VUnitWireInfo.h
-
-$(VHEADER): $(HARDWARE_SRC)
-	verilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_SRC) --top-module $(TYPE_NAME)
-	$(MAKE) -C ./obj_dir -f V$(TYPE_NAME).mk
-	cp ./obj_dir/*.h ./
-)FOO");
-
-  if(simulateLoops){
-    b->PushString(R"FOO(
-VSuperAddress.h: $(HARDWARE_SRC)
-	verilator $(VERILATOR_COMMON_ARGS) --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress
-	$(MAKE) -C ./obj_dir -f VSuperAddress.mk
-	cp ./obj_dir/*.h ./
-)FOO");
+    TemplateSetString("traceType",traceType);
   }
-
-  b->PushString(R"FOO(
-wrapper.o: $(VHEADER) VUnitWireInfo.h wrapper.cpp $(VSIM_HEADER)
-	g++ -std=c++17 -march=native -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)
-
-# Created after calling verilator. Need to recall make to have access to the variables
--include ./obj_dir/V$(TYPE_NAME)_classes.mk
-
-VERILATOR_SOURCE_DIR:=$(VERILATOR_ROOT)/include
-ALL_VERILATOR_FILES:=$(VM_GLOBAL_FAST) $(VM_GLOBAL_SLOW)
-ALL_VERILATOR_O:=$(patsubst %%,./obj_dir/%%.o,$(ALL_VERILATOR_FILES))
-
-./obj_dir/%%.o: $(VERILATOR_SOURCE_DIR)/%%.cpp
-	g++ -w -march=native -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include
-
-verilatorObjects: $(ALL_VERILATOR_O)
-)FOO");
 
   String content = EndString(out,b);
+
+  //ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate);
   
   return content;
+#endif
 }
 
 String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena* out){
@@ -2543,8 +2496,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       return;
     }
 
-    // MARK
-
     VEmitter* m = StartVCode(temp);
 
     VerilogInterfaceSpec databus[] = {
@@ -2588,6 +2539,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
   
   TemplateSetBool("isSimple",isSimple);
+  FUInstance* simpleInstance = nullptr;
   if(isSimple){
     FUInstance* inst = nullptr; // TODO: Should probably separate isSimple to a separate function, because otherwise we are recalculating stuff that we already know.
     for(FUInstance* ptr : accel->allocated){
@@ -2608,6 +2560,8 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       }
       Assert(inst);
 
+      simpleInstance = inst;
+      
       TemplateSetNumber("simpleInputs",inst->declaration->NumberInputs());
       TemplateSetNumber("simpleOutputs",inst->declaration->NumberOutputs());
     } else {
@@ -2941,15 +2895,335 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     }
 
     Array<String> content = EndArray(builder);
+
+    auto b = StartString(temp);
+
+    for(String s : content){
+      b->PushString(s);
+      b->PushString("\n");
+    }
     
     TemplateSetCustom("addrGen",MakeValue(&content));
+
+    TemplateSetString("allAddrGen",EndString(temp,b));
     
     FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
     DEFER_CLOSE_FILE(f);
+
+    // MARK
+
+    {
+      CEmitter* c = StartCCode(temp);
+
+      if(structs.size == 0){
+        String typeName = accel->name;
+        c->Struct(PushString(temp,"%.*sConfig",UN(typeName)));
+        c->EndStruct();
+      }
+      
+      for(TypeStructInfo info : structs){
+        c->Define(PushString(temp,"VERSAT_DEFINED_%.*s",UN(info.name)));
+        c->Struct(PushString(temp,"%.*sConfig",UN(info.name)));
+        for(TypeStructInfoElement entry : info.entries){
+          if(entry.typeAndNames.size > 1){
+            c->Union();
+          
+            for(SingleTypeStructElement typeAndName : entry.typeAndNames){
+              if(typeAndName.arraySize > 1){
+                c->Member(typeAndName.type,typeAndName.name,typeAndName.arraySize);
+              } else {
+                c->Member(typeAndName.type,typeAndName.name);
+              }
+            }
+
+            c->EndStruct();
+          } else {
+            SingleTypeStructElement elem = entry.typeAndNames[0];
+            c->Member(elem.type,elem.name,elem.arraySize);
+          }
+        }
+
+        c->EndStruct();
+        c->Line();
+      }
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("configStructs",content);
+    }
+
+    String typeName = accel->name;
+    {
+      CEmitter* c = StartCCode(temp);
+
+      if(stateStructs.size == 0){
+        c->Struct(PushString(temp,"%.*sState",UN(typeName)));
+        c->EndStruct();
+      }
+      
+      for(TypeStructInfo info : stateStructs){
+        c->Struct(PushString(temp,"%.*sState",UN(info.name)));
+        for(TypeStructInfoElement entry : info.entries){
+          if(entry.typeAndNames.size > 1){
+            c->Union();
+          
+            for(SingleTypeStructElement typeAndName : entry.typeAndNames){
+              if(typeAndName.arraySize > 1){
+                c->Member(typeAndName.type,typeAndName.name,typeAndName.arraySize);
+              } else {
+                c->Member(typeAndName.type,typeAndName.name);
+              }
+            }
+
+            c->EndStruct();
+          } else {
+            SingleTypeStructElement elem = entry.typeAndNames[0];
+            c->Member(elem.type,elem.name,elem.arraySize);
+          }
+        }
+
+        c->EndStruct();
+        c->Line();
+      }
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("stateStructs",content);
+    }
+    
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      c->Struct(S8("AcceleratorState"));
+      for(String name : allStates){
+        c->Member(S8("int"),name);
+      }
+      c->EndStruct();
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("acceleratorState",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+      for(TypeStructInfo info : addressStructures){
+        c->Define(PushString(temp,"VERSAT_DEFINED_%.*sAddr",UN(info.name)));
+        c->Struct(PushString(temp,"%.*sAddr",UN(info.name)));
+
+        for(TypeStructInfoElement elem : info.entries){
+          SingleTypeStructElement single = elem.typeAndNames[0];
+          c->Member(single.type,single.name);
+        }
+        
+        c->EndStruct();
+      }
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("addrStructs",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+      c->Struct(S8("AcceleratorConfig"));
+
+      for(auto elem : structuredConfigs){
+        if(elem.typeAndNames.size > 1){
+          c->Union();
+
+          for(auto typeAndName : elem.typeAndNames){
+            c->Member(typeAndName.type,typeAndName.name);
+          }
+          
+          c->EndStruct();
+        } else {
+          c->Member(elem.typeAndNames[0].type,elem.typeAndNames[0].name);
+        }
+      }
+      
+      c->EndStruct();
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("acceleratorConfig",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+      c->Struct(S8("AcceleratorStatic"));
+
+      for(auto elem : allStaticsVerilatorSide){
+        c->Member(S8("iptr"),elem.name);
+      }
+      
+      c->EndStruct();
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("acceleratorStatic",content);
+    }
+    
+    if(true){
+      CEmitter* c = StartCCode(temp);
+      c->Struct(S8("AcceleratorDelay"));
+      {
+        c->Union();
+        {
+          c->Struct();
+          for(int i = 0 ;i < info.delays; i++){
+            c->Member(S8("iptr"),PushString(temp,"TOP_Delay%d",i));
+          }
+          c->EndStruct();
+
+          c->Member(S8("iptr"),S8("delays"),info.delays);
+        }
+        c->EndStruct();
+      }
+      c->EndStruct();
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("acceleratorDelay",content);
+    }
+    
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      for(Pair<String,int> p : allMem){
+        c->Define(p.first,PushString(temp,"((void*) (versat_base + memMappedStart + 0x%x))",p.second));
+      }
+      
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("memMappedAddresses",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      c->VarBlock();
+      for(Pair<String,int> p : allMem){
+        c->Elem(p.first);
+      }
+      c->EndBlock();
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("addrBlock",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      c->VarBlock();
+      for(auto d : delays){
+        c->Elem(PushString(temp,"0x%x",d));
+      }
+      c->EndBlock();
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("delayBlock",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      if(stateStructs.size > 0){
+        c->RawLine(PushString(temp,"extern volatile %.*sState* accelState;",UN(typeName)));
+      } else {
+        c->RawLine(S8("extern volatile AcceleratorState* accelState;"));
+      };
+
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("accelStateDecl",content);
+    }
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      for(auto elem : allStaticsVerilatorSide){
+        c->Define(PushString(temp,"ACCEL_%.*s",UN(elem.name)),PushString(temp,"accelStatic->%.*s",UN(elem.name)));
+      }
+      
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("allStaticDefines",content);
+    }
+    
+    if(true){
+      CEmitter* c = StartCCode(temp);
+
+      if(isSimple){
+        c->Define(S8("NumberSimpleInputs"),PushString(temp,"%d",simpleInstance->declaration->NumberInputs()));
+        c->Define(S8("NumberSimpleOutputs"),PushString(temp,"%d",simpleInstance->declaration->NumberOutputs()));
+        c->Define(S8("SimpleInputStart"),S8("((iptr*) accelConfig)"));
+        c->Define(S8("SimpleOutputStart"),S8("((int*) accelState)"));
+      }
+        
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("simpleStuff",content);
+    }
+    
+    auto mergedDelays = allDelays;
+    auto outputChangeDelay = false;
+    auto amontMerged = allDelays.size;
+    auto differences = differenceArray;
+    auto mergeMux = muxInfo;
+
+    if(true){
+      CEmitter* c = StartCCode(temp);
+      
+      if(names.size > 1){
+        for(int i = 0; i <  mergedDelays.size; i++){
+          auto delayArray  =  mergedDelays[i];
+          c->ArrayDeclareBlock("unsigned int",SF("delayBuffer_%d",i),true);
+
+          for(auto d : delayArray){
+            c->Elem(PushString(temp,"0x%x",d));
+          }
+
+          c->EndBlock();
+        }
+
+        c->ArrayDeclareBlock("unsigned int*","delayBuffers",true);
+
+        for(int i = 0; i < names.size; i++){
+          c->Elem(PushString(temp,"delayBuffer_%d",i));
+        }
+        
+        c->EndBlock();
+
+        c->Enum(S8("MergeType"));
+        for(int i = 0; i <  names.size; i++){
+          auto name  =  names[i];
+          c->EnumMember(PushString(temp,"MergeType_%.*s",UN(name)),PushString(temp,"%d",i));
+        }
+        c->EndEnum();
+
+        c->FunctionBlock(S8("static inline void"),S8("ActivateMergedAccelerator"));
+        c->Argument(S8("MergeType"),S8("type"));
+
+        c->Assignment(S8("int asInt"),S8("(int) type"));
+
+        c->SwitchBlock(S8("type"));
+        for(int i = 0 ; i < names.size; i++){
+          c->CaseBlock(PushString(temp,"MergeType_%.*s",UN(names[i])));
+
+          for(auto muxInfo : mergeMux[i]){
+            c->Assignment(PushString(temp,"accelConfig->%.*s.sel",UN(muxInfo.name)),PushString(temp,"%d",muxInfo.val));
+          }
+          c->EndBlock();
+        }
+        c->EndBlock();
+
+        c->RawLine(S8("VersatLoadDelay(delayBuffers[asInt]);"));
+      
+        c->EndBlock();
+      }
+      
+      String content = PushASTRepr(c,temp);
+      TemplateSetString("mergeStuff",content);
+    }
+
+    TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
+    TemplateSetHex("memMappedStart",1 << val.memoryConfigDecisionBit);
+    TemplateSetHex("versatAddressSpace",2 * (1 << val.memoryConfigDecisionBit));
+    TemplateSetHex("staticStart",val.nConfigs);
+    TemplateSetHex("delayStart",val.nConfigs + val.nStatics);
+    TemplateSetHex("configStart",val.versatConfigs);
+    TemplateSetHex("stateStart",val.versatStates);
     
     ProcessTemplate(f,BasicTemplates::acceleratorHeaderTemplate);
   }
-
+  
   // Verilator Wrapper (.cpp file that controls simulation)
   {
     Pool<FUInstance> nodes = accel->allocated;
@@ -3011,65 +3285,80 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
 
   // Makefile file for verilator
-  {
-    String outputPath = globalOptions.softwareOutputFilepath;
-    String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
-    FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
-    DEFER_CLOSE_FILE(output);
+  String outputPath = globalOptions.softwareOutputFilepath;
+  String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
+  FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
+  DEFER_CLOSE_FILE(output);
+
+  region(temp){    
+    StringBuilder* b = StartString(temp);
+
+    bool simulateLoops = true;
   
-#if 0
-    TemplateSetBool("traceEnabled",globalDebug.outputVCD);
-    CompiledTemplate* comp = CompileTemplate(versat_makefile_template,"makefile",temp);
-
-    // TODO: We eventually only want to put this as true if we output at least one address gen.
-    TemplateSetBool("simulateLoops",true);
-    
-    fs::path outputFSPath = StaticFormat("%.*s",UNPACK_SS(outputPath));
-    fs::path srcLocation = fs::current_path();
-    fs::path fixedPath = fs::weakly_canonical(outputFSPath / srcLocation);
-
-    String relativePath = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
+    String typeName = accel->name;
 
     Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
     for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
       String filepath  =  globalOptions.verilogFiles[i];
-      fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
+      fs::path path(SF("%.*s",UNPACK_SS(filepath)));
       allFilenames[i] = PushString(temp,"%s",path.filename().c_str());
     }
-
-    TemplateSetArray("allFilenames","String",UNPACK_SS(allFilenames));
   
-    TemplateSetString("generatedUnitsLocation",relativePath);
-    TemplateSetArray("extraSources","String",UNPACK_SS(globalOptions.extraSources));
-#endif
-    
-    String content = EmitMakefile(accel,temp);
+    String generatedUnitsLocation = GetRelativePathFromSourceToTarget(globalOptions.softwareOutputFilepath,globalOptions.hardwareOutputFilepath,temp);
 
-    fprintf(output,"%.*s",UNPACK_SS(content));
-    //ProcessTemplate(output,comp);
-
-    // TODO: Need to add some form of error checking and handling, for the case where verilator root is not found
-    // TODO: Instead of hardcoding this, need to use the embedData approach used for the ExtractVerilatedSignals and use for this.
-    String getVerilatorRootScript = STRING("#!/bin/bash\nTEMP_DIR=$(mktemp -d)\n\npushd $TEMP_DIR &> /dev/null\n\necho \"module Test(); endmodule\" > Test.v\nverilator --cc Test.v &> /dev/null\n\npushd ./obj_dir &> /dev/null\nVERILATOR_ROOT=$(awk '\"VERILATOR_ROOT\" == $1 { print $3}' VTest.mk)\nrm -r $TEMP_DIR\n\necho $VERILATOR_ROOT\n");
+    TemplateSetString("typeName",typeName);
+  
+    String simLoopHeader = {};
+    if(simulateLoops){
+      simLoopHeader = S8("VSuperAddress.h");
+    }
+    TemplateSetString("simLoopHeader",simLoopHeader);
+    TemplateSetString("hardwareFolder",generatedUnitsLocation);
+  
     {
-      String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
-      FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_MISC);
-      DEFER_CLOSE_FILE(output);
+      auto s = StartString(temp);
+      for(String name : allFilenames){
+        s->PushString("$(HARDWARE_FOLDER)/%.*s ",UNPACK_SS(name));
+      }
 
-      fprintf(output,"%.*s",UNPACK_SS(getVerilatorRootScript));
-      fflush(output);
-      OS_SetScriptPermissions(output);
+      TemplateSetString("hardwareUnits",EndString(temp,s));
+    }
+  
+    TemplateSetNumber("databusAddrSize",globalOptions.databusAddrSize);
+    TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
+
+    String traceType = {};
+    if(globalDebug.outputVCD){
+      traceType = S8("--trace");
+      if(globalOptions.generateFSTFormat){
+        traceType = S8("--trace-fst");
+      }
+
+      TemplateSetString("traceType",traceType);
     }
 
-    {
-      String extractVerilatedSignalPath = PushString(temp,"%.*s/ExtractVerilatedSignals.py",UNPACK_SS(globalOptions.softwareOutputFilepath));
-      FILE* output = OpenFileAndCreateDirectories(extractVerilatedSignalPath,"w",FilePurpose_MISC);
-      DEFER_CLOSE_FILE(output);
-
-      fprintf(output,"%.*s",UNPACK_SS(META_ExtractVerilatedSignals_Content));
-      fflush(output);
-      OS_SetScriptPermissions(output);
-    }
+    CompiledTemplate* makefileTpl = CompileTemplate(versat_makefile_template,"makefile",temp);
+    ProcessTemplate(output,makefileTpl);
   }
   
+  {
+    // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
+    String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
+    FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_MISC);
+    DEFER_CLOSE_FILE(output);
+
+    fprintf(output,"%.*s",UN(META_GetVerilatorRoot_Content));
+    fflush(output);
+    OS_SetScriptPermissions(output);
+  }
+
+  {
+    String extractVerilatedSignalPath = PushString(temp,"%.*s/ExtractVerilatedSignals.py",UNPACK_SS(globalOptions.softwareOutputFilepath));
+    FILE* output = OpenFileAndCreateDirectories(extractVerilatedSignalPath,"w",FilePurpose_MISC);
+    DEFER_CLOSE_FILE(output);
+
+    fprintf(output,"%.*s",UNPACK_SS(META_ExtractVerilatedSignals_Content));
+    fflush(output);
+    OS_SetScriptPermissions(output);
+  }
 }

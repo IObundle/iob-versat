@@ -739,7 +739,7 @@ int main(int argc,char* argv[]){
     }
   }
   
-  ReportArenaUsage();
+  //ReportArenaUsage();
 
   return 0;
 }
@@ -819,6 +819,13 @@ Testability:
 -- Etc. Need to develop tests that only need to exercise this conditions and need to make sure that at least Versat produces some valid output and does not simply crash without giving any useful information.
 
 Misc:
+
+Hierarchical Merge:
+
+- Hierarchical merge produces a lot of structures in the header files which are not actually needed.
+-- Need to collapse same structure format into a single format.
+-- Same thing for merge types, merge names and stuff like that. We want to collapse everything that is equal into a single form, reduce complexity and 
+--- IMPORTANT: The delays also need to be collapsed. There is no point in storing 
 
 Generated code does not take into account parameters when it should.
 - Some wires are given fixed sizes when they depend on verilog parameters. 

@@ -20,43 +20,6 @@ String Repr(CASTType type){
   return STRING("No repr for the given type, check if forgot to implement it: %d\n",(int) type);
 }
 
-bool IsBlockType(CASTType type){
-  switch(type){
-  case CASTType_VAR_DECL:; 
-  case CASTType_VAR_DECL_STMT:; 
-  case CASTType_ASSIGNMENT:;
-  case CASTType_STATEMENT:;
-  case CASTType_COMMENT:;
-  case CASTType_STRUCT_DEF:;
-  case CASTType_MEMBER_DECL:;
-  case CASTType_TOP_LEVEL: return false;
-    
-  case CASTType_FUNCTION:
-  case CASTType_IF: return true;
-  }
-
-  NOT_POSSIBLE();
-}
-
-// Declaration type contains multiple declarations (declarations specific to the type, like function arguments and structure definitions)
-bool IsDeclarationType(CASTType type){
-  switch(type){
-  case CASTType_VAR_DECL:; 
-  case CASTType_VAR_DECL_STMT:; 
-  case CASTType_ASSIGNMENT:;
-  case CASTType_STATEMENT:;
-  case CASTType_COMMENT:;
-  case CASTType_IF:;
-  case CASTType_MEMBER_DECL:;
-  case CASTType_TOP_LEVEL: return false;
-
-  case CASTType_STRUCT_DEF:
-  case CASTType_FUNCTION: return true;
-  }
-
-  NOT_POSSIBLE();
-}
-
 CAST* PushCAST(CASTType type,Arena* out){
   CAST* res = PushStruct<CAST>(out);
   res->type = type;
@@ -137,6 +100,11 @@ void CEmitter::InsertStatement(CAST* statementCAST){
       return;
     } break;
 
+    case CASTType_UNION_DEF: {
+      *cast->structDef.declarations->PushElem() = statementCAST;
+      return;
+    } break;
+
     case CASTType_STRUCT_DEF: {
       *cast->structDef.declarations->PushElem() = statementCAST;
       return;
@@ -170,12 +138,23 @@ void CEmitter::Struct(String structName){
   PushLevel(structAST);
 }
 
-void CEmitter::Member(String type,String memberName){
+void CEmitter::Union(String unionName){
+  CAST* unionAST = PushCAST(CASTType_UNION_DEF,arena);
+
+  unionAST->structDef.name = PushString(arena,unionName);
+  unionAST->structDef.declarations = PushArenaList<CAST*>(arena);
+  
+  InsertStatement(unionAST);
+  PushLevel(unionAST);
+}
+
+void CEmitter::Member(String type,String memberName,int arraySize){
   CAST* argument = PushCAST(CASTType_MEMBER_DECL,arena);
 
   argument->varDecl.typeName = PushString(arena,type);
   argument->varDecl.varName = PushString(arena,memberName);
-
+  argument->varDecl.arraySize = arraySize;
+  
   InsertStatement(argument);
 }
 
@@ -433,6 +412,22 @@ void CEmitter::RawLine(String val){
   InsertStatement(rawLine);
 }
 
+void CEmitter::Define(String name){
+  CAST* emptyLine = PushCAST(CASTType_RAW_STATEMENT,arena);
+
+  emptyLine->rawData = PushString(arena,"#define %.*s",UN(name));
+  
+  InsertStatement(emptyLine);
+}
+
+void CEmitter::Define(String name,String content){
+  CAST* emptyLine = PushCAST(CASTType_RAW_STATEMENT,arena);
+
+  emptyLine->rawData = PushString(arena,"#define %.*s %.*s",UN(name),UN(content));
+  
+  InsertStatement(emptyLine);
+}
+
 void CEmitter::Comment(String comment){
   CAST* commentAst = PushCAST(CASTType_COMMENT,arena);
   commentAst->comment = PushString(arena,comment);
@@ -488,24 +483,46 @@ CAST* EndCCode(CEmitter* m){
   return m->topLevel;
 }
 
+String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle){
+  TEMP_REGION(temp,out);
+  CAST* ast = EndCCode(e);
+  StringBuilder* b = StartString(temp);
+
+  Repr(ast,b,cppStyle);
+
+  return EndString(out,b);
+}
+
 void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
   FULL_SWITCH(top->type){
   case CASTType_TOP_LEVEL: {
     if(top->top.oncePragma){
       b->PushString("#pragma once\n\n");
     }
-    
+
+    bool first = true;
     for(SingleLink<CAST*>* iter = top->top.declarations->head; iter; iter = iter->next){
+      // Only new line if we have more than one declaration
+      if(!first){
+        b->PushString("\n");
+      }
+      first = false;
+      
       CAST* elem = iter->elem;
 
-      Repr(elem,b,cppStyle);
-      b->PushString("\n");
+      Repr(elem,b,cppStyle,level);
     }
   } break;
 
   case CASTType_ENUM_DEF:{
     b->PushSpaces(level * 2);
-    b->PushString("enum %.*s {\n",UN(top->enumDef.name));
+
+    if(cppStyle){
+      b->PushString("enum %.*s{\n",UN(top->enumDef.name));
+    } else {
+      b->PushString("typedef enum{\n");
+    }
+
     bool first = true;
     for(auto p : top->enumDef.nameAndValue){
       if(!first){
@@ -517,7 +534,14 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
       b->PushString("%.*s = %.*s",UN(p.first),UN(p.second));
       first = false;
     }
-    b->PushString("\n};");
+
+    b->PushString("\n");
+    b->PushSpaces(level * 2);
+    if(cppStyle){
+      b->PushString("};");
+    } else {
+      b->PushString("} %.*s;",UNPACK_SS(top->enumDef.name));
+    }
   } break;
   
   case CASTType_FUNCTION: {
@@ -559,7 +583,11 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
   } break;
   case CASTType_MEMBER_DECL:{
     b->PushSpaces(level * 2);
-    b->PushString("%.*s %.*s;",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName));
+    if(top->varDecl.arraySize > 0){
+      b->PushString("%.*s %.*s[%d];",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName),top->varDecl.arraySize);
+    } else {
+      b->PushString("%.*s %.*s;",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName));
+    }
   } break;
   case CASTType_VAR_DECL_STMT: {
     b->PushSpaces(level * 2);
@@ -656,7 +684,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
   case CASTType_STRUCT_DEF:{
     b->PushSpaces(level * 2);
 
-    if(cppStyle){
+    if(cppStyle || Empty(top->structDef.name)){
       b->PushString("struct %.*s{\n",UN(top->structDef.name));
     } else {
       b->PushString("typedef struct{\n");
@@ -677,6 +705,30 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     }
   } break;
 
+  case CASTType_UNION_DEF:{
+    b->PushSpaces(level * 2);
+
+    if(cppStyle || Empty(top->structDef.name)){
+      b->PushString("union %.*s{\n",UN(top->structDef.name));
+    } else {
+      b->PushString("typedef union{\n");
+    }
+    
+    for(SingleLink<CAST*>* iter = top->structDef.declarations->head; iter; iter = iter->next){
+      CAST* elem = iter->elem;
+
+      Repr(elem,b,cppStyle,level + 1);
+      b->PushString("\n");
+    }
+    b->PushSpaces(level * 2);
+
+    if(cppStyle){
+      b->PushString("};");
+    } else {
+      b->PushString("} %.*s;",UNPACK_SS(top->structDef.name));
+    }
+  } break;
+  
   case CASTType_STATEMENT:{
     b->PushSpaces(level * 2);
     b->PushString("%.*s;",UNPACK_SS(top->simpleStatement));
@@ -689,7 +741,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     b->PushString("%.*s %.*s",UN(top->varDeclBlock.type),UN(top->varDeclBlock.name));
 
     if(top->varDeclBlock.isArray){
-      b->PushString("[] = {\n");
+      b->PushString("[] = {");
     } else {
       b->PushString(" = {");
     }
@@ -698,7 +750,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     for(CAST* ast : top->varDeclBlock.arrayElems){
       if(!first){
         if(top->varDeclBlock.isArray){
-          b->PushString(",\n");
+          b->PushString(",");
         } else {
           b->PushString(",");
         }
@@ -706,7 +758,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
       Repr(ast,b,cppStyle,level + 1);
       first = false;
     }
-    b->PushString("};\n");
+    b->PushString("};");
   } break;
 
   case CASTType_VAR_BLOCK:{
