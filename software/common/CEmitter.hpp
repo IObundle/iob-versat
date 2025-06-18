@@ -182,7 +182,7 @@ struct CEmitter{
 CEmitter* StartCCode(Arena* out);
 CAST* EndCCode(CEmitter* m);
 
-String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle = false);
+String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle = false,int startLevel = 0);
 
 // TODO: cppStyle is just one styling choice, if we end up having more make a struct that is easier to pass around.
 void Repr(CAST* top,StringBuilder* b,bool cppStyle = false,int level = 0);

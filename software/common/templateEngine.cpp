@@ -1244,6 +1244,55 @@ void PrintFrames(Frame* frame){
   }
 }
 
+void TemplateSimpleSubstitute(StringBuilder* b,String tmpl,Hashmap<String,String>* subs){
+  int size = tmpl.size;
+  for(int i = 0; i < size; i++){
+    if(i + 2 < size && tmpl[i] == '@' && tmpl[i+1] == '{'){
+      i = i+2;
+
+      int start = i;
+      for(; i < size; i++){
+        if(tmpl[i] == '}'){
+          break;
+        }
+      }
+      String subName = String{&tmpl[start],i - start};
+
+      String toSubstituteWith = subs->GetOrFail(subName);
+      b->PushString(toSubstituteWith);
+    } else {
+      b->PushChar(tmpl[i]);
+    }
+  }
+}
+
+String TemplateSubstitute(String tmpl,String* valuesToReplace,Arena* out){
+  TEMP_REGION(temp,out);
+  auto b = StartString(temp);
+  
+  int size = tmpl.size;
+  for(int i = 0; i < size; i++){
+    if(i + 2 < size && tmpl[i] == '@' && tmpl[i+1] == '{'){
+      i = i+2;
+
+      int start = i;
+      for(; i < size; i++){
+        if(tmpl[i] == '}'){
+          break;
+        }
+      }
+      String subIndex = String{&tmpl[start],i - start};
+      int index = ParseInt(subIndex);
+      
+      b->PushString(valuesToReplace[index]);
+    } else {
+      b->PushChar(tmpl[i]);
+    }
+  }
+
+  return EndString(out,b);
+}
+
 Hashmap<String,Value>* GetAllTemplateValues(){
   return globalFrame->table;
 }

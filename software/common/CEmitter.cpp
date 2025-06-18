@@ -483,12 +483,12 @@ CAST* EndCCode(CEmitter* m){
   return m->topLevel;
 }
 
-String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle){
+String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle,int level){
   TEMP_REGION(temp,out);
   CAST* ast = EndCCode(e);
   StringBuilder* b = StartString(temp);
 
-  Repr(ast,b,cppStyle);
+  Repr(ast,b,cppStyle,level);
 
   return EndString(out,b);
 }
@@ -807,6 +807,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
   } break;
     
   case CASTType_RAW_STATEMENT:{
+    b->PushSpaces(level * 2);
     b->PushString("%.*s",UNPACK_SS(top->rawData));
   } break;
 

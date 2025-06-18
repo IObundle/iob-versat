@@ -113,8 +113,6 @@ struct CompiledTemplate{
   String content;
   Array<Block*> blocks;
   String name;
-
-  // Followed by content and the block/expression structure
 };
 
 struct Value;
@@ -127,6 +125,10 @@ void ProcessTemplate(FILE* outputFile,CompiledTemplate* compiledTemplate);
 CompiledTemplate* CompileTemplate(String content,const char* name,Arena* out);
 
 Array<TemplateRecord> RecordTypesAndFieldsUsed(CompiledTemplate* compiled,Arena* out); // Quick way of checking useless values 
+
+void TemplateSimpleSubstitute(StringBuilder* b,String tmpl,Hashmap<String,String>* subs);
+
+String TemplateSubstitute(String tmpl,String* valuesToReplace,Arena* out);
 
 Hashmap<String,Value>* GetAllTemplateValues();
 void ClearTemplateEngine();
