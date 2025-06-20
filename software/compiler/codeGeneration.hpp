@@ -163,10 +163,11 @@ struct VerilogInterfaceSpec{
   bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
 };
 
-void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,String unpackBase,String packedBase);
-
 Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out);
 
 void OutputCircuitSource(FUDeclaration* decl,FILE* file);
 void OutputIterativeSource(FUDeclaration* decl,FILE* file);
+
+// Versat_instance, all external memory files, makefile for pc-emul, basically everything that is only generated once.
+// For the top instance and support files.
 void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple);

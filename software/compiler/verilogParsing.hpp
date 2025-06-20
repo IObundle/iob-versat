@@ -9,7 +9,6 @@
 #include "parser.hpp"
 
 struct Arena;
-struct CompiledTemplate;
 
 typedef Range<Expression*> ExpressionRange;
 

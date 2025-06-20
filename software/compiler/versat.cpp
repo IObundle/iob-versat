@@ -1,33 +1,9 @@
 #include "versat.hpp"
 
-#include <new>
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-#include <cstdarg>
-#include <unordered_map>
-
 #include "globals.hpp"
-#include "printf.h"
 
-#include "thread.hpp"
-#include "type.hpp"
-#include "debugVersat.hpp"
-#include "parser.hpp"
-#include "configurations.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
-#include "verilogParsing.hpp"
-#include "templateEngine.hpp"
-#include "textualRepresentation.hpp"
-#include "templateData.hpp"
 #include "declaration.hpp"
-
-namespace BasicTemplates{
-  CompiledTemplate* topAcceleratorTemplate;
-  CompiledTemplate* acceleratorHeaderTemplate;
-  CompiledTemplate* iterativeTemplate;
-}
+#include "templateEngine.hpp"
 
 int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now.

@@ -4,28 +4,12 @@
 #include <ftw.h>
 
 // TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
-
-#include "debugVersat.hpp"
-#include "declaration.hpp"
-#include "embeddedData.hpp"
-#include "filesystem.hpp"
-#include "globals.hpp"
-#include "logger.hpp"
-#include "memory.hpp"
-#include "structParsing.hpp"
-#include "utilsCore.hpp"
-#include "versat.hpp"
 #include "utils.hpp"
-#include "verilogParsing.hpp"
-#include "type.hpp"
-#include "templateEngine.hpp"
-#include "textualRepresentation.hpp"
-#include "codeGeneration.hpp"
-#include "accelerator.hpp"
-#include "dotGraphPrinting.hpp"
-#include "versatSpecificationParser.hpp"
-#include "symbolic.hpp"
 #include "parser.hpp"
+#include "versatSpecificationParser.hpp"
+#include "declaration.hpp"
+#include "templateEngine.hpp"
+#include "codeGeneration.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -34,67 +18,6 @@ namespace fs = std::filesystem;
 //       Do not actually want to do these preprocessor things. Fix the makefile so that it passes as a string
 #define DO_STRINGIFY(ARG) #ARG
 #define STRINGIFY(ARG) DO_STRINGIFY(ARG)
-
-// TODO: Small fix for common template. Works for now 
-void SetIncludeHeader(CompiledTemplate* tpl,String name);
-
-static Value HexValue(Value in,Arena* out){
-  static char buffer[128];
-
-  int number = ConvertValue(in,ValueType::NUMBER,nullptr).number;
-
-  int size = sprintf(buffer,"0x%x",number);
-
-  Value res = {};
-  res.type = ValueType::STRING;
-  res.str = PushString(out,String{buffer,size});
-
-  return res;
-}
-
-static Value Identify(Value val,Arena* out){
-  //Assert(val.type == GetType(STRING("FUInstance*")));
-
-  FUInstance* inst;
-  if(val.type == GetType(STRING("FUInstance*"))){
-    FUInstance** instPtr = (FUInstance**) val.custom;
-    inst = *instPtr;
-  } else if(val.type == GetType(STRING("FUInstance"))){
-    inst = (FUInstance*) val.custom;
-  } else {
-    Assert(false);
-  }
-  
-  String ret = PushString(out,"%.*s_%d",UNPACK_SS(inst->name),inst->id);
-  
-  return MakeValue(ret);
-}
-
-#include "templateData.hpp"
-
-void LoadTemplates(Arena* perm){
-  TEMP_REGION(temp,perm);
-  CompiledTemplate* commonTpl = CompileTemplate(versat_common_template,"common",perm);
-  SetIncludeHeader(commonTpl,STRING("common"));
-
-  BasicTemplates::topAcceleratorTemplate = CompileTemplate(versat_top_instance_template,"top",perm);
-  BasicTemplates::acceleratorHeaderTemplate = CompileTemplate(versat_header_template,"header",perm);
-  BasicTemplates::iterativeTemplate = CompileTemplate(versat_iterative_template,"iter",perm);
-  
-  RegisterPipeOperation(STRING("MemorySize"),[](Value val,Arena* out){
-    ExternalMemoryInterface* inter = (ExternalMemoryInterface*) val.custom;
-    int byteSize = ExternalMemoryByteSize(inter);
-    return MakeValue(byteSize);
-  });
-  RegisterPipeOperation(STRING("Hex"),HexValue);
-  RegisterPipeOperation(STRING("Identify"),Identify);
-  RegisterPipeOperation(STRING("Type"),[](Value val,Arena* out){
-    Type* type = val.type;
-
-    return MakeValue(type->name);
-  });
-}
-
 
 // Only for graphs that we know for sure are DAG
 Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* out){
@@ -292,9 +215,6 @@ int main(int argc,char* argv[]){
 
   InitDebug();
   
-  void SetTemplateNameToContent(Array<Pair<String,String>> val); // Kinda of an hack.
-  SetTemplateNameToContent(generated_templateNameToContent);
-  
   Arena globalPermanentInst = InitArena(Megabyte(128));
   globalPermanent = &globalPermanentInst;
   Arena tempInst = InitArena(Megabyte(128));
@@ -337,17 +257,8 @@ int main(int argc,char* argv[]){
   globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
   globalOptions.unitFolderPaths = PushArrayFromList(perm,gather.unitFolderPaths);
-
-  // Type stuff needed by templates
-  RegisterTypes();
-  void RegisterParsedTypes();
-  RegisterParsedTypes();
-  void AfterRegisteringParsedTypes();
-  AfterRegisteringParsedTypes();
   
   InitializeTemplateEngine(perm);
-  LoadTemplates(perm);
-
   InitializeSimpleDeclarations();
 
   globalDebug.outputAccelerator = true;

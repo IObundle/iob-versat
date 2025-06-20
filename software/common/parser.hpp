@@ -5,17 +5,32 @@
 #include <string>
 
 #include "utils.hpp"
-#include "type.hpp"
 
-struct Command;
 struct Tokenizer;
 
-// TODO: The entire code base reuses "Expression" in a lot of different situations while in reality every single Expression should be unique for the given file/module. 
+enum ValueType{
+  ValueType_NIL,
+  ValueType_NUMBER,
+  ValueType_STRING,
+  ValueType_BOOLEAN
+};
+
+struct Value{
+  ValueType type;
+
+  union{
+    bool boolean;
+    char ch;
+    i64 number;
+    String str;
+  };
+};
+
+// TODO: Expression is now mostly a Verilog type thing. We can remove it from here and make it fully Verilog specific.
 struct Expression{
   const char* op;
   String id;
   Array<Expression*> expressions;
-  Command* command;
   Value val;
   String text;
   int approximateLine;
@@ -194,6 +209,8 @@ struct TemplateMarker{
 }; 
 
 #define TOKENIZER_REGION(TOK,TMPL) TemplateMarker _marker(__LINE__)(TOK,TMPL)
+
+// TODO: We probably want to simplify this. Kinda sucks forcing template stuff into what should just be a simple parser. 
 
 /* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
      Array<ExpressionType> expressions;

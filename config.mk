@@ -1,4 +1,4 @@
-VERSAT_COMMON_FLAGS := -Wswitch-enum # -Werror=switch-enum
+VERSAT_COMMON_FLAGS := -Wall -Wswitch-enum # -Werror=switch-enum
 
 VERSAT_COMMON_FLAGS += -ggdb3 # Outputs more debug info but only when debuggin with gdb
 

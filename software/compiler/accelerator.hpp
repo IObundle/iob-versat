@@ -181,6 +181,7 @@ struct VersatComputedValues{
   int delayBitsStart;
 
   int nUnits;
+  int nDones;
   
   // Configurations = config + static + delays
   int configurationBits;

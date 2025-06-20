@@ -12,7 +12,6 @@
 #include "globals.hpp"
 #include "memory.hpp"
 #include "symbolic.hpp"
-#include "type.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
@@ -21,6 +20,7 @@
 #include "debug.hpp"
 #include "merge.hpp"
 #include "accelerator.hpp"
+#include "templateEngine.hpp"
 
 // TODO: Rework expression parsing to support error reporting similar to module diff.
 //       A simple form of synchronization after detecting an error would vastly improve error reporting

@@ -357,7 +357,7 @@ Array<Token> ParseList(Tokenizer* tok,Arena* out){
       break;
     }
 
-    bool seenComma = tok->IfNextToken(",");
+    tok->IfNextToken(",");
   }
   AssertToken(tok,")");
 
@@ -382,7 +382,7 @@ Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
       break;
     }
 
-    bool seenComma = tok->IfNextToken(",");
+    tok->IfNextToken(",");
   }
   AssertToken(tok,")");
 
@@ -418,7 +418,7 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
     DataValue* val = ParseValue(tok,out);
     *valueList->PushElem() = val;
     
-    bool seenComma = tok->IfNextToken(",");
+    tok->IfNextToken(",");
 
     if(tok->IfPeekToken("}")){
       break;
@@ -450,7 +450,7 @@ Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena
     Array<DataValue*> array = PushArrayFromList(out,valueList);
     *valueTableList->PushElem() = array;    
     
-    bool seenComma = tok->IfNextToken(",");
+    tok->IfNextToken(",");
 
     if(tok->IfPeekToken("}")){
       break;
@@ -713,7 +713,7 @@ String EscapeCString(String content,Arena* out){
     case '\n': b->PushString("\\n"); break;
     case '\"': b->PushString("\\\""); break;
     case '\t': b->PushString("\\t"); break;
-    case '\\': b->PushString("\\"); break;
+    case '\\': b->PushString("\\\\"); break;
     case '\r': b->PushString("\\r"); break;
     case '\'': b->PushString("\'"); break;
     default:{

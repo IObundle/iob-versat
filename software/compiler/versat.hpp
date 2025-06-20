@@ -1,16 +1,13 @@
 #pragma once
 
-#include <vector>
-#include <unordered_map>
-
-#include "../common/utils.hpp"
-#include "../common/memory.hpp"
-#include "../common/logger.hpp"
+#include "utils.hpp"
+#include "memory.hpp"
+#include "logger.hpp"
 
 #include "globals.hpp"
-#include "accelerator.hpp"
-#include "configurations.hpp"
 #include "debugVersat.hpp"
+
+// TODO: This file can probably go. Just rename and move things around to files that make more sense.
 
 // Forward declarations
 struct Accelerator;
@@ -43,14 +40,6 @@ struct DelayToAdd{
   String bufferParameters;
   int bufferAmount;
 };
-
-namespace BasicTemplates{
-  extern CompiledTemplate* iterativeTemplate;
-  extern CompiledTemplate* topAcceleratorTemplate;
-  extern CompiledTemplate* acceleratorHeaderTemplate;
-}
-
-struct GraphMapping;
 
 // Temp
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
@@ -90,9 +79,6 @@ enum SubUnitOptions{
 };
 
 // Declaration functions
-
-// nocheckin: Replace RegisterFU with a AllocateFU function.
-//            We do not need anything from the declaration during registering, so might as well simplify this part.
 FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
 FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int latency,String name);

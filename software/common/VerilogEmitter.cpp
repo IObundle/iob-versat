@@ -32,6 +32,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_ASSIGN_DECL:
     case VASTType_INSTANCE:;
     case VASTType_BLANK:
+    case VASTType_PORT_GROUP:
     case VASTType_PORT_DECL: continue;
 
     case VASTType_WIRE_ASSIGN_BLOCK:{
@@ -89,6 +90,11 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     case VASTType_WIRE_ASSIGN_BLOCK:
     case VASTType_PORT_DECL: continue;
 
+    case VASTType_PORT_GROUP: {
+      *cast->portGroup.portDeclarations->PushElem() = portAST;
+      return;
+    } break;
+      
     case VASTType_MODULE_DECL: {
       *cast->module.portDeclarations->PushElem() = portAST;
       return; 
@@ -119,6 +125,7 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     case VASTType_ALWAYS_DECL:
     case VASTType_PORT_CONNECT:
     case VASTType_IF:
+    case VASTType_PORT_GROUP:
     case VASTType_WIRE_ASSIGN_BLOCK:
     case VASTType_PORT_DECL: continue;
 
@@ -194,6 +201,19 @@ void VEmitter::EndModule(){
   while(buffer[top-1]->type != VASTType_MODULE_DECL){
     PopLevel();
   }
+  PopLevel();
+}
+
+void VEmitter::StartPortGroup(){
+  VAST* decl = PushVAST(VASTType_PORT_GROUP,arena);
+  
+  decl->portGroup.portDeclarations = PushArenaList<VAST*>(arena);
+  
+  InsertDeclaration(decl);
+  PushLevel(decl);
+}
+
+void VEmitter::EndPortGroup(){
   PopLevel();
 }
 
@@ -507,6 +527,14 @@ void VEmitter::InstanceParam(const char* paramName,int paramValue){
   p->first = PushString(arena,"%s",paramName);
   p->second = PushString(arena,"%d",paramValue);
 }
+
+void VEmitter::InstanceParam(const char* paramName,const char* paramValue){
+  VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
+
+  Pair<String,String>* p = decl->instance.parameters->PushElem();
+  p->first = PushString(arena,"%s",paramName);
+  p->second = PushString(arena,"%s",paramValue);
+}
   
 void VEmitter::PortConnect(const char* portName,const char* connectionExpr){
   VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
@@ -597,6 +625,13 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
     // Top level port connections are expected to always end in a ','. 
     for(VAST* ast : top->top.portConnections){
+      Repr(ast,b,state,level + 1);
+      b->PushString(",\n");
+    }
+  } break;
+
+  case VASTType_PORT_GROUP:{
+    for(VAST* ast : top->portGroup.portDeclarations){
       Repr(ast,b,state,level + 1);
       b->PushString(",\n");
     }

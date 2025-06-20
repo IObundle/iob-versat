@@ -102,7 +102,7 @@ static bool isSimpleAccelerator = @{isSimple};
 static bool acceleratorSupportsDMA = @{useDMA};
 
 static const int memMappedStart = @{memMappedStart};
-static const int versatAddressSpace = @{versatAddressSpace}; // 2 * @{memoryMappedBase |> Hex};
+static const int versatAddressSpace = @{versatAddressSpace};
 
 #define ACCELERATOR_TOP_ADDR_INIT @{addrBlock}
 static unsigned int delayBuffer[] = @{delayBlock};

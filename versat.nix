@@ -25,11 +25,6 @@ pkgs.stdenv.mkDerivation rec {
 
   buildInputs = [
     pkgs.gnumake
-    pkgs.verilator # We do not need verilator anymore, right?
-    (pkgs2.python3.withPackages (python-pkgs: with python-pkgs; [
-      # select Python packages here
-      libclang
-    ]))  
   ];
 
   enableParallelBuilding = true;

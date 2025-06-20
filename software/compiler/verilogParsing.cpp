@@ -893,7 +893,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
       VersatStage stage = VersatStage_COMPUTE;
       
-      if(stageValue && stageValue->type == ValueType::STRING){
+      if(stageValue && stageValue->type == ValueType_STRING){
         if(CompareString(stageValue->str,"Write")){
           stage = VersatStage_WRITE;
         } else if(CompareString(stageValue->str,"Read")){

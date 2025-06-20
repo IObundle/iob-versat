@@ -6,7 +6,6 @@
 #include "utils.hpp"
 
 #include "delayCalculation.hpp"
-#include "versat.hpp"
 
 struct Accelerator;
 struct Arena;

@@ -8,6 +8,7 @@ enum VASTType{
   VASTType_TOP_LEVEL,
   VASTType_MODULE_DECL,
   VASTType_PORT_DECL,
+  VASTType_PORT_GROUP,
   VASTType_VAR_DECL,
   VASTType_WIRE_ASSIGN_BLOCK,
   VASTType_ASSIGN_DECL,
@@ -84,7 +85,11 @@ struct VAST{
       String joinElem;
       ArenaList<VAST*>* expressions;
     } wireAssignBlock;
-    
+
+    struct {
+      ArenaList<VAST*>* portDeclarations;
+    } portGroup;
+
     struct{
       String name;
       ArenaList<Pair<String,String>>* parameters;
@@ -123,6 +128,9 @@ struct VEmitter{
   void DeclParam(const char* name,int value); // A global param of a module
   void EndModule();
 
+  void StartPortGroup();
+  void EndPortGroup();
+  
   void Input(const char* name,int bitsize = 1);
   void Input(String name,int bitsize = 1);
   void Input(const char* name,const char* expr);
@@ -167,6 +175,7 @@ struct VEmitter{
   void StartInstance(const char* moduleName,const char* instanceName);
   void StartInstance(String moduleName,const char* instanceName);
   void InstanceParam(const char* paramName,int paramValue);
+  void InstanceParam(const char* paramName,const char* paramValue);
   void PortConnect(const char* portName,const char* connectionExpr);
   void PortConnect(String portName,String connectionExpr);
   void PortConnectIndexed(const char* portFormat,int index,const char* connectionExpr);

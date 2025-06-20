@@ -198,7 +198,7 @@ static void InternalUpdateAccelerator(){
 
    cyclesDone += 1;
 
-   int sizeOfData = (@{opts.databusDataSize} / 8);
+   int sizeOfData = (@{databusDataSize} / 8);
 
    V@{typeName}* self = dut;
 

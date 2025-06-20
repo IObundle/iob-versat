@@ -28,7 +28,7 @@ Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose){
   
   accel->name = PushString(accel->accelMemory,name);
   accel->purpose = purpose;
-  PushString(accel->accelMemory,{"",1});
+  PushString(accel->accelMemory,{"",1}); // TODO: What?
   
   return accel;
 }
@@ -663,10 +663,10 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   int delayBits = 0;
   int configBits = 0;
   int numberUnits = 0;
+  int numberDones = 0;
   
   auto builder = StartArray<ExternalMemoryInterface>(temp);
   
-  // TODO: Check if we can remove the for loop over units and check if we can calculate from data stored in AccelInfo
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
     FUInstance* inst = unit->inst;
@@ -697,6 +697,10 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
     if(decl->externalMemory.size){
       builder.PushArray(decl->externalMemory);
     }
+
+    if(decl->implementsDone){
+      numberDones += 1;
+    }
   }
 
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
@@ -706,9 +710,11 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
     }
   }    
 
+  res.nDones = numberDones;
+  
   Array<ExternalMemoryInterface> allExternalMemories = EndArray(builder);
   res.totalExternalMemory = ExternalMemoryByteSize(allExternalMemories);
-
+  
   int staticBits = 0;
   res.nStatics = info->statics;
   staticBits = info->staticBits;
