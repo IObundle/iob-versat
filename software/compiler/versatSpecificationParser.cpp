@@ -1,25 +1,6 @@
 #include "versatSpecificationParser.hpp"
 
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-#include <cassert>
-#include <cstdint>
-
-#include "configurations.hpp"
 #include "declaration.hpp"
-#include "embeddedData.hpp"
-#include "globals.hpp"
-#include "memory.hpp"
-#include "symbolic.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
-#include "verilogParsing.hpp"
-#include "versat.hpp"
-#include "parser.hpp"
-#include "debug.hpp"
-#include "merge.hpp"
-#include "accelerator.hpp"
 #include "templateEngine.hpp"
 
 // TODO: Rework expression parsing to support error reporting similar to module diff.
@@ -889,36 +870,6 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
   return def;
 }
 
-Opt<TransformDef> ParseTransformDef(Tokenizer* tok,Arena* out){
-  TEMP_REGION(temp,out);
-  TransformDef def = {};
-
-  tok->AssertNextToken("transform");
-
-  def.name = tok->NextToken();
-  CHECK_IDENTIFIER(def.name);
-  
-  EXPECT(tok,"{");
-
-  ArenaList<ConnectionDef>* cons = PushArenaList<ConnectionDef>(temp);
-  while(!tok->Done()){
-    Token peek = tok->PeekToken();
-
-    if(CompareString(peek,"}")){
-      break;
-    }
-
-    Opt<ConnectionDef> optCon = ParseConnection(tok,out);
-    PROPAGATE(optCon); // TODO: We could try to keep going and find more errors
-    
-    *cons->PushElem() = optCon.value();
-  }
-  def.connections = PushArrayFromList(out,cons);
-  EXPECT(tok,"}");
-  
-  return def;
-}
-
 FUDeclaration* ParseIterative(Tokenizer* tok){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -1379,155 +1330,6 @@ Var Next(GroupIterator& iter){
   return res;
 }
 
-static std::unordered_map<String,Transformation> transformations = {};
-
-Opt<int> ApplyTransforms(String content,int outPortStart,Array<Token> transforms){
-  // TODO(Performance): Trying to find transforms all the time is wasteful.
-  int outPort = outPortStart;
-  for(Token& transformToken : transforms){
-    auto iter = transformations.find(transformToken);
-
-    if(iter == transformations.end()){
-      ReportError(content,transformToken,"Following transformation does not exist");
-      return {};
-    }
-
-    Transformation transform = iter->second;
-
-    Array<int> map = transform.map;
-    if(outPort >= transform.inputs){
-      const char* str = StaticFormat("Port connection (%d) outside transformation range (%d)",outPort,map.size);
-      ReportError(content,transformToken,str);
-      return {};
-    }
-          
-    outPort = map[outPort];
-  }
-
-  return outPort;
-}
-
-static bool InstantiateTransform(Tokenizer* tok,TransformDef def){
-  TEMP_REGION(temp,nullptr);
-  Arena* perm = globalPermanent;
-
-  if(transformations.find(def.name) != transformations.end()){
-    ReportError(tok,def.name,"Trasform already exists");
-    return true;
-  }
-
-  Hashmap<String,int>* table = PushHashmap<String,int>(temp,1000);
-  int portIndex = 0;
-  bool error = false;
-  for(VarDeclaration& decl : def.inputs){
-    if(CompareString(decl.name,STRING("out"))){
-      ReportError(tok,decl.name,"Cannot use special out unit as module input");
-      error = true;
-    }
-
-    if(decl.isArray){
-      for(int i = 0; i < decl.arraySize; i++){
-        String actualName = GetActualArrayName(decl.name,i,temp);
-        table->Insert(actualName,portIndex++);
-      }
-    } else {
-      table->Insert(decl.name,portIndex++);
-    }
-  }
-
-  Set<int>* inputsSeen = PushSet<int>(temp,1000);
-  Hashmap<int,int>* transformation = PushHashmap<int,int>(temp,1000);
-  for(ConnectionDef& decl : def.connections){
-    int nOutConnections = NumberOfConnections(decl.output);
-    int nInConnections = NumberOfConnections(decl.input);
-
-    // TODO: Proper error report by making VarGroup a proper struct that stores a token for the entire parsed text.
-    
-    if(nOutConnections != nInConnections){
-      printf("Number of connections missmatch %d to %d\n",nOutConnections,nInConnections);
-      Assert(false);
-    }
-
-    GroupIterator out = IterateGroup(decl.output);
-    GroupIterator in  = IterateGroup(decl.input);
-    while(HasNext(out) && HasNext(in)){
-      BLOCK_REGION(temp);
-
-      Var outVar = Next(out);
-      Var inVar = Next(in);
-        
-      Assert(inVar.extra.delay.high == 0); // For now, inputs cannot have delay.
-
-      String outName = outVar.name;
-      if(outVar.isArrayAccess){
-        outName = GetActualArrayName(outName,outVar.index.low,temp);
-      }
-      String inName = inVar.name;
-      if(inVar.isArrayAccess){
-        inName = GetActualArrayName(inName,inVar.index.low,temp);
-      }
-
-      if(CompareString(outName,STRING("out"))){
-        ReportError(tok,outVar.name,"Cannot use special out unit as an input");
-        error = true;
-        break;
-      }
-
-      if(!CompareString(inName,STRING("out"))){
-        ReportError(tok,inVar.name,"Only out is allowed as input of connection");
-        error = true;
-        break;
-      }
-
-      if(!table->Exists(outName)){
-        ReportError(tok,outVar.name,"Did not find the following input");
-        error = true;
-        break;
-      }
-        
-      int outPort = table->GetOrFail(outName);
-
-      Opt<int> optOutPort = ApplyTransforms(tok->GetContent(),outPort,decl.transforms);
-      if(!optOutPort.has_value()){
-        error = true;
-        break;
-      }
-        
-      outPort = optOutPort.value();
-      int inPort  = inVar.extra.port.low;
-
-      if(inputsSeen->ExistsOrInsert(inPort)){
-        ReportError(tok,inVar.name,"Input already was set once before. Cannot connect two ports to one input");
-        error = true;
-        break;
-      }
-
-      transformation->Insert(outPort,inPort);
-    }
-      
-    Assert(HasNext(out) == HasNext(in));
-  }
-
-  Array<int> transform = PushArray<int>(perm,transformation->nodesUsed);
-  int inputs = 0;
-  int outputs = 0;
-  for(Pair<int,int*> p : transformation){
-    transform[p.first] = *p.second;
-    inputs = std::max(inputs,p.first);
-    outputs = std::max(outputs,*p.second);
-  }
-  
-  String storedString = PushString(perm,def.name);
-
-  Transformation trans = {};
-  trans.map = transform;
-  trans.inputs = inputs + 1; // Plus one because inputs is an index
-  trans.outputs = outputs + 1;
-
-  transformations.insert({storedString,trans});
-  return error;
-}
-
 FUInstance* CreateFUInstanceWithParameters(Accelerator* accel,FUDeclaration* type,String name,InstanceDeclaration decl){
   FUInstance* inst = CreateFUInstance(accel,type,name);
   
@@ -1765,14 +1567,6 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         FUInstance* inInstance = *optInInstance;
 
         int outPort = outVar.extra.port.low;
-
-        Opt<int> optOutPort = ApplyTransforms(content,outPort,decl.transforms);
-        if(!optOutPort.has_value()){
-          error = true;
-          break;
-        }
-        
-        outPort = optOutPort.value();
         int inPort  = inVar.extra.port.low;
         ConnectUnits(outInstance,outPort,inInstance,inPort,outVar.extra.delay.low);
       }

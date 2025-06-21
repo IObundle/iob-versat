@@ -1,13 +1,6 @@
 #include "verilogParsing.hpp"
 
-#include <cstdio>
-
-#include "memory.hpp"
-
 #include "templateEngine.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
-
 #include "embeddedData.hpp"
 
 typedef Value (*MathFunction)(Value f,Value g);

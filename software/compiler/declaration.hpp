@@ -1,12 +1,8 @@
 #pragma once
 
-#include <cstdio>
-
 #include "configurations.hpp"
-#include "accelerator.hpp"
-#include "verilogParsing.hpp"
 
-//struct FUInstance;
+struct FUInstance;
 struct FUDeclaration;
 struct Edge;
 struct InstanceInfo;

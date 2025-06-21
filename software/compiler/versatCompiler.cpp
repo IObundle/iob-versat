@@ -1,5 +1,4 @@
 #include <argp.h>
-#include <unordered_map>
 #include <sys/wait.h>
 #include <ftw.h>
 

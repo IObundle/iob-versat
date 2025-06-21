@@ -1,20 +1,7 @@
 #include "merge.hpp"
-#include "accelerator.hpp"
-#include "configurations.hpp"
-#include "declaration.hpp"
-#include "delayCalculation.hpp"
-#include "dotGraphPrinting.hpp"
-#include "filesystem.hpp"
-#include "globals.hpp"
-#include "logger.hpp"
-#include "memory.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
 
+#include "declaration.hpp"
 #include "textualRepresentation.hpp"
-#include "versat.hpp"
-#include <bits/getopt_core.h>
-#include <unordered_map>
 
 bool NodeConflict(FUInstance* inst){
   // For now, do not even try to map nodes that contain any config modifiers.

@@ -3,17 +3,14 @@
 // Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
 
 #include <cstdio>
-#include <initializer_list>
-#include <iosfwd>
 #include <string.h>
-#include <new>
-#include <functional>
 #include <stdint.h>
-#include <optional>
 
-#include "signal.h"
+// Mostly for std::move and std::hash
+#include <utility>
+#include <string>
+
 #include "assert.h"
-
 #include "debug.hpp"
 
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
@@ -211,6 +208,11 @@ typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef unsigned int uint;
 
+// Nullopt similar to the one in std but we skip having to include a heavy templated file for this.
+struct nullopt_t {
+    constexpr explicit nullopt_t(int) {}
+};
+
 // Using std::optional is a pain when debugging 
 // This simple class basically does the same and much easier to debug
 template<typename T>
@@ -230,7 +232,7 @@ public:
     return *this;
   };
 
-  Opt<T>& operator=(std::nullopt_t){
+  Opt<T>& operator=(nullopt_t){
     hasVal = false;
     return *this;
   };
@@ -253,7 +255,7 @@ private:
 
 public:
   Opt():val(nullptr){};
-  Opt(std::nullopt_t):val(nullptr){};
+  Opt(nullopt_t):val(nullptr){};
   Opt(T* t):val(t){};
 
   Opt<T*>& operator=(T& t){
@@ -261,7 +263,7 @@ public:
     return *this;
   };
 
-  Opt<T*>& operator=(std::nullopt_t){
+  Opt<T*>& operator=(nullopt_t){
     val = nullptr;
     return *this;
   };
@@ -517,8 +519,6 @@ void MakeDirectory(const char* path);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
 String PathGoUp(char* pathBuffer);
-String GetCommonPath(String path1,String path2,Arena* out);
-String OS_NormalizePath(String in,Arena* out);
 
 void FixedStringCpy(char* dest,String src);
 

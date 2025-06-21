@@ -30,6 +30,9 @@ int dprintf(const char *format, ...){
 }
 
 String Offset(String base,int amount){
+  if(amount > base.size){
+    return {};
+  }
   String res = base;
   res.data += amount;
   res.size -= amount;
@@ -198,52 +201,6 @@ String PathGoUp(char* pathBuffer){
   content.size = i;
 
   return content;
-}
-
-Array<String> SplitPath(String path,Arena* out){
-  Array<String> res = Split(path,'/',out);
-  for(String& s : res){
-    s = TrimWhitespaces(s);
-  }
-  return res;
-}
-
-String GetCommonPath(String path1,String path2,Arena* out){
-  TEMP_REGION(temp,out);
-
-  // TODO: This function is currently kinda hardcoded to expect both inputs to start in the same folder.
-  //       This is also important for the return path, because I want the result of this function to start in the same folder.
-  //       If paths differ on their beginning we could fix this function by first finding the absolute path of each and start from there, but at that point I would need to see what would we do about the format of the result for that case
-  
-  Array<String> split1 = SplitPath(path1,temp);
-  Array<String> split2 = SplitPath(path2,temp);
-
-  auto builder = StartString(temp);
-  for(int i = 0; i < MIN(split1.size,split2.size); i++){
-    if(i != 0){
-      builder->PushString("/");
-    }
-    if(CompareString(split1[i],split2[i])){
-      builder->PushString(split1[i]);
-    }
-  }
-
-  return EndString(out,builder);
-}
-
-String OS_NormalizePath(String in,Arena* out){
-  fs::path path(CS(in));
-
-  path = fs::absolute(path);
-  path = path.lexically_normal();
-
-  String res = PushString(out,"%s",path.c_str());
-
-  if(res.data[res.size - 1] == '/'){
-    res.size -= 1;
-  }
-
-  return res;
 }
 
 static char* GetNumberRepr(u64 number){

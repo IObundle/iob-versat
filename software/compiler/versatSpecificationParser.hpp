@@ -1,14 +1,7 @@
 #pragma once
 
 #include "symbolic.hpp"
-#include "utilsCore.hpp"
-#include "verilogParsing.hpp"
-#include "versat.hpp"
-#include "parser.hpp"
-#include "debug.hpp"
 #include "merge.hpp"
-
-#include "embeddedData.hpp"
 
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Set<String> InstanceName;
@@ -33,8 +26,6 @@ struct Var{
   Range<int> index;
   bool isArrayAccess;
 };
-
-//typedef Array<Var> VarGroup;
 
 struct VarGroup{
   Array<Var> vars;
@@ -118,11 +109,6 @@ struct ModuleDef : public DefBase{
   Array<ConnectionDef> connections;
 };
 
-struct TransformDef : public DefBase{
-  Array<VarDeclaration> inputs;
-  Array<ConnectionDef> connections;
-};
-
 struct MergeDef : public DefBase{
   Array<TypeAndInstance> declarations;
   Array<SpecificMergeNode> specifics;
@@ -159,8 +145,6 @@ struct AddressGenForDef{
   Token loopVariable;
   SymbolicExpression* start;
   SymbolicExpression* end;
-  //Token start; // Can be a number or an input
-  //Token end;
 };
 
 struct SymbolicExpression;

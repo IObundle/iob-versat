@@ -1,18 +1,10 @@
 #include "accelerator.hpp"
+
 #include "declaration.hpp"
-#include "globals.hpp"
-#include "memory.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
 #include "versat.hpp"
 
-#include <unordered_map>
-#include <queue>
-
-#include "debug.hpp"
-#include "debugVersat.hpp"
-#include "configurations.hpp"
-#include "textualRepresentation.hpp"
+// TODO: We only need this because of DELAY_SIZE.
+#include "codeGeneration.hpp"
 
 #define TAG_TEMPORARY_MARK 1
 #define TAG_PERMANENT_MARK 2
@@ -1441,7 +1433,8 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
   
   Pool<FUInstance*> compositeInstances = {};
   Pool<FUInstance*> toRemove = {};
-  std::unordered_map<StaticId,int> staticToIndex;
+
+  TrieMap<StaticId,int>* staticToIndex = PushTrieMap<StaticId,int>(temp);
   SubMap* subMappingDone = PushTrieMap<SubMappingInfo,PortInstance>(globalPermanent);
   
   for(int i = 0; i < times; i++){
@@ -1464,7 +1457,7 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       break;
     }
 
-    std::unordered_map<int,int> sharedToFirstChildIndex;
+    TrieMap<int,int>* sharedToFirstChildIndex = PushTrieMap<int,int>(temp);
 
     int freeSharedIndex = GetFreeShareIndex(newAccel); //(maxSharedIndex != -1 ? maxSharedIndex + 1 : 0);
     int count = 0;
@@ -1481,16 +1474,17 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       int instSharedIndex = freeSharedIndex;
       if(inst->sharedEnable){
         // Flattening a shared unit
-        auto iter = sharedToFirstChildIndex.find(inst->sharedIndex);
+        int* val = sharedToFirstChildIndex->Get(inst->sharedIndex);
 
-        if(iter == sharedToFirstChildIndex.end()){
-          sharedToFirstChildIndex.insert({inst->sharedIndex,freeSharedIndex});
+        if(val){
+          sharedToFirstChildIndex->Insert(inst->sharedIndex,freeSharedIndex);
         } else {
-          freeSharedIndex = iter->second;
+          freeSharedIndex = *val;
         }
       }
 
-      std::unordered_map<int,int> sharedToShared;
+      TrieMap<int,int>* sharedToShared = PushTrieMap<int,int>(temp);
+      //std::unordered_map<int,int> sharedToShared;
       // Create new instance and map then
       AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
 
@@ -1523,33 +1517,33 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
             StaticId id = {};
             id.name = circuitInst->name;
             id.parent = inst->declaration;
-            staticToIndex.insert({id,shareIndex});
+            staticToIndex->Insert(id,shareIndex);
           }
 
           ShareInstanceConfig(newInst,shareIndex);
         } else if(circuitInst->sharedEnable && inst->sharedEnable){
-          auto ptr = sharedToShared.find(circuitInst->sharedIndex);
+          int* val = sharedToShared->Get(circuitInst->sharedIndex);
 
-          if(ptr != sharedToShared.end()){
-            ShareInstanceConfig(newInst,ptr->second);
+          if(val){
+            ShareInstanceConfig(newInst,*val);
           } else {
             int newIndex = GetFreeShareIndex(newAccel);
 
-            sharedToShared.insert({circuitInst->sharedIndex,newIndex});
+            sharedToShared->Insert(circuitInst->sharedIndex,newIndex);
 
             ShareInstanceConfig(newInst,newIndex);
           }
         } else if(inst->sharedEnable){ // Currently flattening instance is shared
           ShareInstanceConfig(newInst,instSharedIndex); // Always use the same inst index
         } else if(circuitInst->sharedEnable){
-          auto ptr = sharedToShared.find(circuitInst->sharedIndex);
+          int* val = sharedToShared->Get(circuitInst->sharedIndex);
 
-          if(ptr != sharedToShared.end()){
-            ShareInstanceConfig(newInst,ptr->second);
+          if(val){
+            ShareInstanceConfig(newInst,*val);
           } else {
             int newIndex = freeSharedIndex;
             
-            sharedToShared.insert({circuitInst->sharedIndex,newIndex});
+            sharedToShared->Insert(circuitInst->sharedIndex,newIndex);
 
             ShareInstanceConfig(newInst,newIndex);
             freeSharedIndex = GetFreeShareIndex(newAccel);
@@ -1700,7 +1694,6 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       }
 
       RemoveFUInstance(newAccel,*instPtr);
-      //AssertGraphValid(newAccel->allocated,temp);
     }
 
     toRemove.Clear();

@@ -1,6 +1,5 @@
 #include "filesystem.hpp"
 #include "utils.hpp"
-#include "utilsCore.hpp"
 
 static Arena storeFileInfoArena = {};
 static ArenaList<FileInfo>* storeFileInfo;
@@ -35,7 +34,7 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
     return nullptr;
   }
 
-  int size = std::min(filepath.size,4095);
+  int size = MIN(filepath.size,4095);
   strncpy(pathBuffer,filepath.data,size);
   pathBuffer[size] = '\0';
 

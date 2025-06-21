@@ -8,6 +8,15 @@
 
 FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose);
 
+Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
+
+String TrimLeftWhitespaces(String in);
+String TrimRightWhitespaces(String in);
+String TrimWhitespaces(String in);
+
+String GetCommonPath(String path1,String path2,Arena* out);
+String OS_NormalizePath(String in,Arena* out);
+
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute);

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_map>
-
 #include "utils.hpp"
 #include "memory.hpp"
 #include "verilogParsing.hpp"

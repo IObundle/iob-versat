@@ -1,9 +1,5 @@
 #pragma once
 
-#include <initializer_list>
-#include <vector>
-#include <string>
-
 #include "utils.hpp"
 
 struct Tokenizer;
@@ -169,16 +165,8 @@ bool IsOnlyWhitespace(String tok);
 bool Contains(String str,const char* toCheck);
 bool StartsWith(String toSearch,String starter);
 
-String OffsetString(String str,int amount);
-
 bool CheckFormat(const char* format,String tok);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
-
-Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
-
-String TrimLeftWhitespaces(String in);
-String TrimRightWhitespaces(String in);
-String TrimWhitespaces(String in);
 
 String PushPointingString(Arena* out,int startPos,int size);
 

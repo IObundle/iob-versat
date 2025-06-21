@@ -4,9 +4,11 @@
 #include "memory.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
-#include "utilsCore.hpp"
+#include "CEmitter.hpp"
 
 #include <dirent.h>
+
+// TODO: We might wnat to be able to generate different source files in order to take advantage of the compilation of objects. No point recompiling stuff everytime we only want to change a single enum or something like that. This is only important if the time taken to compile the sources starts to become problematic.
 
 // TODO: We are trying to be "clever" with the fact that we only parse stuff and then let outside code act on it, but I think that I just want to make stuff as simple as possible. If the parser sees a enum it immediatly registers it and the parsing code can immediatly check if a type already exists or not. I do not see the need to make this code respect lexer/parser/compiler boundaries because we immediatly fail and force the programmer to change if any parsing problem occurs. No need to synchronize or keep parsing or anything like that, just make sure that we fail fast.
 
@@ -189,6 +191,13 @@ struct GenericDef{
     TableDef* asTable;
     MapDef* asMap;
   };
+};
+    
+struct FileGroupInfo{
+  String originalRelativePath;
+  String filename;
+  String commonFolder;
+  String contentRawArrayName;
 };
 
 Pool<EnumDef> enums = {};
@@ -727,8 +736,6 @@ String EscapeCString(String content,Arena* out){
   return EndString(out,b);
 }
 
-#include "CEmitter.hpp"
-
 // 0 - exe name
 // 1 - definition file
 // 2 - output name
@@ -760,6 +767,59 @@ int main(int argc,const char* argv[]){
   
   String headerName = PushString(temp,"%s.hpp",outputPath);
   String sourceName = PushString(temp,"%s.cpp",outputPath);
+
+  // TODO: Because we are implementing more logic, we probably want to have two steps, specially because we have things like FileGroups and so on.
+  if(argc == 4){
+    if(CompareString(S8(argv[3]),S8("-d"))){
+      // Generate the .d file.
+
+      String dFileName = PushString(temp,"%s.d",outputPath);
+
+      FILE* dFile = fopen(CS(dFileName),"w");
+      
+      headerName = OS_NormalizePath(headerName,temp);
+      sourceName = OS_NormalizePath(sourceName,temp);
+
+      auto list = PushArenaList<String>(temp);
+
+      for(FileDef* def : files){
+        String path = def->filepathFromRoot;
+        String absolute = GetAbsolutePath(path,temp);
+        *list->PushElem() = absolute;
+      }
+      
+      for(FileGroupDef* def : fileGroups){
+        for(String folderPath : def->foldersFromRoot){
+          DIR* directory = opendir(SF("%.*s",UN(folderPath)));
+          Assert(directory);
+          
+          dirent* entry = nullptr;
+          while ((entry = readdir(directory)) != NULL){
+            if (entry->d_type == DT_DIR) {
+              continue;
+            }
+            
+            String fileName = PushString(temp,"%s",entry->d_name);
+
+            String fullPath = PushString(temp,"%.*s/%.*s",UN(folderPath),UN(fileName));
+            *list->PushElem() = GetAbsolutePath(fullPath,temp);
+          }
+        
+          closedir(directory);
+        }
+      }
+
+      fprintf(dFile,"%.*s %.*s:",UN(headerName),UN(sourceName));
+
+      for(String str : list){
+        fprintf(dFile," \\\n %.*s",UN(str));
+      }
+      
+      fclose(dFile);
+    }
+    
+    return 0;
+  }
 
   {
     FILE* header = fopen(CS(headerName),"w");
@@ -1115,13 +1175,6 @@ int main(int argc,const char* argv[]){
     }
 
     c->Comment(S8("Embed File Groups"));
-    
-    struct FileGroupInfo{
-      String originalRelativePath;
-      String filename;
-      String commonFolder;
-      String contentRawArrayName;
-    };
 
     for(FileGroupDef* def : fileGroups){
       auto list = PushArenaList<FileGroupInfo>(temp);

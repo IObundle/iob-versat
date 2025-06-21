@@ -1,9 +1,6 @@
 #include "dotGraphPrinting.hpp"
 
-#include "accelerator.hpp"
-#include "memory.hpp"
 #include "utils.hpp"
-#include "utilsCore.hpp"
 #include "versat.hpp"
 
 // Make sure that it matches the value of the corresponding enum

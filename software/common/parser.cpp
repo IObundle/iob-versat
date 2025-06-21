@@ -76,7 +76,6 @@ Tokenizer::Tokenizer(String content,const char* singleChars,BracketList<const ch
   keepWhitespaces = false;
   keepComments = false;
   leaky = InitArena(Kilobyte(16));
-  std::vector<const char*> specials;
 
   this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specialCharsList);
 }
@@ -963,56 +962,6 @@ bool StartsWith(String toSearch,String starter){
     }
   }
   return true;
-}
-
-String OffsetString(String str,int amount){
-  if(amount > str.size){
-    return {};
-  }
-  String res = str;
-  res.data += amount;
-  res.size -= amount;
-  return res;
-}
-
-String TrimLeftWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*start) && start < end) ++start;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
-}
-
-String TrimRightWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*end) && end > start) --end;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
-}
-
-String TrimWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*start) && start < end) ++start;
-  while(std::isspace(*end) && end > start) --end;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
 }
 
 String PushPointingString(Arena* out,int startPos,int size){

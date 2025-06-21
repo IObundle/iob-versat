@@ -1,12 +1,6 @@
 #pragma once
 
 #include "versat.hpp"
-#include "thread.hpp"
-#include <unordered_map>
-
-#include "accelerator.hpp"
-
-//#define MAX_CLIQUE_TIME 10.0f
 
 struct FUInstance;
 struct Accelerator;

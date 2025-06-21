@@ -1,16 +1,7 @@
 #include "delayCalculation.hpp"
 
-#include "accelerator.hpp"
-#include "configurations.hpp"
-#include "debug.hpp"
 #include "declaration.hpp"
-#include "dotGraphPrinting.hpp"
-#include "filesystem.hpp"
-#include "memory.hpp"
-#include "utilsCore.hpp"
 #include "versat.hpp"
-#include "debugVersat.hpp"
-#include "versatSpecificationParser.hpp"
 
 struct AccelEdgeIterator{
   AccelInfoIterator iter;

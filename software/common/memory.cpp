@@ -250,7 +250,7 @@ Byte* PushBytes(Arena* arena, size_t size){
   }
   
   arena->used += size;
-  arena->maximum = std::max(arena->maximum,arena->used);
+  arena->maximum = MAX(arena->maximum,arena->used);
   
   return ptr;
 }

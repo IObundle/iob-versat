@@ -1,8 +1,6 @@
 #pragma once
 
 #include "dotGraphPrinting.hpp"
-#include "utils.hpp"
-#include "accelerator.hpp"
 #include "configurations.hpp"
 
 // TODO: Maybe it would be best if we just made the change to versat to do delay calculation in a port by port basis instead of just looking at the units themselves. This would extract a little bit more performace, use less hardware since we can have better fixed buffer allocations and we could even simplify a bit of the code, since the "out" unit already requires port based delay calculations.
