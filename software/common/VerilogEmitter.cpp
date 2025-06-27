@@ -33,6 +33,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_INSTANCE:;
     case VASTType_BLANK:
     case VASTType_PORT_GROUP:
+    case VASTType_COMMENT:
     case VASTType_PORT_DECL: continue;
 
     case VASTType_WIRE_ASSIGN_BLOCK:{
@@ -87,6 +88,7 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     case VASTType_BLANK:
     case VASTType_ALWAYS_DECL:
     case VASTType_IF:
+    case VASTType_COMMENT:
     case VASTType_WIRE_ASSIGN_BLOCK:
     case VASTType_PORT_DECL: continue;
 
@@ -127,6 +129,7 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     case VASTType_IF:
     case VASTType_PORT_GROUP:
     case VASTType_WIRE_ASSIGN_BLOCK:
+    case VASTType_COMMENT:
     case VASTType_PORT_DECL: continue;
 
     case VASTType_INSTANCE:{
@@ -381,6 +384,13 @@ void VEmitter::Blank(){
   InsertDeclaration(blank);
 }
 
+void VEmitter::Comment(const char* expr){
+  VAST* commentDecl = PushVAST(VASTType_COMMENT,arena);
+  commentDecl->comment = PushString(arena,"%s",expr);
+
+  InsertDeclaration(commentDecl);
+}
+
 void VEmitter::Expression(const char* expr){
   VAST* exprDecl = PushVAST(VASTType_EXPR,arena);
   exprDecl->expr.content = PushString(arena,"%s",expr);
@@ -627,6 +637,24 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     for(VAST* ast : top->top.portConnections){
       Repr(ast,b,state,level + 1);
       b->PushString(",\n");
+    }
+  } break;
+
+  case VASTType_COMMENT:{
+    b->PushSpaces(level * 2);
+
+    bool hasNewlines = false;
+    for(char ch : top->comment){
+      if(ch == '\n'){
+        hasNewlines = true;
+      }
+    }
+
+    if(hasNewlines){
+      b->PushString("/* \n %.*s",UN(top->comment));
+      b->PushString("\n*/\n");
+    } else {
+      b->PushString("// %.*s",UN(top->comment));
     }
   } break;
 

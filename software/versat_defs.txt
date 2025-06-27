@@ -107,6 +107,7 @@ file HeaderTemplate      = ./software/templates/versat_header.tpl;
 file MakefileTemplate    = ./software/templates/versat_makefile.tpl;
 file TopInstanceTemplate = ./software/templates/versat_top_instance.tpl;
 file WrapperTemplate     = ./software/templates/versat_wrapper.tpl;
+file VersatTemplate      = ./software/templates/iob_versat_template.tpl;
 
 fileGroup defaultVerilogUnits = ./hardware/src/units;
 fileGroup defaultVerilogFiles = ./hardware/src | ./hardware/src/units;

@@ -1751,13 +1751,14 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   // TODO: Join the Merge and the Subunit register function common functionality into one
   FUDeclaration declInst = {};
   declInst.name = name;
-  declInst.parameters = PushArray<String>(globalPermanent,6);
-  declInst.parameters[0] = STRING("ADDR_W");
-  declInst.parameters[1] = STRING("DATA_W");
-  declInst.parameters[2] = STRING("DELAY_W");
-  declInst.parameters[3] = STRING("AXI_ADDR_W");
-  declInst.parameters[4] = STRING("AXI_DATA_W");
-  declInst.parameters[5] = STRING("LEN_W");
+  declInst.parameters = PushArray<Parameter>(globalPermanent,6);
+
+  declInst.parameters[0] = {STRING("ADDR_W"),nullptr};
+  declInst.parameters[1] = {STRING("DATA_W"),nullptr};
+  declInst.parameters[2] = {STRING("DELAY_W"),nullptr};
+  declInst.parameters[3] = {STRING("AXI_ADDR_W"),nullptr};
+  declInst.parameters[4] = {STRING("AXI_DATA_W"),nullptr};
+  declInst.parameters[5] = {STRING("LEN_W"),nullptr};
 
   Pair<Accelerator*,AcceleratorMapping*> baseCopy = CopyAcceleratorWithMapping(mergedAccel,AcceleratorPurpose_BASE,true,globalPermanent);
 

@@ -47,6 +47,11 @@ enum FUDeclarationType{
   FUDeclarationType_ITERATIVE
 };
 
+struct Parameter{
+  String name;
+  SymbolicExpression* valueExpr;
+};
+
 // TODO: A lot of duplicated data exists since the change to merge.
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
@@ -61,7 +66,7 @@ struct FUDeclaration{
   AccelInfo info;
   
   int numberDelays;
-  Array<String> parameters; // For now, only the parameters extracted from verilog files
+  Array<Parameter> parameters;
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;

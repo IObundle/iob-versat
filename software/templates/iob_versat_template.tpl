@@ -12,13 +12,14 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    parameter WDATA_W    = 32,
    parameter MEM_ADDR_OFFSET = 0
 ) (
-   input                   iob_valid_i,
-   input  [    ADDR_W-1:0] iob_addr_i,
-   input  [    DATA_W-1:0] iob_wdata_i,
-   input  [(DATA_W/8)-1:0] iob_wstrb_i,
-   output                  iob_rvalid_o,
-   output [    DATA_W-1:0] iob_rdata_o,
-   output                  iob_ready_o,
+   input                   @{prefix}iob_valid_i,
+   input  [    ADDR_W-1:0] @{prefix}iob_addr_i,
+   input  [    DATA_W-1:0] @{prefix}iob_wdata_i,
+   input  [(DATA_W/8)-1:0] @{prefix}iob_wstrb_i,
+   output                  @{prefix}iob_rvalid_o,
+   output [    DATA_W-1:0] @{prefix}iob_rdata_o,
+   output                  @{prefix}iob_ready_o,
+   @{extraIob}     
 
 `ifdef VERSAT_EXTERNAL_MEMORY
 `ifdef VERSAT_EXPORT_EXTERNAL_MEMORY
@@ -77,7 +78,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    input arst_i
 );
 
-   assign iob_ready_o = 1'b1;
+   assign @{prefix}iob_ready_o = 1'b1;
 
    localparam LEN_W = `LEN_W;
    localparam IO = `nIO;
@@ -150,7 +151,6 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    ) simpleToAxi (
       .m_wvalid_i(w_valid),
       .m_wready_o(w_ready),
-      .m_waddr_i (w_addr + MEM_ADDR_OFFSET),
       .m_wdata_i (w_data),
       .m_wstrb_i (w_strb),
       .m_wlen_i  (w_len),
@@ -158,10 +158,14 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
 
       .m_rvalid_i(r_valid),
       .m_rready_o(r_ready),
-      .m_raddr_i (r_addr + MEM_ADDR_OFFSET),
       .m_rdata_o (r_data),
       .m_rlen_i  (r_len),
       .m_rlast_o (r_last),
+
+@{AXIAddr}
+
+      //.m_waddr_i (w_addr + MEM_ADDR_OFFSET),
+      //.m_raddr_i (r_addr + MEM_ADDR_OFFSET),
 
       .axi_awid_o(axi_awid_o), //Address write channel ID.
       .axi_awaddr_o(axi_awaddr_o), //Address write channel address.
@@ -222,12 +226,15 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .AXI_ADDR_W(AXI_ADDR_W),
       .LEN_W     (LEN_W)
    ) xversat (
-      .valid (iob_valid_i),
-      .wstrb (iob_wstrb_i),
-      .addr  (iob_addr_i),
-      .wdata (iob_wdata_i),
-      .rdata (iob_rdata_o),
-      .rvalid(iob_rvalid_o),
+      .valid (@{prefix}iob_valid_i),
+      .wstrb (@{prefix}iob_wstrb_i),
+
+      @{addr}
+
+      //.addr  (@{prefix}iob_addr_i),
+      .wdata (@{prefix}iob_wdata_i),
+      .rdata (@{prefix}iob_rdata_o),
+      .rvalid(@{prefix}iob_rvalid_o),
 
 `ifdef VERSAT_EXTERNAL_MEMORY
       `include "versat_external_memory_internal_portmap.vh"

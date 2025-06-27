@@ -361,7 +361,7 @@ typedef Array<const char> String;
 
 #define UN(STR) UNPACK_SS(STR)
 
-inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
+inline String STRING(const char* str){if(str == nullptr) return {}; return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
 inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}

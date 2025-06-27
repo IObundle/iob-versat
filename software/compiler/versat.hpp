@@ -34,6 +34,16 @@ enum GraphDotFormat_{
   GRAPH_DOT_FORMAT_LATENCY = 0x40 // Outputs latency information for edges and port instances which know their latency information
 };
 
+struct WireInformation{
+  Wire wire;
+  int addr;
+  int configBitStart;
+  bool isStatic;
+  SymbolicExpression* bitExpr;
+  String bitString;
+  String sizeString;
+};
+
 struct DelayToAdd{
   Edge edge;
   String bufferName;
@@ -54,17 +64,26 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays);
 // Accelerator merging
 DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out);
 
+// Global parameters are verilog parameters that Versat assumes that exist and that it uses through the entire accelerator.
+// Units are not required to implement them but if they do, their values comes from Versat and user cannot change them.
+bool IsGlobalParameter(String name);
+
+// Returns the parameters including default parameters if the unit does not define them (defaults from the declaration)
+Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena* out);
+
 // Misc
 bool CheckValidName(String name); // Check if name can be used as identifier in verilog
 bool IsTypeHierarchical(FUDeclaration* decl);
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
 
-FUDeclaration* RegisterModuleInfo(ModuleInfo* info);
+FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out);
 
 // Accelerator functions
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times);
+
+Array<WireInformation> CalculateWireInformation(Pool<FUInstance> instances,Hashmap<StaticId,StaticData>* staticUnits,int addrOffset,Arena* out);
 
 void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out);
 void FillDeclarationWithDelayType(FUDeclaration* decl);

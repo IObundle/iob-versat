@@ -31,7 +31,7 @@ struct Expression{
   String text;
   int approximateLine;
   
-  enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
+  enum {UNDEFINED,OPERATION,IDENTIFIER,FUNCTION,LITERAL} type;
 };
 
 void PrintExpression(Expression* exp);

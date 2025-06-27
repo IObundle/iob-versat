@@ -14,6 +14,7 @@ enum FilePurpose{
   FilePurpose_VERILOG_INCLUDE,
   FilePurpose_MAKEFILE,
   FilePurpose_SOFTWARE,
+  FilePurpose_SCRIPT,
   FilePurpose_MISC,
   FilePurpose_DEBUG_INFO
 };

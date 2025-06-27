@@ -1116,18 +1116,12 @@ static void PrintExpression(Expression* exp,int level){
   case Expression::IDENTIFIER:{
     printf("IDENTIFIER\n");
   }break;
-  case Expression::COMMAND:{
-    printf("COMMAND\n");
+  case Expression::FUNCTION:{
+    printf("FUNCTION\n");
   }break;
   case Expression::LITERAL:{
     Value val = exp->val;
     printf("LITERAL: %ld\n",val.number);
-  }break;
-  case Expression::ARRAY_ACCESS:{
-    printf("ARRAY_ACCESS\n");
-  }break;
-  case Expression::MEMBER_ACCESS:{
-    printf("MEMBER_ACCESS\n");
   }break;
   }
 

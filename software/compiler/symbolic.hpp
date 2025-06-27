@@ -50,7 +50,6 @@ void Print(SymbolicExpression* expr,bool printNewLine = false);
 void Repr(StringBuilder* builder,SymbolicExpression* expr);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
 
-
 int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values);
 
 SymbolicExpression* PushLiteral(Arena* out,int value,bool negate = false);
@@ -94,6 +93,7 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
 
 SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out);
+SymbolicExpression* ReplaceVariables(SymbolicExpression* expr,Hashmap<String,SymbolicExpression*>* values,Arena* out);
 
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrint = false);
 SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out);

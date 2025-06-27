@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 
 module VWrite #(
-   //parameter SIZE_W     = 32, TODO: Completely forgot why we have SIZE_W in the first place.
    parameter DATA_W     = 32, // Internal datapath width
    parameter ADDR_W     = 16,
    parameter PERIOD_W   = 14, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)

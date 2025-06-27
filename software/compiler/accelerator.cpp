@@ -5,6 +5,7 @@
 
 // TODO: We only need this because of DELAY_SIZE.
 #include "codeGeneration.hpp"
+#include "symbolic.hpp"
 
 #define TAG_TEMPORARY_MARK 1
 #define TAG_PERMANENT_MARK 2
@@ -647,7 +648,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   return size;
 }
 
-VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
+VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out){
   TEMP_REGION(temp,nullptr);
   VersatComputedValues res = {};
 
@@ -656,7 +657,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   int configBits = 0;
   int numberUnits = 0;
   int numberDones = 0;
-  
+
   auto builder = StartArray<ExternalMemoryInterface>(temp);
   
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
@@ -746,6 +747,8 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA){
   res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
   
   res.numberConnections = info->numberConnections;
+
+  //res.configExpr = Normalize(expr,out);
   
   return res;
 }
@@ -755,7 +758,7 @@ bool SetParameter(FUInstance* inst,String parameterName,String parameterValue){
   int paramSize = decl->parameters.size;
   
   for(int i = 0; i < paramSize; i++){
-    if(CompareString(decl->parameters[i],parameterName)){
+    if(CompareString(decl->parameters[i].name,parameterName)){
       inst->parameterValues[i].val = parameterValue;
       return true;
     }

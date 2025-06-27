@@ -5,15 +5,16 @@ static Arena storeFileInfoArena = {};
 static ArenaList<FileInfo>* storeFileInfo;
 
 const char* FilePurpose_Name(FilePurpose p){
-  switch(p){
+  FULL_SWITCH(p){
   case FilePurpose_VERILOG_COMMON_CODE: return "VERILOG_COMMON_CODE";
   case FilePurpose_VERILOG_CODE: return "VERILOG_CODE";
   case FilePurpose_VERILOG_INCLUDE: return "VERILOG_INCLUDE";
   case FilePurpose_MAKEFILE: return "MAKEFILE";
   case FilePurpose_SOFTWARE: return "SOFTWARE";
+  case FilePurpose_SCRIPT: return "SCRIPT";
   case FilePurpose_MISC: return "MISC";
   case FilePurpose_DEBUG_INFO: return "DEBUG_INFO";
-  }
+  } END_SWITCH()
   NOT_POSSIBLE();
 }
 

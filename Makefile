@@ -59,7 +59,7 @@ $(BUILD_DIR)/embedData: $(VERSAT_TOOLS_DIR)/embedData.cpp $(VERSAT_COMMON_OBJS) 
 	$(COMPILE_TOOL)
 
 # Generate meta code
-$(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embedData
+$(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData.d $(BUILD_DIR)/embedData
 	$(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData
 
 # Compile object files
@@ -88,7 +88,7 @@ clean:
 	-rm -fr build
 	-rm -f *.a versat versat.d
 
-.PHONY: versat
+.PHONY: versat $(BUILD_DIR)/embeddedData.d
 
 .SUFFIXES:
 

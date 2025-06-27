@@ -5,8 +5,7 @@ HARDWARE_FOLDER := @{hardwareFolder}
 VHEADER := V$(TYPE_NAME).h
 SOFTWARE_FOLDER := .
 HARDWARE_SRC := @{hardwareUnits}
-
-HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v)
+HARDWARE_SRC += @{moduleUnits}
 VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)
 INCLUDE := -I$(HARDWARE_FOLDER)
 

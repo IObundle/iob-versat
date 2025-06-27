@@ -16,6 +16,8 @@ struct Options{
   String softwareOutputFilepath;
   String debugPath;
 
+  String prefixIObPort;
+  
   String generetaSourceListName; // TODO: Not yet implemented
   
   String specificationFilepath;
@@ -23,7 +25,6 @@ struct Options{
   int databusAddrSize; // AXI_ADDR_W - used to be bitSize
   int databusDataSize; // AXI_DATA_W
 
-  bool copyUnitsConvenience; // TODO: Not yet implemented
   bool addInputAndOutputsToTop;
   bool debug;
   bool shadowRegister;
@@ -33,6 +34,9 @@ struct Options{
   bool disableDelayPropagation;
   bool useDMA;
   bool exportInternalMemories;
+
+  bool extraIOb;
+  bool useSymbolAddress; // If the system removes the LSB bits of the address (alignment info) and if we must generate code to account for that.
 };
 
 struct DebugState{

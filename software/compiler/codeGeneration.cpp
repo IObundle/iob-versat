@@ -4,6 +4,7 @@
 #include "VerilogEmitter.hpp"
 #include "declaration.hpp"
 #include "embeddedData.hpp"
+#include "filesystem.hpp"
 #include "symbolic.hpp"
 #include "addressGen.hpp"
 #include "globals.hpp"
@@ -52,7 +53,7 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
 String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   TEMP_REGION(temp,out);
   FUDeclaration* decl = inst->declaration;
-  Array<String> parameters = decl->parameters;
+  Array<Parameter> parameters = decl->parameters;
   int size = parameters.size;
 
   if(size == 0){
@@ -66,7 +67,7 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   bool insertedOnce = false;
   for(int i = 0; i < size; i++){
     ParameterValue v = inst->parameterValues[i];
-    String parameter = parameters[i];
+    Parameter parameter = parameters[i];
     
     if(!v.val.size){
       continue;
@@ -75,7 +76,7 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
     if(insertedOnce){
       builder->PushString(",");
     }
-    builder->PushString(".%.*s(%.*s)",UNPACK_SS(parameter),UNPACK_SS(v.val));
+    builder->PushString(".%.*s(%.*s)",UNPACK_SS(parameter.name),UNPACK_SS(v.val));
     insertedOnce = true;
   }
   builder->PushString(")");
@@ -906,9 +907,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
 
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
   Pool<FUInstance> instances = accel->allocated;
-  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
-
-  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
   
   Pool<FUInstance> nodes = accel->allocated;
   for(FUInstance* node : nodes){
@@ -918,59 +917,10 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
       SetParameter(node,STRING("LEN_W"),STRING("LEN_W"));
     }
   }
-  
-  Array<InstanceInfo*> allSameLevel = GetAllSameLevelUnits(&info,0,0,temp);
-  auto builder = StartArray<Array<int>>(temp);
-  for(InstanceInfo* p : allSameLevel){
-    *builder.PushElem() = p->individualWiresGlobalConfigPos;
-  }
-  Array<Array<int>> wireIndexByInstanceGood = EndArray(builder);
-  Array<Wire> configs = topLevelDecl->configs;
-  
-  int configBit = 0;
-  int addr = val.versatConfigs;
-  auto arr = StartArray<WireInformation>(temp);
-  for(auto n : nodes){
-    for(Wire w : n->declaration->configs){
-      WireInformation info = {};
-      info.wire = w;
-      info.configBitStart = configBit;
-      configBit += w.bitSize;
-      info.addr = 4 * addr++;
-      *arr.PushElem() = info;
-    }
-  }
-  for(Pair<StaticId,StaticData*> n : staticUnits){
-    for(Wire w : n.data->configs){
-      WireInformation info = {};
-      info.wire = w;
-      info.wire.name = ReprStaticConfig(n.first,&w,temp2);
-      info.configBitStart = configBit;
-      configBit += w.bitSize;
-      info.addr = 4 * addr++;
-      info.isStatic = true;
-      *arr.PushElem() = info;
-    }
-  }
-  int delaysInserted = 0;
-  for(auto n : nodes){
-    for(int i = 0; i < n->declaration->NumberDelays(); i++){
-      Wire wire = {};
-      wire.bitSize = DELAY_SIZE;
-      wire.name = PushString(temp2,"Delay%d",delaysInserted++);
-      wire.stage = VersatStage_COMPUTE;
 
-      WireInformation info = {};
-      info.wire = wire;
-      info.configBitStart = configBit;
-      configBit += DELAY_SIZE;
-      info.addr = 4 * addr++;
-      *arr.PushElem() = info;
-    }
-  }
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
+  Array<WireInformation> wireInfo = CalculateWireInformation(nodes,staticUnits,val.versatConfigs,temp);
   
-  auto test = EndArray(arr);
-
   VEmitter* m = StartVCode(temp);
 
   // VARS
@@ -1002,7 +952,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
 
     m->Input("change_config_pulse");
 
-    for(WireInformation info : test){
+    for(WireInformation info : wireInfo){
       if(info.isStatic){
         m->Output(info.wire.name,info.wire.bitSize);
       }
@@ -1019,7 +969,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
 
     m->Assign("config_data_o","configdata");
 
-    for(WireInformation info : test){
+    for(WireInformation info : wireInfo){
       Wire w = info.wire;
       if(w.stage == VersatStage_COMPUTE || w.stage == VersatStage_WRITE){
         m->Reg(SF("Compute_%.*s",UN(w.name)),w.bitSize);
@@ -1049,7 +999,22 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
         m->If("rst_i");
         m->Set("shadow_configdata",0);
         m->ElseIf("data_write & !memoryMappedAddr");
-        for(WireInformation info : test){
+        
+        for(WireInformation info : wireInfo){
+          - LEFT HERE - We need to generate a generic for loop that handle arguments for AXI_ADDR_W, AXI_DATA_W and stuff like that.
+          - We probably can also generate a loop for values that are not divided by 8 by having the loop iterate over every bit. Something like:
+          
+          for(i = 0; i < DELAY_W; i++){
+            if(strobe[i/8]){
+              // ....
+            }
+          }
+          - Basically we need to descent into bit level in order for this to work.
+          
+          if(info.bitExpr->type != SymbolicExpressionType_LITERAL){
+            m->Comment("HERE");
+          }
+          
           m->If(SF("address[%d:0] == %d",configurationAddressBits + 1,info.addr));
           EmitStrobe(m,"data_wstrb","shadow_configdata",info.configBitStart,"data_data",info.wire.bitSize);
           m->EndIf();
@@ -1064,12 +1029,12 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
         m->If("rst_i");
         m->Set("configdata",0);
         m->ElseIf("change_config_pulse");
-        for(WireInformation info : test){
+        for(WireInformation info : wireInfo){
           if(info.wire.stage == VersatStage_READ){
             m->Set(SF("configdata[%d+:%d]",info.configBitStart,info.wire.bitSize),SF("shadow_configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
           }
         }
-        for(WireInformation info : test){
+        for(WireInformation info : wireInfo){
           if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
             m->Set(SF("configdata[%d+:%d]",info.configBitStart,info.wire.bitSize),SF("Compute_%.*s",UN(info.wire.name)));
           }
@@ -1083,18 +1048,18 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     m->AlwaysBlock("clk_i","rst_i");
     {
       m->If("rst_i");
-      for(WireInformation info : test){
+      for(WireInformation info : wireInfo){
         if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Compute_%.*s",UN(info.wire.name)),"0");
         }
       }
       m->ElseIf("change_config_pulse");
-      for(WireInformation info : test){
+      for(WireInformation info : wireInfo){
         if(info.wire.stage == VersatStage_COMPUTE){
           m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("shadow_configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
         }
       }
-      for(WireInformation info : test){
+      for(WireInformation info : wireInfo){
         if(info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("Write_%.*s",UN(info.wire.name)));
         }
@@ -1107,13 +1072,13 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     m->AlwaysBlock("clk_i","rst_i");
     {
       m->If("rst_i");
-      for(WireInformation info : test){
+      for(WireInformation info : wireInfo){
         if(info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Write_%.*s",UN(info.wire.name)),"0");
         }
       }
       m->ElseIf("change_config_pulse");
-      for(WireInformation info : test){
+      for(WireInformation info : wireInfo){
         if(info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Write_%.*s",UN(info.wire.name)),SF("shadow_configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
         }
@@ -1122,7 +1087,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     }
     m->EndBlock();
 
-    for(WireInformation info : test){
+    for(WireInformation info : wireInfo){
       if(info.isStatic){
         m->Assign(info.wire.name,PushString(temp,"configdata[%d+:%d]",info.configBitStart,info.wire.bitSize));
       }
@@ -2242,7 +2207,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
     structs = GenerateStructs(allStructs,STRING("Config"),true,temp);
   }
 
-  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA);
+  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
   
   // TODO: A lot of cruft in this function
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
@@ -2429,66 +2394,15 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
   Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
 
-  Pool<FUInstance> nodes = accel->allocated;
-  Array<String> parameters = PushArray<String>(temp,nodes.Size());
-  for(int i = 0; i < nodes.Size(); i++){
-    parameters[i] = GenerateVerilogParameterization(nodes.Get(i),temp);
+  Pool<FUInstance> instances = accel->allocated;
+  Array<String> parameters = PushArray<String>(temp,instances.Size());
+  for(int i = 0; i < instances.Size(); i++){
+    parameters[i] = GenerateVerilogParameterization(instances.Get(i),temp);
   }
 
   Array<InstanceInfo*> topLevelUnits = GetAllSameLevelUnits(&info,0,0,temp);
   
-  auto instances = nodes;
-  
-  int configBit = 0;
-  int addr = val.versatConfigs;
-  
-  // TODO: We are still relying on explicit data contained inside the 
-  // Join configs statics and delays into a single array.
-  // Simplifies the code gen, since we generate the same code regardless of the wire origin.
-  // Only wire, position and stuff like that matters
-  auto arr = StartArray<WireInformation>(temp);
-  for(auto n : nodes){
-    for(Wire w : n->declaration->configs){
-      WireInformation info = {};
-      info.wire = w;
-      info.configBitStart = configBit;
-      configBit += w.bitSize;
-      info.addr = 4 * addr++;
-      *arr.PushElem() = info;
-    }
-  }
-  for(Pair<StaticId,StaticData*> n : staticUnits){
-    for(Wire w : n.data->configs){
-      WireInformation info = {};
-      info.wire = w;
-      info.wire.name = ReprStaticConfig(n.first,&w,temp2);
-      info.configBitStart = configBit;
-      configBit += w.bitSize;
-      info.addr = 4 * addr++;
-      info.isStatic = true;
-      *arr.PushElem() = info;
-    }
-  }
-  int delaysInserted = 0;
-  for(auto n : nodes){
-    for(int i = 0; i < n->declaration->NumberDelays(); i++){
-      Wire wire = {};
-      wire.bitSize = DELAY_SIZE;
-      wire.name = PushString(temp2,"Delay%d",delaysInserted++);
-      wire.stage = VersatStage_COMPUTE;
-
-      WireInformation info = {};
-      info.wire = wire;
-      info.configBitStart = configBit;
-      configBit += DELAY_SIZE;
-      info.addr = 4 * addr++;
-      *arr.PushElem() = info;
-    }
-  }
-  
-  auto test = EndArray(arr);
-
-  auto wireInfo = test;
+  Array<WireInformation> wireInfo = CalculateWireInformation(instances,staticUnits,val.versatConfigs,temp);
   
   // Top accelerator
   {
@@ -2527,7 +2441,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
 
     {
       VEmitter* m = StartVCode(temp);
-      EmitConnectOutputsToOut(m,nodes);
+      EmitConnectOutputsToOut(m,instances);
       auto b = StartString(temp);
       Repr(EndVCode(m),b);
       String content = EndString(temp,b);
@@ -2539,7 +2453,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       Array<Wire> configs = topLevelDecl->configs;
 
       VEmitter* m = StartVCode(temp);
-      EmitTopLevelInstanciateUnits(m,val,nodes,topLevelDecl,wireIndexByInstanceGood,configs);
+      EmitTopLevelInstanciateUnits(m,val,instances,topLevelDecl,wireIndexByInstanceGood,configs);
       auto b = StartString(temp);
       Repr(EndVCode(m),b);
       String content = EndString(temp,b);
@@ -2865,7 +2779,8 @@ assign data_wstrb = wstrb;
   }
 
   // Top configurations
-  {
+  // NOTE: Versat instance does not instantiate configurations if not config bits and therefore we do not emit it (simplifies logic has otherwise we would have to worry about emitting something passable. This way we can just skip stuff).
+  if(val.configurationBits){
     FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_configurations.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
 
@@ -3311,7 +3226,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("stateStructs",content);
     }
     
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       c->Struct(S8("AcceleratorState"));
@@ -3324,7 +3239,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("acceleratorState",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
       for(TypeStructInfo info : addressStructures){
         c->Define(PushString(temp,"VERSAT_DEFINED_%.*sAddr",UN(info.name)));
@@ -3342,7 +3257,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("addrStructs",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
       c->Struct(S8("AcceleratorConfig"));
 
@@ -3365,7 +3280,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("acceleratorConfig",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
       c->Struct(S8("AcceleratorStatic"));
 
@@ -3378,7 +3293,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("acceleratorStatic",content);
     }
     
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
       c->Struct(S8("AcceleratorDelay"));
       {
@@ -3399,7 +3314,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("acceleratorDelay",content);
     }
     
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       for(Pair<String,int> p : allMem){
@@ -3410,7 +3325,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("memMappedAddresses",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       c->VarBlock();
@@ -3423,7 +3338,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("addrBlock",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       c->VarBlock();
@@ -3436,7 +3351,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("delayBlock",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       if(stateStructs.size > 0){
@@ -3449,7 +3364,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("accelStateDecl",content);
     }
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       for(auto elem : allStaticsVerilatorSide){
@@ -3460,7 +3375,7 @@ assign data_wstrb = wstrb;
       TemplateSetString("allStaticDefines",content);
     }
     
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
 
       if(isSimple){
@@ -3480,7 +3395,7 @@ assign data_wstrb = wstrb;
     auto differences = differenceArray;
     auto mergeMux = muxInfo;
 
-    if(true){
+    {
       CEmitter* c = StartCCode(temp);
       
       if(names.size > 1){
@@ -4108,7 +4023,19 @@ if(SimulateDatabus){
 
       TemplateSetString("hardwareUnits",EndString(temp,s));
     }
-  
+
+    {
+      auto s = StartString(temp);
+      for(FUDeclaration* decl : globalDeclarations){
+        if(decl->type == FUDeclarationType_COMPOSITE || decl->type == FUDeclarationType_MERGED){
+          s->PushString("$(HARDWARE_FOLDER)/%.*s.v ",UN(decl->name));
+        }
+      }
+
+      TemplateSetString("moduleUnits",EndString(temp,s));
+    }
+
+    
     TemplateSetNumber("databusAddrSize",globalOptions.databusAddrSize);
     TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
 
@@ -4124,11 +4051,48 @@ if(SimulateDatabus){
 
     ProcessTemplateSimple(output,META_MakefileTemplate_Content);
   }
+
+  {
+    // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
+    String versatPath = PushString(temp,"%.*s/iob_versat.v",UNPACK_SS(globalOptions.hardwareOutputFilepath));
+    FILE* output = OpenFileAndCreateDirectories(versatPath,"w",FilePurpose_VERILOG_CODE);
+    DEFER_CLOSE_FILE(output);
+
+    ClearTemplateEngine();
+
+    TemplateSetString("prefix",globalOptions.prefixIObPort);
+    
+    if(globalOptions.extraIOb){
+      TemplateSetString("extraIob",S8("iob_csrs_iob_rready_i,"));
+    } else {
+      TemplateSetString("extraIob",{});
+    }
+
+    if(globalOptions.useSymbolAddress){
+      TemplateSetString("AXIAddr",R"FOO(
+      .m_waddr_i({2'b00,w_addr[AXI_ADDR_W-3:2]} + MEM_ADDR_OFFSET),
+      .m_raddr_i({2'b00,r_addr[AXI_ADDR_W-3:2]} + MEM_ADDR_OFFSET),
+)FOO");
+    } else {
+      TemplateSetString("AXIAddr",R"FOO(
+      .m_waddr_i(w_addr + MEM_ADDR_OFFSET),
+      .m_raddr_i(r_addr + MEM_ADDR_OFFSET),
+)FOO");
+    }
+
+    if(globalOptions.useSymbolAddress){
+      TemplateSetString("addr",PushString(temp,".addr({%.*siob_addr_i,2'b00}),",UN(globalOptions.prefixIObPort)));
+    } else {
+      TemplateSetString("addr",PushString(temp,".addr(%.*siob_addr_i),",UN(globalOptions.prefixIObPort)));
+    }
+    
+    ProcessTemplateSimple(output,META_VersatTemplate_Content);
+  }
   
   {
     // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
     String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
-    FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_MISC);
+    FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_SCRIPT);
     DEFER_CLOSE_FILE(output);
 
     fprintf(output,"%.*s",UN(META_GetVerilatorRoot_Content));
@@ -4138,11 +4102,13 @@ if(SimulateDatabus){
 
   {
     String extractVerilatedSignalPath = PushString(temp,"%.*s/ExtractVerilatedSignals.py",UNPACK_SS(globalOptions.softwareOutputFilepath));
-    FILE* output = OpenFileAndCreateDirectories(extractVerilatedSignalPath,"w",FilePurpose_MISC);
+    FILE* output = OpenFileAndCreateDirectories(extractVerilatedSignalPath,"w",FilePurpose_SCRIPT);
     DEFER_CLOSE_FILE(output);
 
     fprintf(output,"%.*s",UNPACK_SS(META_ExtractVerilatedSignals_Content));
     fflush(output);
     OS_SetScriptPermissions(output);
   }
+
+
 }

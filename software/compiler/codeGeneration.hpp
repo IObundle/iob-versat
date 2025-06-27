@@ -52,13 +52,6 @@ struct MuxInfo{
   InstanceInfo* info;
 };
 
-struct WireInformation{
-  Wire wire;
-  int addr;
-  int configBitStart;
-  bool isStatic;
-};
-
 struct SameMuxEntities{
   int configPos;
   InstanceInfo* info;

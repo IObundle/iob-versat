@@ -280,13 +280,13 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,axi_
             super()._post_setup()
 
             # MARKED
-            shutil.copytree(
-                f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
-            )
+            #shutil.copytree(
+            #    f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
+            #)
             # MARKED
-            shutil.copytree(
-                f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
-            )
+            #shutil.copytree(
+            #    f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
+            #)
             shutil.rmtree(f"{build_dir}/software/common")
             shutil.rmtree(f"{build_dir}/software/compiler")
             shutil.rmtree(f"{build_dir}/software/templates")

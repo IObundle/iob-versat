@@ -17,6 +17,7 @@ enum VASTType{
   VASTType_SET,
   VASTType_EXPR,
   VASTType_ALWAYS_DECL,
+  VASTType_COMMENT,
   VASTType_INSTANCE,
   VASTType_BLANK
 };
@@ -35,6 +36,8 @@ struct VAST{
   VASTType type;
 
   union{
+    String comment;
+
     struct{
       String timescaleExpression;
       ArenaList<String>* includes;
@@ -154,6 +157,7 @@ struct VEmitter{
   void Assign(String name,String expr);
   
   void Blank();
+  void Comment(const char* expr);
   void Expression(const char* expr);
 
   // Kinda hardcoded for now, we mostly only care about clk and rst signals.

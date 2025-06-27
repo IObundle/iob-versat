@@ -202,6 +202,8 @@ struct VersatComputedValues{
   int externalMemoryInterfaces;
   int totalExternalMemory;  
 
+  //SymbolicExpression* configExpr;
+  
   //bool signalLoop;
 };
 
@@ -233,8 +235,8 @@ struct EdgeIterator{
 };
 
 // Strange forward declare
-template<typename T> struct WireTemplate;
-typedef WireTemplate<int> Wire;
+//template<typename T> struct WireTemplate;
+//typedef WireTemplate<int> Wire;
 
 // TODO: Kinda not good, need to look at the wrapper again to simplif this part.
 //       Too many stuff is dependent on explicit data and complications are starting to pile up.
@@ -315,7 +317,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 
 // This computes the values for the top accelerator only.
 // Different of a regular accelerator because it can add more configs for DMA and other top level things
-VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA);
+VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA,Arena* out);
 
 // Returns false if parameter does not exist 
 bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);

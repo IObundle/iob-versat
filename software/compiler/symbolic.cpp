@@ -1725,6 +1725,44 @@ SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace
   NOT_POSSIBLE();
 }
 
+SymbolicExpression* ReplaceVariables(SymbolicExpression* base,Hashmap<String,SymbolicExpression*>* values,Arena* out){
+  switch(base->type){
+  case SymbolicExpressionType_LITERAL:
+    return SymbolicDeepCopy(base,out);
+  case SymbolicExpressionType_VARIABLE: {
+    SymbolicExpression** exists = values->Get(base->variable);
+    
+    if(exists){
+      return SymbolicDeepCopy(*exists,out);
+    } else {
+      return SymbolicDeepCopy(base,out);
+    }
+  } break;
+  case SymbolicExpressionType_FUNC:
+    //WARN_CODE(); // Treating this the same as the sum or mul case.
+  case SymbolicExpressionType_SUM:
+  case SymbolicExpressionType_MUL: {
+    Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,base->terms.size);
+    for(int i = 0; i < children.size; i++){
+      children[i] = ReplaceVariables(base->terms[i],values,out);
+    }
+
+    SymbolicExpression* copy = CopyExpression(base,out);
+    copy->terms = children;
+
+    return copy;
+  }
+  case SymbolicExpressionType_DIV:{
+    SymbolicExpression* res = CopyExpression(base,out);
+    res->top = ReplaceVariables(base->top,values,out);
+    res->bottom = ReplaceVariables(base->bottom,values,out); 
+
+    return res;
+  } break;
+  }
+  NOT_POSSIBLE();
+}
+
 Array<String> ExtractAllVariables(SymbolicExpression* top,Arena* out){
   TEMP_REGION(temp,out);
   auto Recurse = [](auto Recurse,SymbolicExpression* expr,ArenaList<String>* accum){

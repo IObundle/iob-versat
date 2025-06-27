@@ -386,7 +386,7 @@ static Expression* VerilogParseFactor(Tokenizer* tok,Arena* out){
     *expr = {};
 
     expr->id = mathFunctionName;
-    expr->type = Expression::COMMAND;
+    expr->type = Expression::FUNCTION;
     expr->expressions = PushArray<Expression*>(out,description.amountOfParameters);
 
     tok->AssertNextToken("(");
@@ -445,7 +445,7 @@ static Value Eval(Expression* expr,TrieMap<String,Value>* map){
   case Expression::LITERAL:{
     return expr->val;
   }break;
-  case Expression::COMMAND:{ // Called Command but for verilog it is actually a math function call
+  case Expression::FUNCTION:{ // Called Command but for verilog it is actually a math function call
     String functionName = expr->id;
 
     Expression* argument = expr->expressions[0];
@@ -462,8 +462,6 @@ static Value Eval(Expression* expr,TrieMap<String,Value>* map){
     
     return result;
   } break;
-  case Expression::ARRAY_ACCESS:
-  case Expression::MEMBER_ACCESS:
   case Expression::UNDEFINED:
     NOT_POSSIBLE("None of these should appear in parameters");
   }
@@ -698,8 +696,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       if(CompareString(attribute,"source")){
         isSource = true;
       } else {
-        // Maybe log it as a potential error ?
-        
+        // TODO: Report unused attribute.
         //NOT_IMPLEMENTED("Should not give an error"); // Unknown attribute, error for now
       }
 
@@ -714,7 +711,6 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       module.isSource = isSource;
       *modules->PushElem() = module;
 
-      //isSource = false; 
       break; // For now, only parse the first module found
     }
 
@@ -981,9 +977,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
       }
     }
   } break;
-  case Expression::COMMAND:; 
-  case Expression::ARRAY_ACCESS:; 
-  case Expression::MEMBER_ACCESS:; 
+  case Expression::FUNCTION:; 
   case Expression::UNDEFINED:; 
   }
 
