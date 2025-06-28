@@ -40,8 +40,6 @@ struct WireInformation{
   int configBitStart;
   bool isStatic;
   SymbolicExpression* bitExpr;
-  String bitString;
-  String sizeString;
 };
 
 struct DelayToAdd{

@@ -271,7 +271,8 @@ template<> class std::hash<StaticId>{
 };
 
 struct StaticData{
-   Array<Wire> configs;
+  FUDeclaration* decl; // Declaration of unit that contains the given configs
+  Array<Wire> configs;
 };
 
 struct StaticInfo{

@@ -138,6 +138,14 @@ void Print(SymbolicExpression* expr,bool printNewLine){
   }
 }
 
+char* DebugRepr(SymbolicExpression* expr){
+  TEMP_REGION(temp,nullptr);
+
+  String str = PushRepresentation(expr,temp);
+
+  return SF("%.*s",UN(str));
+}
+
 void Repr(StringBuilder* builder,SymbolicExpression* expr){
   BuildRepresentation(builder,expr,true,0);
 }
@@ -1818,7 +1826,6 @@ void CheckIfCorrect(SymbolicExpression* start,SymbolicExpression* end){
       return;
     }
   }
-  
 }
 
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrint){

@@ -140,8 +140,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
 
     int size = EvalRange(wire.bitSize,instantiated);
 
-    // MARK
-    
     configs[i].name = info->configs[i].name;
     configs[i].bitSize = size;
     configs[i].isStatic = false;
@@ -387,12 +385,12 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   // Default parameters given to all modules. Parameters need a proper revision, but need to handle parameters going up in the hierarchy
 
   res->parameters = PushArray<Parameter>(permanent,6);
-  res->parameters[0] = {STRING("ADDR_W"),nullptr};
-  res->parameters[1] = {STRING("DATA_W"),nullptr};
-  res->parameters[2] = {STRING("DELAY_W"),nullptr};
-  res->parameters[3] = {STRING("AXI_ADDR_W"),nullptr};
-  res->parameters[4] = {STRING("AXI_DATA_W"),nullptr};
-  res->parameters[5] = {STRING("LEN_W"),nullptr};
+  res->parameters[0] = {STRING("ADDR_W"),PushLiteral(permanent,32)};
+  res->parameters[1] = {STRING("DATA_W"),PushLiteral(permanent,32)};
+  res->parameters[2] = {STRING("DELAY_W"),PushLiteral(permanent,7)};
+  res->parameters[3] = {STRING("AXI_ADDR_W"),PushLiteral(permanent,32)};
+  res->parameters[4] = {STRING("AXI_DATA_W"),PushLiteral(permanent,32)};
+  res->parameters[5] = {STRING("LEN_W"),PushLiteral(permanent,20)};
   
   if(circuit->allocated.Size() == 0){
     res->baseCircuit = circuit;
@@ -442,11 +440,9 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
 #endif
   
   res->staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
-
+  
   // Start by collecting all the existing static allocated units in subinstances
   for(FUInstance* inst : res->fixedDelayCircuit->allocated){
-    Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
-    
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
@@ -459,16 +455,18 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
       id.parent = res;
 
       StaticData data = {};
+      data.decl = inst->declaration;
+      data.configs = PushArray<Wire>(permanent,inst->declaration->configs.size);
 
-      Array<Wire> wires = PushArray<Wire>(permanent,inst->declaration->configs.size);
-
+      // We need to instantiate the verilog parameters in here.
+      Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
       for(int i = 0; i <  inst->declaration->configs.size; i++){
         Wire w  =  inst->declaration->configs[i];
 
-        wires[i] = w;
-        wires[i].sizeExpr = ReplaceVariables(w.sizeExpr,params,permanent);
+        data.configs[i] = w;
+        data.configs[i].sizeExpr = ReplaceVariables(w.sizeExpr,params,permanent);
       }
-      
+
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
@@ -626,6 +624,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
       id.parent = registeredType;
 
       StaticData data = {};
+      data.decl = inst->declaration;
       data.configs = inst->declaration->configs;
       registeredType->staticUnits->InsertIfNotExist(id,data);
     }
@@ -677,18 +676,17 @@ bool IsGlobalParameter(String name){
 }
 
 Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena* out){
-  auto map = PushHashmap<String,SymbolicExpression*>(out,inst->parameterValues.size);
   FUDeclaration* decl = inst->declaration;
+
+  auto map = PushHashmap<String,SymbolicExpression*>(out,decl->parameters.size);
   
-  for(int i = 0; i <  decl->parameters.size; i++){
+  for(int i = 0; i < decl->parameters.size; i++){
     Parameter param = decl->parameters[i];
     ParameterValue val = inst->parameterValues[i];
 
     if(!IsGlobalParameter(param.name)){
       if(Empty(val.val)){
-        if(param.valueExpr){
-          map->Insert(param.name,param.valueExpr);
-        }
+        map->Insert(param.name,param.valueExpr);
       } else {
         map->Insert(param.name,ParseSymbolicExpression(val.val,out));
       }
@@ -710,8 +708,6 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
   int configBit = 0;
   int addr = addrOffset;
   for(auto n : nodes){
-    Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(n,temp);
-
     for(Wire w : n->declaration->configs){
       WireInformation info = {};
       info.wire = w;
@@ -720,28 +716,33 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.addr = 4 * addr++;
 
       info.bitExpr = Normalize(expr,out);
-      info.bitString = PushRepresentation(info.bitExpr,out);
-      info.sizeString = PushRepresentation(w.sizeExpr,out);
       
-      expr = SymbolicAdd(expr,w.sizeExpr,temp);
+      expr = SymbolicAdd(info.bitExpr,w.sizeExpr,temp);
       *list->PushElem() = info;
     }
   }
   for(Pair<StaticId,StaticData*> n : staticUnits){
+    FUDeclaration* decl = n.second->decl;
+    Hashmap<String,SymbolicExpression*>* defaultParams = PushHashmap<String,SymbolicExpression*>(temp,decl->parameters.size);
+
+    for(Parameter p : decl->parameters){
+      defaultParams->Insert(p.name,p.valueExpr);
+    }
+    
     for(Wire w : n.data->configs){
       WireInformation info = {};
       info.wire = w;
       info.wire.name = ReprStaticConfig(n.first,&w,out);
+      info.wire.sizeExpr = ReplaceVariables(w.sizeExpr,defaultParams,temp);
+
       info.configBitStart = configBit;
       configBit += w.bitSize;
       info.addr = 4 * addr++;
       info.isStatic = true;
 
       info.bitExpr = Normalize(expr,out);
-      info.bitString = PushRepresentation(info.bitExpr,out);
-      info.sizeString = PushRepresentation(w.sizeExpr,out);
 
-      expr = SymbolicAdd(expr,w.sizeExpr,temp);
+      expr = SymbolicAdd(info.bitExpr,info.wire.sizeExpr,temp);
 
       *list->PushElem() = info;
     }
@@ -756,15 +757,15 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
 
       WireInformation info = {};
       info.wire = wire;
+      info.wire.sizeExpr = PushVariable(globalPermanent,S8("DELAY_W"));
+      
       info.configBitStart = configBit;
       configBit += DELAY_SIZE;
       info.addr = 4 * addr++;
 
-      info.bitExpr = Normalize(expr,out); // SymbolicDeepCopy(expr,out);
-      info.bitString = PushRepresentation(info.bitExpr,out);
-      info.sizeString = PushRepresentation(PushVariable(temp,S8("DELAY_W")),out);
+      info.bitExpr = Normalize(expr,out);
 
-      expr = SymbolicAdd(expr,PushVariable(temp,S8("DELAY_W")),temp);
+      expr = SymbolicAdd(info.bitExpr,PushVariable(temp,S8("DELAY_W")),temp);
 
       *list->PushElem() = info;
     }

@@ -10,10 +10,12 @@ enum VASTType{
   VASTType_PORT_DECL,
   VASTType_PORT_GROUP,
   VASTType_VAR_DECL,
+  VASTType_INTEGER_DECL,
   VASTType_WIRE_ASSIGN_BLOCK,
   VASTType_ASSIGN_DECL,
   VASTType_PORT_CONNECT,
   VASTType_IF,
+  VASTType_LOOP,
   VASTType_SET,
   VASTType_EXPR,
   VASTType_ALWAYS_DECL,
@@ -37,7 +39,8 @@ struct VAST{
 
   union{
     String comment;
-
+    String name;
+    
     struct{
       String timescaleExpression;
       ArenaList<String>* includes;
@@ -81,6 +84,13 @@ struct VAST{
       ArenaList<VASTIf>* ifExpressions;
       ArenaList<VAST*>* elseStatements; // If nullptr then no else clause
     } ifExpr; 
+
+    struct {
+      String initExpr;
+      String loopExpr;
+      String incrExpr;
+      ArenaList<VAST*>* statements;
+    } loopExpr; 
     
     struct{
       String name;
@@ -155,11 +165,12 @@ struct VEmitter{
   void Reg(const char* name,int bitsize = 1);
   void Assign(const char* name,const char* expr);
   void Assign(String name,String expr);
+  void Integer(const char* name);
   
   void Blank();
   void Comment(const char* expr);
   void Expression(const char* expr);
-
+  
   // Kinda hardcoded for now, we mostly only care about clk and rst signals.
   void AlwaysBlock(const char* posedge1,const char* posedge2);
 
@@ -172,6 +183,9 @@ struct VEmitter{
   void ElseIf(const char* expr);
   void Else();
   void EndIf();
+
+  void Loop(const char* start,const char* loop,const char* incr);
+  void EndLoop();
   
   void EndBlock();
   

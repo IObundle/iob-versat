@@ -908,7 +908,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
   Pool<FUInstance> instances = accel->allocated;
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
-  
+
   Pool<FUInstance> nodes = accel->allocated;
   for(FUInstance* node : nodes){
     if(node->declaration->nIOs){
@@ -920,6 +920,8 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
 
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
   Array<WireInformation> wireInfo = CalculateWireInformation(nodes,staticUnits,val.versatConfigs,temp);
+  
+  DEBUG_BREAK();
   
   VEmitter* m = StartVCode(temp);
 
@@ -938,6 +940,7 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     m->DeclParam("AXI_ADDR_W",32);
     m->DeclParam("AXI_DATA_W",globalOptions.databusDataSize);
     m->DeclParam("LEN_W",20);
+    m->DeclParam("DELAY_W",7);
 
     if(configurationsBits){
       m->Output("config_data_o",configurationsBits);
@@ -994,6 +997,8 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
     
     if(configurationsBits){
       // Shadow config setting
+
+      m->Integer("i");
       m->AlwaysBlock("clk_i","rst_i");
       {
         m->If("rst_i");
@@ -1001,22 +1006,20 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
         m->ElseIf("data_write & !memoryMappedAddr");
         
         for(WireInformation info : wireInfo){
-          - LEFT HERE - We need to generate a generic for loop that handle arguments for AXI_ADDR_W, AXI_DATA_W and stuff like that.
-          - We probably can also generate a loop for values that are not divided by 8 by having the loop iterate over every bit. Something like:
-          
-          for(i = 0; i < DELAY_W; i++){
-            if(strobe[i/8]){
-              // ....
-            }
-          }
-          - Basically we need to descent into bit level in order for this to work.
-          
-          if(info.bitExpr->type != SymbolicExpressionType_LITERAL){
-            m->Comment("HERE");
-          }
-          
           m->If(SF("address[%d:0] == %d",configurationAddressBits + 1,info.addr));
-          EmitStrobe(m,"data_wstrb","shadow_configdata",info.configBitStart,"data_data",info.wire.bitSize);
+
+          if(info.wire.sizeExpr && info.wire.sizeExpr->type != SymbolicExpressionType_LITERAL){
+            String repr = PushRepresentation(info.wire.sizeExpr,temp);
+            
+            m->Loop("i = 0",SF("i < %.*s",UN(repr)),"i++");
+            m->If(SF("data_wstrb[i/8]"));
+            m->Set(SF("shadow_configdata[%d+i]",info.configBitStart),SF("data_data[i]"));
+            m->EndIf();
+            m->EndLoop();
+          } else {
+            EmitStrobe(m,"data_wstrb","shadow_configdata",info.configBitStart,"data_data",info.wire.bitSize);
+          }
+          
           m->EndIf();
         }
         m->EndIf();

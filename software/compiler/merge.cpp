@@ -2,6 +2,7 @@
 
 #include "declaration.hpp"
 #include "textualRepresentation.hpp"
+#include "symbolic.hpp"
 
 bool NodeConflict(FUInstance* inst){
   // For now, do not even try to map nodes that contain any config modifiers.
@@ -1753,12 +1754,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   declInst.name = name;
   declInst.parameters = PushArray<Parameter>(globalPermanent,6);
 
-  declInst.parameters[0] = {STRING("ADDR_W"),nullptr};
-  declInst.parameters[1] = {STRING("DATA_W"),nullptr};
-  declInst.parameters[2] = {STRING("DELAY_W"),nullptr};
-  declInst.parameters[3] = {STRING("AXI_ADDR_W"),nullptr};
-  declInst.parameters[4] = {STRING("AXI_DATA_W"),nullptr};
-  declInst.parameters[5] = {STRING("LEN_W"),nullptr};
+  declInst.parameters[0] = {STRING("ADDR_W"),PushLiteral(globalPermanent,32)};
+  declInst.parameters[1] = {STRING("DATA_W"),PushLiteral(globalPermanent,32)};
+  declInst.parameters[2] = {STRING("DELAY_W"),PushLiteral(globalPermanent,7)};
+  declInst.parameters[3] = {STRING("AXI_ADDR_W"),PushLiteral(globalPermanent,32)};
+  declInst.parameters[4] = {STRING("AXI_DATA_W"),PushLiteral(globalPermanent,32)};
+  declInst.parameters[5] = {STRING("LEN_W"),PushLiteral(globalPermanent,20)};
 
   Pair<Accelerator*,AcceleratorMapping*> baseCopy = CopyAcceleratorWithMapping(mergedAccel,AcceleratorPurpose_BASE,true,globalPermanent);
 

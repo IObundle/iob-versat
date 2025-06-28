@@ -567,6 +567,7 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
       id.parent = info->parent;
 
       StaticData data = {};
+      data.decl = info->decl;
       data.configs = info->decl->configs;
       staticUnits->InsertIfNotExist(id,data);
     }
