@@ -96,18 +96,9 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
 
-    // TODO: Make this more generic. Probably gonna need to take a look at a FUDeclaration as a instance of a more generic FUType construct. FUDeclaration has constant values, the FUType stores the expressions to compute them.
-    // Override databus size for current architecture
-    if(CompareString(def.name,STRING("AXI_ADDR_W"))){
-      Expression* expr = PushStruct<Expression>(temp);
-
-      expr->type = Expression::LITERAL;
-      expr->id = def.name;
-      expr->val = MakeValue(globalOptions.databusAddrSize);
-
-      def.expr = expr;
-    }
-
+#if 1
+    // TODO: We cannot remove this because the external memories are instantiated based on this value and we currently have no way of exporting this value.
+    //       This essentially means that the accelerator is still dependent on the setup phase, but this only affects the datapath size and the datapath size is mostly a setup phase thing anyway, so it is not the worst. 
     if(CompareString(def.name,STRING("AXI_DATA_W"))){
       Expression* expr = PushStruct<Expression>(temp);
 
@@ -117,17 +108,7 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
 
       def.expr = expr;
     }
-
-    // Override length. Use 20 for now
-    if(CompareString(def.name,STRING("LEN_W"))){
-      Expression* expr = PushStruct<Expression>(temp);
-
-      expr->type = Expression::LITERAL;
-      expr->id = def.name;
-      expr->val = MakeValue(20); // TODO: Lenght and all manner of parameters that need to be propagated need a good look at. It's becoming clubersome to deal it.
-
-      def.expr = expr;
-    }
+#endif
 
     instantiated[i] = def;
   }

@@ -227,7 +227,6 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
     }
   }
 
-  DEBUG_BREAK();
   Array<Pair<String,int>> res = PushArray<Pair<String,int>>(out,count);
   int index = 0;
   for(InstanceInfo& in : info){

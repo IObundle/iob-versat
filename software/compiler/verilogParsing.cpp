@@ -499,6 +499,23 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
 
       tok->AssertNextToken("=");
 
+      Token peek = tok->PeekToken();
+      if(CompareString(peek,"\"")){
+        tok->AdvancePeek();
+        while(!tok->Done()){
+          Token token = tok->PeekToken();
+
+          if(CompareString(token,"\"")){
+            break;
+          }
+
+          tok->AdvancePeek();
+        }
+        tok->AssertNextToken("\"");
+        
+        continue;
+      }
+      
       Expression* expr = VerilogParseExpression(tok,out);
       Value val = Eval(expr,map);
 

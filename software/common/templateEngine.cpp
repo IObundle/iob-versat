@@ -111,6 +111,8 @@ void ProcessTemplateSimple(FILE* outputFile,String tmpl){
   
   fprintf(outputFile,"%.*s",UNPACK_SS(content));
   fflush(outputFile);
+
+  ClearTemplateEngine();
 }
 
 void TemplateSimpleSubstitute(StringBuilder* b,String tmpl,Hashmap<String,String>* subs){

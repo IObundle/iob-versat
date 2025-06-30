@@ -947,8 +947,6 @@ String EmitConfiguration(Accelerator* accel,FUDeclaration* topLevelDecl,Arena* o
   
   Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(&info,temp);
   Array<WireInformation> wireInfo = CalculateWireInformation(nodes,staticUnits,val.versatConfigs,temp);
-
-  DEBUG_BREAK();
     
   VEmitter* m = StartVCode(temp);
 
@@ -2170,8 +2168,6 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
   FillStaticInfo(&info);
 
-  DEBUG_BREAK();
-  
   AccelInfoIterator iter = StartIteration(&info);
 
   Array<InstanceInfo*> allSameLevel = GetAllSameLevelUnits(&info,0,0,temp);
@@ -3498,6 +3494,9 @@ assign data_wstrb = csr_wstrb;
     TemplateSetHex("delayStart",val.nConfigs + val.nStatics);
     TemplateSetHex("configStart",val.versatConfigs);
     TemplateSetHex("stateStart",val.versatStates);
+    TemplateSetBool("useDMA",globalOptions.useDMA);
+    TemplateSetString("typeName",accel->name);
+    TemplateSetNumber("nConfigs",val.nConfigs);
 
     ProcessTemplateSimple(f,META_HeaderTemplate_Content);
   }
@@ -3930,6 +3929,8 @@ if(SimulateDatabus){
 )FOO"));
 
         for(auto wire : allConfigsVerilatorSide){
+          // TODO: Need to fix this. Broken after the change to the parameters
+#if 0
           if(wire.bitSize != 64){
             String format = S8(R"FOO(
   once{
@@ -3945,6 +3946,7 @@ if(SimulateDatabus){
             
             c->RawLine(TemplateSubstitute(format,values,temp));
           }
+#endif
           
           if(wire.stage == VersatStage_READ){
             c->Assignment(PushString(temp,"self->%.*s",UN(wire.name)),PushString(temp,"%.*s%.*s",UN(wire.source),UN(wire.name)));
@@ -4082,7 +4084,6 @@ if(SimulateDatabus){
       TemplateSetNumber("addressSize",10); // TODO: We need to figure out the best thing to do in this situation.
     }
       
-    TemplateSetNumber("databusAddrSize",globalOptions.databusAddrSize);
     TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
 
     String traceType = {};

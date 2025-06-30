@@ -10,7 +10,6 @@ Arena* globalPermanent;
 Options DefaultOptions(Arena* out){
   Options res = {};
   res.databusDataSize = 32;
-  res.databusAddrSize = 32;
 
   res.useFixedBuffers = true;
   res.shadowRegister = true; 

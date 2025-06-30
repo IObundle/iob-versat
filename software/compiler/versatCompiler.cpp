@@ -168,7 +168,6 @@ parse_opt (int key, char *arg,
     case 'u': *opts->unitFolderPaths->PushElem() = STRING(arg); break;
 
     case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
-    case 'x': opts->options->databusAddrSize = ParseInt(STRING(arg)); break;
 
     case 'd': opts->options->useDMA = true; break;
     case 'D': opts->options->architectureHasDatabus = true; break;
@@ -199,7 +198,6 @@ struct argp_option options[] =
   {
     { 0, 'S',"File",   0, "Extra sources"},
     { 0, 'b',"Size",   0, "Databus size connected to external memory (8,16,default:32,64,128,256)"},
-    { 0, 'x',"Size",   0, "Address size (default:32,64)"},
     { 0, 'd', 0,       0, "Use DMA"},
     { 0, 'D', 0,       0, "Architecture has databus"},
     { 0, 'I',"Path",   0, "Include paths"},
