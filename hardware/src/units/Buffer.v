@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Buffer #(
-   parameter ADDR_W = 7,
+   parameter DELAY_W = 7,
    parameter DATA_W = 32
 ) (
    //control
@@ -12,8 +12,8 @@ module Buffer #(
    input run,
 
    // External memory
-   //output [ADDR_W-1:0]     ext_2p_addr_out_0,
-   //output [ADDR_W-1:0]     ext_2p_addr_in_0,
+   //output [DELAY_W-1:0]     ext_2p_addr_out_0,
+   //output [DELAY_W-1:0]     ext_2p_addr_in_0,
    //output                  ext_2p_write_0,
    //output                  ext_2p_read_0,
    //input  [DATA_W-1:0]     ext_2p_data_in_0,
@@ -24,12 +24,12 @@ module Buffer #(
 
    (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
 
-   input [ADDR_W-1:0] amount
+   input [DELAY_W-1:0] amount
 );
 
-   wire [  ADDR_W:0] occupancy;
+   wire [  DELAY_W:0] occupancy;
 
-   wire [  ADDR_W:0] trueAmount = {1'b0, amount};
+   wire [  DELAY_W:0] trueAmount = {1'b0, amount};
 
    wire aboveOrEqual = (occupancy >= trueAmount);
    wire belowOrEqual = (occupancy <= trueAmount);
@@ -38,17 +38,17 @@ module Buffer #(
    wire write_en = (running && belowOrEqual);
 
    wire                                                        ext_2p_write;
-   wire                                           [ADDR_W-1:0] ext_2p_addr_out;
+   wire                                           [DELAY_W-1:0] ext_2p_addr_out;
    wire                                           [DATA_W-1:0] ext_2p_data_out;
 
    wire                                                        ext_2p_read;
-   wire                                           [ADDR_W-1:0] ext_2p_addr_in;
+   wire                                           [DELAY_W-1:0] ext_2p_addr_in;
    wire                                           [DATA_W-1:0] ext_2p_data_in;
 
    my_2p_asym_ram #(
       .W_DATA_W(DATA_W),
       .R_DATA_W(DATA_W),
-      .ADDR_W  (ADDR_W)
+      .ADDR_W  (DELAY_W)
    ) ext_2p (
       // Writting port
       .w_en_i  (ext_2p_write),
@@ -68,7 +68,7 @@ module Buffer #(
    iob_fifo_sync #(
       .W_DATA_W(DATA_W),
       .R_DATA_W(DATA_W),
-      .ADDR_W  (ADDR_W)
+      .ADDR_W  (DELAY_W)
    ) fifo (
       .rst_i (rst),
       .clk_i (clk),

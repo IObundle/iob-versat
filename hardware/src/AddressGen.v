@@ -33,6 +33,9 @@ module AddressGen #(
    output reg done_o
 );
 
+wire [PERIOD_W-1:0] fullZeroPeriod = 0; // To remove warning about bitsize
+wire [ADDR_W-1:0] fullZeroIter = 0; // To remove warning about bitsize
+
    SuperAddress #(
       .ADDR_W(ADDR_W),
       .PERIOD_W(PERIOD_W),
@@ -56,15 +59,15 @@ module AddressGen #(
       .duty_i      (duty_i),
       .shift_i     (shift_i),
 
-      .period2_i(0),
-      .incr2_i(0),
-      .iterations2_i(0),
-      .shift2_i(0),
+      .period2_i(fullZeroPeriod),
+      .incr2_i(fullZeroIter),
+      .iterations2_i(fullZeroIter),
+      .shift2_i(fullZeroIter),
 
-      .period3_i(0),
-      .incr3_i(0),
-      .iterations3_i(0),
-      .shift3_i(0),
+      .period3_i(fullZeroPeriod),
+      .incr3_i(fullZeroIter),
+      .iterations3_i(fullZeroIter),
+      .shift3_i(fullZeroIter),
 
       .doneDatabus(),
       .doneAddress(),

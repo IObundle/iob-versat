@@ -159,6 +159,7 @@ module LookupTableRead #(
    AddressGen #(
       .ADDR_W  (ADDR_W),
       .DATA_W  (AXI_DATA_W),
+      .DELAY_W(DELAY_W),
       .PERIOD_W(ADDR_W)
    ) addrgenA (
       .clk_i(clk),

@@ -7,7 +7,8 @@ module versat_instance #(
       parameter DATA_W = 32,
       parameter AXI_ADDR_W = 32,
       parameter AXI_DATA_W = @{databusDataSize},
-      parameter LEN_W = 20
+      parameter LEN_W = 20,
+      parameter DELAY_W = 10
    )
    (
    // Databus master interface
@@ -23,12 +24,12 @@ module versat_instance #(
 `endif
 
 // data/control interface
-   input                           valid,
-   input [ADDR_W-1:0]              addr, // Use address in the code below, it uses byte addresses
-   input [DATA_W/8-1:0]            wstrb,
-   input [DATA_W-1:0]              wdata,
-   output                          rvalid,
-   output reg [DATA_W-1:0]         rdata,
+   input                           csr_valid,
+   input [ADDR_W-1:0]              csr_addr, // Use address in the code below, it uses byte addresses
+   input [DATA_W/8-1:0]            csr_wstrb,
+   input [DATA_W-1:0]              csr_wdata,
+   output                          csr_rvalid,
+   output reg [DATA_W-1:0]         csr_rdata,
 
 @{externalMemPorts}
 
@@ -53,7 +54,7 @@ wire done;
 reg [30:0] runCounter;
 reg [31:0] stateRead;
 
-wire we = (|wstrb);
+wire we = (|csr_wstrb);
 
 wire memoryMappedAddr;
 
@@ -96,19 +97,19 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
       soft_reset <= 1'b0;
       signal_loop <= 1'b0;
 
-      if(valid) begin 
+      if(csr_valid) begin 
          // Config/State register access
          if(!memoryMappedAddr) begin
-            if(wstrb == 0) versat_rvalid <= 1'b1;
+            if(csr_wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= stateRead;
          end
 
          // Versat specific registers
-         if(addr == 0) begin
-            if(wstrb == 0) versat_rvalid <= 1'b1;
+         if(csr_addr == 0) begin
+            if(csr_wstrb == 0) versat_rvalid <= 1'b1;
             if(we) begin
-               soft_reset <= wdata[31];
-               signal_loop <= wdata[30];    
+               soft_reset <= csr_wdata[31];
+               signal_loop <= csr_wdata[30];    
             end else begin
                versat_rdata <= {31'h0,done}; 
             end
@@ -140,9 +141,9 @@ begin
       if(run)
          runCounter <= runCounter - 1;
 
-      if(valid && we) begin
-         if(addr == 0)
-            runCounter <= runCounter + wdata[15:0];
+      if(csr_valid && we) begin
+         if(csr_addr == 0)
+            runCounter <= runCounter + csr_wdata[15:0];
       end
    end
 end

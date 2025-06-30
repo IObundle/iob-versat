@@ -127,6 +127,9 @@ struct AccelInfo{
   int externalMemoryInterfaces;
   int numberConnections;
   int nDones;
+
+  String staticExpr;
+  String delayStart;
   
   int memoryMappedBits;
   int unitsMapped;

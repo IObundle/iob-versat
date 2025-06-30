@@ -272,7 +272,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,axi_
                         "max": "256",
                         "descr": "Versat AXI datapath size",
                     },
-                    {"name":"AXI_ADDR_W","type": "P","val": "24","min": "1","max": "32","descr": "AXI address bus width"}
+                    {"name":"AXI_ADDR_W","type": "P","val": "32","min": "1","max": "32","descr": "AXI address bus width"}
                 ]
 
         @classmethod
@@ -353,7 +353,7 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,axi_
                 confs.append({"name":"USE_EXTMEM","type": "M","val": True,"min": "0","max": "1","descr": "Versat AXI implies External memory"})
                 confs.append({'name':'AXI_ID_W', 'type':'P', 'val':'1', 'min':'1', 'max':'1', 'descr':'description here'})
                 confs.append({'name':'AXI_LEN_W', 'type':'P', 'val':'8', 'min':'1', 'max':'8', 'descr':'description here'})
-                confs.append({"name":"AXI_ADDR_W","type": "P","val": "30","min": "1","max": "32","descr": "AXI address bus width"}) # TODO: Changed 24 to 30. Realistically should receive from top the actual size.
+                confs.append({"name":"AXI_ADDR_W","type": "P","val": "32","min": "1","max": "32","descr": "AXI address bus width"}) # TODO: Changed 24 to 30. Realistically should receive from top the actual size.
                 confs.append({"name":"AXI_DATA_W","type": "P","val": f"{AXI_DATA_W}","min": "1","max": "256","descr": "AXI data bus width"})
 
             super()._setup_confs(confs)

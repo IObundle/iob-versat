@@ -650,7 +650,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
 }
 
 VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out){
-  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp,out);
   VersatComputedValues res = {};
 
   int memoryMappedDWords = 0;
@@ -659,6 +659,8 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
   int numberUnits = 0;
   int numberDones = 0;
 
+  SymbolicExpression* configExpr = PushLiteral(temp,0);
+  
   auto builder = StartArray<ExternalMemoryInterface>(temp);
   
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
@@ -676,6 +678,8 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
     res.nConfigs += decl->configs.size;
     for(Wire& wire : decl->configs){
       configBits += wire.bitSize;
+
+      configExpr = Normalize(SymbolicAdd(configExpr,wire.sizeExpr,temp),temp);
     }
 
     res.nStates += decl->states.size;
@@ -704,6 +708,12 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
     }
   }    
 
+  SymbolicExpression* staticSize = ParseSymbolicExpression(info->staticExpr,temp);
+  SymbolicExpression* delayStart = Normalize(SymbolicAdd(configExpr,staticSize,temp),out);
+
+  res.configSizeExpr = Normalize(configExpr,out);
+  res.delayStart = delayStart;
+  
   res.nDones = numberDones;
   
   Array<ExternalMemoryInterface> allExternalMemories = EndArray(builder);
@@ -717,6 +727,11 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
   
   int staticBitsStart = configBits;
   res.delayBitsStart = staticBitsStart + staticBits;
+
+  SymbolicExpression* total = SymbolicAdd(configExpr,staticSize,temp);
+  total = SymbolicAdd(total,SymbolicMult(PushLiteral(temp,res.nDelays),PushVariable(temp,S8("DELAY_W")),temp),temp);
+  
+  res.configurationBitsExpr = Normalize(total,out);
   
   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
   res.versatConfigs = 1;

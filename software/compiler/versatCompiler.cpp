@@ -683,6 +683,9 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 
 Usability:
 
+- Need to check parameters and sizes and report stuff at Versat compile time.
+-- An example is the xunitF which requires input to be 32 bits, meaning that we cannot just 
+
 - Is there a reason to have versat_emul.c ?
 -- Couldn't we just put everything into versat_wrapper and be done with it? That way, the user would only need to add the lib to the compilation process and everything should work fine.
 

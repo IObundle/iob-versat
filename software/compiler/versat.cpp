@@ -84,7 +84,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
   Array<Wire> configs = PushArray<Wire>(perm,info->configs.size);
   Array<Wire> states = PushArray<Wire>(perm,info->states.size);
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(perm,info->externalInterfaces.size);
-  int memoryMapBits = 0;
   
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
@@ -183,8 +182,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
     }break;
     }
   }
-
-  memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
   
   decl.name = info->name;
 
@@ -198,7 +195,9 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
   decl.numberDelays = info->nDelays;
   decl.nIOs = info->nIO;
 
-  if(info->memoryMapped) decl.memoryMapBits = memoryMapBits;
+  if(info->memoryMapped) {
+    decl.memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
+  }
 
   decl.implementsDone = info->hasDone;
   decl.signalLoop = info->signalLoop;
@@ -668,6 +667,9 @@ int GetInputPortNumber(FUInstance* inputInstance){
 bool IsGlobalParameter(String name){
   if(CompareString(name,"AXI_ADDR_W") ||
      CompareString(name,"AXI_DATA_W") ||
+     //CompareString(name,"ADDR_W")     ||
+     CompareString(name,"DATA_W")     ||
+     CompareString(name,"LEN_W")      ||
      CompareString(name,"DELAY_W")){
     return true;
   }
@@ -684,7 +686,9 @@ Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena*
     Parameter param = decl->parameters[i];
     ParameterValue val = inst->parameterValues[i];
 
-    if(!IsGlobalParameter(param.name)){
+    if(IsGlobalParameter(param.name)){
+      map->Insert(param.name,PushVariable(out,param.name));
+    } else {
       if(Empty(val.val)){
         map->Insert(param.name,param.valueExpr);
       } else {
@@ -726,14 +730,18 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
     Hashmap<String,SymbolicExpression*>* defaultParams = PushHashmap<String,SymbolicExpression*>(temp,decl->parameters.size);
 
     for(Parameter p : decl->parameters){
-      defaultParams->Insert(p.name,p.valueExpr);
+      if(IsGlobalParameter(p.name)){
+        defaultParams->Insert(p.name,PushVariable(out,p.name));
+      } else {
+        defaultParams->Insert(p.name,p.valueExpr);
+      }
     }
     
     for(Wire w : n.data->configs){
       WireInformation info = {};
       info.wire = w;
       info.wire.name = ReprStaticConfig(n.first,&w,out);
-      info.wire.sizeExpr = ReplaceVariables(w.sizeExpr,defaultParams,temp);
+      info.wire.sizeExpr = ReplaceVariables(w.sizeExpr,defaultParams,out);
 
       info.configBitStart = configBit;
       configBit += w.bitSize;
@@ -757,7 +765,7 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
 
       WireInformation info = {};
       info.wire = wire;
-      info.wire.sizeExpr = PushVariable(globalPermanent,S8("DELAY_W"));
+      info.wire.sizeExpr = PushVariable(out,S8("DELAY_W"));
       
       info.configBitStart = configBit;
       configBit += DELAY_SIZE;

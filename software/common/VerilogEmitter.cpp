@@ -202,12 +202,20 @@ void VEmitter::Module(String name){
   PushLevel(decl);
 }
 
-void VEmitter::DeclParam(const char* name,int value){
+void VEmitter::ModuleParam(const char* name,int value){
   VAST* decl = FindFirstVASTType(VASTType_MODULE_DECL,true);
 
   Pair<String,String>* p = decl->module.parameters->PushElem();
   p->first = PushString(arena,"%s",name);
   p->second = PushString(arena,"%d",value);
+}
+
+void VEmitter::ModuleParam(const char* name,String value){
+  VAST* decl = FindFirstVASTType(VASTType_MODULE_DECL,true);
+
+  Pair<String,String>* p = decl->module.parameters->PushElem();
+  p->first = PushString(arena,"%s",name);
+  p->second = PushString(arena,value);
 }
 
 void VEmitter::EndModule(){
@@ -361,11 +369,33 @@ void VEmitter::WireAndAssignJoinBlock(const char* name,const char* joinElem,int 
   PushLevel(wireAssignBlock);
 }
 
+void VEmitter::WireAndAssignJoinBlock(const char* name,const char* joinElem,const char* bitsize){
+  VAST* wireAssignBlock = PushVAST(VASTType_WIRE_ASSIGN_BLOCK,arena);
+
+  wireAssignBlock->wireAssignBlock.name = PushString(arena,"%s",name);
+  wireAssignBlock->wireAssignBlock.bitSize = PushString(arena,"%s",bitsize);
+  wireAssignBlock->wireAssignBlock.expressions = PushArenaList<VAST*>(arena);
+  wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,"%s",joinElem);
+  
+  InsertDeclaration(wireAssignBlock);
+  PushLevel(wireAssignBlock);
+}
+
 void VEmitter::Reg(const char* name,int bitsize){
   VAST* regDecl = PushVAST(VASTType_VAR_DECL,arena);
 
   regDecl->varDecl.name = PushString(arena,"%s",name);
   regDecl->varDecl.bitSize = PushString(arena,"%d",bitsize);
+  regDecl->varDecl.isWire = false;
+  
+  InsertDeclaration(regDecl);
+}
+
+void VEmitter::Reg(const char* name,String bitsize){
+  VAST* regDecl = PushVAST(VASTType_VAR_DECL,arena);
+
+  regDecl->varDecl.name = PushString(arena,"%s",name);
+  regDecl->varDecl.bitSize = PushString(arena,bitsize);
   regDecl->varDecl.isWire = false;
   
   InsertDeclaration(regDecl);
@@ -758,10 +788,10 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   case VASTType_INSTANCE:{
     b->PushSpaces(level * 2);
     
-    b->PushString("%.*s",UNPACK_SS(top->instance.moduleName));
+    b->PushString("%.*s ",UNPACK_SS(top->instance.moduleName));
     
     if(!Empty(top->instance.parameters)){
-      b->PushString(" #(\n");
+      b->PushString("#(\n");
       bool first = true;
       for(auto p : top->instance.parameters){
         if(!first){
@@ -775,7 +805,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       }
       b->PushString("\n");
       b->PushSpaces(level * 2);
-      b->PushString(")\n");
+      b->PushString(") ");
     }
     
     b->PushString("%.*s (\n",UNPACK_SS(top->instance.name));

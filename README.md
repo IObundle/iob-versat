@@ -219,19 +219,22 @@ The interfaces, wire formats expected, and their usages are as follows:
 
 module ExampleCustomUnitWithAllInterfaces #(
     // Some of the parameters that the interface might need to support
-    parameter DATA_W,
-    parameter ADDR_W,
-    parameter DELAY_W,
-    parameter AXI_ADDR_W,
-    parameter AXI_DATA_W,
-    parameter LEN_W,
+    // The following parameters are used by Versat and have special meaning.
+    parameter DATA_W, - Granularity of the coarse grained accelerator. Units are not required to support variable sized inputs and outputs (they can have fixed sizes) but supporting allows Versat to use that unit for different granularity values.
+    parameter AXI_ADDR_W, - Address width of the databus connection (which connects to an external SRAM memory). 
+    parameter AXI_DATA_W, - Data width of the databus connection (which connects to an external SRAM memory). 
+    parameter DELAY_W, - Maximum size of the delay value. Parameter of the delay{i} input. Versat automatically calculates this.
+    parameter LEN_W, - Maximum transfer length. Parameter of the databus_len input. User must set this value depending on the maximum transfer length that it expects the unit to perform.
+
+    // This parameter is unit specific. In this case, is used to change the maximum size of the memory mapped interface. Versat allows parameters to be defined inside the specification file, meaning that it is possible for the user to define parameter values when instantiating the unit. 
+    parameter ADDR_W
   )
 
-  // Standard wire types 
+  // Standard wire types (optional)
   input clk,
   input rst,
   input run, // Only asserted for one cycle.
-  input running, // Asserted while the accelerator is running. The unit can "turn off" its logic while this signal is de-asserted to save energy,
+  input running, // Asserted while the accelerator is running. The unit can "turn off" its logic while this signal is de-asserted to save energy and speed up simulation.
 
   // Inputs and Outputs
   input [DATA_W-1:0] in0, // Input.
@@ -242,8 +245,8 @@ module ExampleCustomUnitWithAllInterfaces #(
   // Delay: delays are used by Versat to indicate how many cycles the unit must wait before the input contains valid data.
   input [DELAY_W-1:0] delay0, 
 
-  // Memory mapped - Simple memory mapped slave interface. Follows the specifications of the IOb native interface
-  //                 Note that this interface is usually used when the accelerator is not running. Implementation must handle any usage of this interface at any time.
+  // Memory mapped - Simple memory mapped interface. Follows the specifications of the IOb native interface
+  //                 Note that this interface is usually used when the accelerator is not running.
   input                 valid,
   output                rvalid,
   input  [DATA_W/8-1:0] wstrb,

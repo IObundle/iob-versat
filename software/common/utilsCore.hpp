@@ -343,8 +343,6 @@ template<typename T>
 struct Array{
   T* data;
   int size;
-  
-  inline operator int(){return data;}
 
   inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
   ArrayIterator<T> begin() const{return ArrayIterator<T>{data};};
@@ -455,7 +453,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 
 // TODO: I wonder if it would be better to have a arena backed region where we can dump strings and it acts globally, meaning that we must call functions to init it and to clear it everytime we want to use it.
 // TODO: It would be better if we just have a malloc failsafe where we allocate more memory if needed.
-char* StaticFormat(const char* format,...);
+char* StaticFormat(const char* format,...) __attribute__ ((format (printf, 1, 2)));;
 // Shorthand
 #define SF(...) StaticFormat(__VA_ARGS__) 
 

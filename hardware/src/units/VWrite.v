@@ -209,7 +209,7 @@ module VWrite #(
    AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
-      .DELAY_W(20),
+      .DELAY_W(DELAY_W),
       .PERIOD_W(PERIOD_W)
    ) addrgenStore (
       .clk_i(clk),
@@ -220,7 +220,7 @@ module VWrite #(
 
       //configurations 
       .period_i(per),
-      .delay_i ({13'b0,delay0} + extra_delay),
+      .delay_i (delay0 + extra_delay),
       .start_i ({1'b0,start[ADDR_W-2:0]}),
       //.start_i (start_inst),
       .incr_i  (incr),

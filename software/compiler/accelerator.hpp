@@ -202,7 +202,10 @@ struct VersatComputedValues{
   int externalMemoryInterfaces;
   int totalExternalMemory;  
 
-  //SymbolicExpression* configExpr;
+  //String delayStartStr;
+  SymbolicExpression* configSizeExpr;
+  SymbolicExpression* delayStart;
+  SymbolicExpression* configurationBitsExpr;
   
   //bool signalLoop;
 };

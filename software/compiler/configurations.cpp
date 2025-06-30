@@ -11,6 +11,7 @@
 #include "versat.hpp"
 #include "textualRepresentation.hpp"
 #include <strings.h>
+#include "symbolic.hpp"
 
 Array<InstanceInfo>& AccelInfoIterator::GetCurrentMerge(){
   return info->infos[mergeIndex].info;
@@ -226,6 +227,7 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
     }
   }
 
+  DEBUG_BREAK();
   Array<Pair<String,int>> res = PushArray<Pair<String,int>>(out,count);
   int index = 0;
   for(InstanceInfo& in : info){
@@ -495,7 +497,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     unit->memMappedBitSize = unit->decl->memoryMapBits;
 
     if(unit->decl->memoryMapBits.has_value()){
-      unit->memMappedSize = (1 << unit->decl->memoryMapBits.value());
+      unit->memMappedSize = 1 << unit->decl->memoryMapBits.value();
     }
     
     if(!parent){
@@ -1079,12 +1081,13 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
     }
   }
 
-    TrieMap<StaticId,int>* staticSeen = PushTrieMap<StaticId,int>(temp);
+  TrieMap<StaticId,int>* staticSeen = PushTrieMap<StaticId,int>(temp);
   
   // TODO: I am not sure if static info is needed by all the accelerators
   //       or if it is only needed by the top accelerator.
   //       For now we calculate it to make easier to debug by inspecting the data.
   //       But need to take another look eventually
+  SymbolicExpression* staticExpr = PushLiteral(temp,0);
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     if(inst->isStatic){
@@ -1097,6 +1100,8 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
 
       for(Wire& wire : inst->declaration->configs){
         info->staticBits += wire.bitSize;
+
+        staticExpr = Normalize(SymbolicAdd(staticExpr,wire.sizeExpr,temp),temp);
       }
     }
 
@@ -1110,11 +1115,16 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
 
           for(Wire& wire : pair.second->configs){
             info->staticBits += wire.bitSize;
+
+            staticExpr = Normalize(SymbolicAdd(staticExpr,wire.sizeExpr,temp),temp);
           }
         }
       }
     }
   }
+
+  // TODO: HACK, VERY BAD
+  info->staticExpr = PushRepresentation(staticExpr,globalPermanent);
   
   for(FUInstance* ptr : accel->allocated){
     info->numberConnections += Size(ptr->allOutputs);

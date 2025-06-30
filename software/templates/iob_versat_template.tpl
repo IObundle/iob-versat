@@ -164,9 +164,6 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
 
 @{AXIAddr}
 
-      //.m_waddr_i (w_addr + MEM_ADDR_OFFSET),
-      //.m_raddr_i (r_addr + MEM_ADDR_OFFSET),
-
       .axi_awid_o(axi_awid_o), //Address write channel ID.
       .axi_awaddr_o(axi_awaddr_o), //Address write channel address.
       .axi_awlen_o(axi_awlen_o), //Address write channel burst length.
@@ -226,15 +223,14 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .AXI_ADDR_W(AXI_ADDR_W),
       .LEN_W     (LEN_W)
    ) xversat (
-      .valid (@{prefix}iob_valid_i),
-      .wstrb (@{prefix}iob_wstrb_i),
+      .csr_valid (@{prefix}iob_valid_i),
+      .csr_wstrb (@{prefix}iob_wstrb_i),
 
       @{addr}
 
-      //.addr  (@{prefix}iob_addr_i),
-      .wdata (@{prefix}iob_wdata_i),
-      .rdata (@{prefix}iob_rdata_o),
-      .rvalid(@{prefix}iob_rvalid_o),
+      .csr_wdata (@{prefix}iob_wdata_i),
+      .csr_rdata (@{prefix}iob_rdata_o),
+      .csr_rvalid(@{prefix}iob_rvalid_o),
 
 `ifdef VERSAT_EXTERNAL_MEMORY
       `include "versat_external_memory_internal_portmap.vh"

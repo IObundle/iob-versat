@@ -61,7 +61,7 @@ module VRead #(
    input [  ADDR_W-1:0] shift3,
    input [  ADDR_W-1:0] incr3,
 
-   input [ 20-1:0]      extra_delay,
+   input [DELAY_W-1:0]  extra_delay,
    input                ignore_first,
 
    input [DELAY_W-1:0] delay0
@@ -213,7 +213,7 @@ assign data_data = databus_rdata_0;
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
       .PERIOD_W(PERIOD_W),
-      .DELAY_W(21)
+      .DELAY_W(DELAY_W)
    ) addrgenOutput (
       .clk_i(clk),
       .rst_i(rst),
@@ -223,7 +223,7 @@ assign data_data = databus_rdata_0;
 
       //configurations 
       .period_i(per),
-      .delay_i ({13'b0,delay0} + extra_delay),
+      .delay_i (delay0 + extra_delay),
       .start_i ({1'b0,start[ADDR_W-2:0]}),
       .incr_i  (incr),
 

@@ -138,7 +138,8 @@ struct VEmitter{
   
   // Module definition
   void Module(String name);
-  void DeclParam(const char* name,int value); // A global param of a module
+  void ModuleParam(const char* name,int value); // A global param of a module
+  void ModuleParam(const char* name,String value);
   void EndModule();
 
   void StartPortGroup();
@@ -162,7 +163,9 @@ struct VEmitter{
   void WireArray(const char* name,int count,int bitsize = 1);
   void WireArray(const char* name,int count,const char* bitsizeExpr);
   void WireAndAssignJoinBlock(const char* name,const char* joinElem,int bitsize = 1);
+  void WireAndAssignJoinBlock(const char* name,const char* joinElem,const char* bitsize);
   void Reg(const char* name,int bitsize = 1);
+  void Reg(const char* name,String expr);
   void Assign(const char* name,const char* expr);
   void Assign(String name,String expr);
   void Integer(const char* name);

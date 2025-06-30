@@ -11,7 +11,7 @@ module SimpleDMA #(
       // Master interface used to fetch data from memory
       input                   m_databus_ready,
       output                  m_databus_valid,
-      output [ADDR_W-1:0]     m_databus_addr,
+      output [AXI_ADDR_W-1:0] m_databus_addr,
       input  [DATA_W-1:0]     m_databus_rdata,
       output [DATA_W-1:0]     m_databus_wdata,
       output [(DATA_W/8)-1:0] m_databus_wstrb,
@@ -19,7 +19,7 @@ module SimpleDMA #(
       input                   m_databus_last,      
 
       // Configuration (set before asserting run)
-      input                   addr_internal,
+      input [ADDR_W-1:0]      addr_internal,
       input [AXI_ADDR_W-1:0]  addr_read,
       input [LEN_W-1:0]       length,
 

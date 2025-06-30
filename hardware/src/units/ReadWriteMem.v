@@ -108,7 +108,8 @@
 
    AddressGen #(
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W)
+      .DATA_W(SIZE_W),
+      .DELAY_W(DELAY_W)
    ) addrgenA (
       .clk_i(clk),
       .rst_i(rst),
@@ -137,7 +138,8 @@
 
    AddressGen #(
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W)
+      .DATA_W(SIZE_W),
+      .DELAY_W(DELAY_W)
    ) addrgenB (
       .clk_i(clk),
       .rst_i(rst),
