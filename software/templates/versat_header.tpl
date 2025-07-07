@@ -10,6 +10,7 @@
 #include "stdint.h"
 #endif
 
+#define MAX(A,B) (((A) > (B)) ? (A) : (B))
 typedef intptr_t iptr;
 
 // Config
@@ -57,12 +58,12 @@ int GetAcceleratorCyclesElapsed();
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
-void VersatMemoryCopy(void* dest,const void* data,int size);
-void VersatUnitWrite(const void* baseaddr,int index,int val);
-int VersatUnitRead(const void* baseaddr,int index);
-float VersatUnitReadFloat(const void* baseaddr,int index);
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size);
+void VersatUnitWrite(volatile const void* baseaddr,int index,int val);
+int VersatUnitRead(volatile const void* baseaddr,int index);
+float VersatUnitReadFloat(volatile const void* baseaddr,int index);
 void SignalLoop();
-void VersatLoadDelay(const unsigned int* delayBuffer);
+void VersatLoadDelay(volatile const unsigned int* delayBuffer);
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
 // Their embedded counterparts simply do nothing

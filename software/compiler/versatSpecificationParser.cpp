@@ -2,6 +2,7 @@
 
 #include "declaration.hpp"
 #include "templateEngine.hpp"
+#include "utilsCore.hpp"
 
 // TODO: Rework expression parsing to support error reporting similar to module diff.
 //       A simple form of synchronization after detecting an error would vastly improve error reporting
@@ -1609,12 +1610,12 @@ void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
   }
 }
 
-Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out){
+Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
   TEMP_REGION(temp,out);
   Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
 
-  ArenaList<TypeDefinition>* typeList = PushArenaList<TypeDefinition>(temp);
+  ArenaList<ConstructDef>* typeList = PushArenaList<ConstructDef>(temp);
   
   bool anyError = false;
   while(!tok->Done()){
@@ -1624,8 +1625,8 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out){
       Opt<ModuleDef> moduleDef = ParseModuleDef(tok,out);
 
       if(moduleDef.has_value()){
-        TypeDefinition def = {};
-        def.type = DefinitionType_MODULE;
+        ConstructDef def = {};
+        def.type = ConstructType_MODULE;
         def.module = moduleDef.value();
 
         *typeList->PushElem() = def;
@@ -1636,16 +1637,16 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out){
       Opt<MergeDef> mergeDef = ParseMerge(tok,out);
       
       if(mergeDef.has_value()){
-        TypeDefinition def = {};
-        def.type = DefinitionType_MERGE;
+        ConstructDef def = {};
+        def.type = ConstructType_MERGE;
         def.merge = mergeDef.value();
 
         *typeList->PushElem() = def;
       } else {
         anyError = true;
       }
-    } else if(CompareString(peek,"AddressGen")){
-      Opt<AddressGenDef> def = ParseAddressGen(tok,globalPermanent);
+    } else if(CompareString(peek,"addressGen")){
+      Opt<AddressGenDef> def = ParseAddressGen(tok,out);
       
       if(def.has_value()){
         AddressGenDef* buffer = addressGens.Alloc();
@@ -1657,7 +1658,7 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out){
       // TODO: Report error, 
       ReportError(tok,peek,"Unexpected token in global scope");
       tok->AdvancePeek();
-      Synchronize(tok,{"debug","module","iterative","merge","transform"});
+      Synchronize(tok,{"module","merge","addressGen"});
     }
   }
 
@@ -1668,23 +1669,23 @@ Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out){
   return PushArrayFromList(out,typeList);
 }
 
-Array<Token> TypesUsed(TypeDefinition def,Arena* out){
+Array<Token> TypesUsed(ConstructDef def,Arena* out){
   TEMP_REGION(temp,out);
 
   switch(def.type){
-  case DefinitionType_MERGE: {
+  case ConstructType_MERGE: {
     // TODO: How do we deal with same types being used?
     //       Do we just ignore it?
     Array<Token> result = Extract(def.merge.declarations,out,&TypeAndInstance::typeName);
     
     return result;
   } break;
-  case DefinitionType_MODULE: {
+  case ConstructType_MODULE: {
     Array<Token> result = Extract(def.module.declarations,temp,&InstanceDeclaration::typeName);
 
     return Unique(result,out);
   } break;
-  case DefinitionType_ITERATIVE:{
+  case ConstructType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
   }; 
   default: Assert(false);
@@ -1693,15 +1694,15 @@ Array<Token> TypesUsed(TypeDefinition def,Arena* out){
   return {};
 }
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def){
+FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def){
   switch(def.type){
-  case DefinitionType_MERGE: {
+  case ConstructType_MERGE: {
     return InstantiateMerge(def.merge);
   } break;
-  case DefinitionType_MODULE: {
+  case ConstructType_MODULE: {
     return InstantiateModule(content,def.module);
   } break;
-  case DefinitionType_ITERATIVE:{
+  case ConstructType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
   }; 
   default: Assert(false);
@@ -1710,15 +1711,15 @@ FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition 
   return nullptr;
 }
   
-FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def){
+FUDeclaration* InstantiateSpecifications(String content,ConstructDef def){
   switch(def.type){
-  case DefinitionType_MERGE: {
+  case ConstructType_MERGE: {
     return InstantiateMerge(def.merge);
   } break;
-  case DefinitionType_MODULE: {
+  case ConstructType_MODULE: {
     return InstantiateModule(content,def.module);
   } break;
-  case DefinitionType_ITERATIVE:{
+  case ConstructType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
   }; 
   default: Assert(false);
@@ -1796,40 +1797,18 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
       
       EXPECT(tok,";");
       break;
-    } else {      
-      EXPECT(tok,"[");
-      auto symbolicExpression = ParseSymbolicExpression(tok,out);
-      EXPECT(tok,"]");
-      
-      PROPAGATE(symbolicExpression);
-      
-      EXPECT(tok,"=");
-      Token other = tok->NextToken();
-
-      EXPECT(tok,"[");
-      auto symbolicExpression2 = ParseSymbolicExpression(tok,out);
-      EXPECT(tok,"]");
-
-      EXPECT(tok,";");
-
-      PROPAGATE(symbolicExpression2);
-      
-      if(CompareString(construct,"mem")){
-        externalName = PushString(out,other);
-      } else {
-        externalName = PushString(out,construct);
-      }
-      
-      break;
     }
   }
- 
+
+  if(!symbolic){
+    return {};
+  }
+  
   AddressGenDef def = {};
   def.name = name;
   def.type = type;
   def.inputs = inputsArr;
   def.loops = PushArrayFromList(out,loops);
-  def.externalName = externalName;
   def.symbolic = symbolic;
   
   return def;

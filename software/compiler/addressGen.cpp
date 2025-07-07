@@ -3,6 +3,7 @@
 #include "memory.hpp"
 #include "symbolic.hpp"
 #include "utilsCore.hpp"
+#include "versatSpecificationParser.hpp"
 
 static String GetDefaultVarNameForLoop(int loopIndex,int amountOfLoops,bool fromInnermost){
   String vars[] = {
@@ -119,7 +120,7 @@ SymbolicExpression* LoopMaximumValue(LoopLinearSumTerm term,Arena* out){
 }
 
 void Repr(StringBuilder* builder,AddressAccess* access){
-  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp,builder->arena);
 
   builder->PushString("External:\n");
   Repr(builder,access->external);
@@ -247,7 +248,7 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
     if(removeOne){
       diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
     }
-
+    
     SymbolicExpression* final = Normalize(diff,out);
     return final;
   };
@@ -257,8 +258,9 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
     return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
   };
 
+  result.length = GetLoopSizeRepr(inner,out);
+
   if(size == 1){
-    result.length = GetLoopSizeRepr(inner,out);
     result.totalTransferSize = result.length;
     result.amountMinusOne = STRING("0");
     result.addrShift = STRING("0");
@@ -266,10 +268,8 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
     // TODO: A bit repetitive, could use some cleanup
     SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
     
-    result.length = GetLoopSizeRepr(inner,out);
     result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
 
-    // NOTE: Derivation inside a LoopLinearSum is just getting the values for the term.
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
 
     result.addrShift = PushRepresentation(derived,out);
@@ -419,12 +419,6 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
 
   // NOTE: The reason we need to align is because the increase in AXI_DATA_W forces data to be aligned inside the VUnits memories. The single loop does not care because we only need to access values individually, but the double loop cannot function because it assumes that the data is read and stored in a linear matter while in reality the data is stored in multiples of (AXI_DATA_W/DATA_W). 
   
-#if 0
-  if(doubleLoop){
-    res.length = PushString(out,"(ALIGN(%.*s,VERSAT_DIFF_W) * sizeof(float))",UNPACK_SS(external.length));
-  }
-#endif
-  
   res.amount_minus_one = PushString(out,external.amountMinusOne);
   res.addr_shift = PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift));
 
@@ -477,3 +471,65 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
   
   return res;
 }
+
+AddressAccess* ConvertAddressGenDef(AddressGenDef* def,Arena* out){
+  TEMP_REGION(temp,out);
+      
+  auto loopVarBuilder = StartArray<String>(temp);
+  for(int i = 0; i <  def->loops.size; i++){
+    AddressGenForDef loop  =  def->loops[i];
+
+    *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
+  }
+  Array<String> loopVars = EndArray(loopVarBuilder);
+      
+  // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
+  SymbolicExpression* loopExpression = PushLiteral(temp,1);
+  for(AddressGenForDef loop : def->loops){
+    SymbolicExpression* diff = SymbolicSub(loop.end,loop.start,temp);
+
+    loopExpression = SymbolicMult(loopExpression,diff,temp);
+  }
+  SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
+
+  // Building expression for the external address
+  SymbolicExpression* normalized = Normalize(def->symbolic,temp);
+  for(String str : loopVars){
+    normalized = Group(normalized,str,temp);
+  }
+        
+  LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
+  for(int i = 0; i < loopVars.size; i++){
+    String var = loopVars[i];
+
+    // TODO: This function is kinda too heavy for what is being implemented.
+    Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
+
+    SymbolicExpression* term = termOpt.value_or(nullptr);
+    if(!term){
+      term = PushLiteral(temp,0);
+    }
+
+    AddressGenForDef loop = def->loops[i];
+    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,loop.end,temp);
+    expr = AddLoopLinearSum(sum,expr,temp);
+  }
+
+  // Extracts the constant term
+  SymbolicExpression* toCalcConst = normalized;
+
+  // TODO: Currently we are not dealing with loops that do not start at zero
+  SymbolicExpression* zero = PushLiteral(temp,0);
+  for(String str : loopVars){
+    toCalcConst = SymbolicReplace(toCalcConst,str,zero,temp);
+  }
+  toCalcConst = Normalize(toCalcConst,temp);
+
+  LoopLinearSum* freeTerm = PushLoopLinearSumFreeTerm(toCalcConst,temp);
+      
+  AddressAccess* result = PushStruct<AddressAccess>(out);
+  result->inputVariableNames = CopyArray<String>(def->inputs,out);
+  result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
+  result->external = AddLoopLinearSum(expr,freeTerm,out);
+  return result;
+};

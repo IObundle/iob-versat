@@ -6,6 +6,7 @@ module LookupTableRead #(
    parameter ADDR_W     = 16,
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
+   parameter DELAY_W    = 20,
    parameter LEN_W      = 8
 ) (
    //databus interface
@@ -51,7 +52,7 @@ module LookupTableRead #(
 
    input disabled,
 
-   input [31:0] delay0,
+   input [DELAY_W-1:0] delay0,
 
    input running,
    input clk,

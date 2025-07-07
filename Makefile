@@ -59,7 +59,7 @@ $(BUILD_DIR)/embedData: $(VERSAT_TOOLS_DIR)/embedData.cpp $(VERSAT_COMMON_OBJS) 
 	$(COMPILE_TOOL)
 
 # Generate meta code
-$(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData.d $(BUILD_DIR)/embedData
+$(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embedData
 	$(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData
 
 # Compile object files
@@ -74,6 +74,7 @@ $(BUILD_DIR)/embeddedData.d: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embed
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
 	g++ -MMD -std=c++17 -DVERSAT_DEBUG -DVERSAT_DIR="$(VERSAT_DIR)" -rdynamic -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) -lstdc++ -lm -lgcc -lc -pthread -ldl 
 
+-include $(BUILD_DIR)/embeddedData.d
 -include $(BUILD_DIR)/*.d
 
 versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash

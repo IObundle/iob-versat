@@ -8,6 +8,7 @@
 struct SymbolicExpression;
 struct LoopLinearSum;
 struct LoopLinearSumTerm;
+struct AddressGenDef;
 
 // TODO: We currently do not support loops that start at non zero values. The fix is simple, we can always shift loops from N..M to 0..(M-N) by adding more logic to the expression. Kinda not doing this for now since still have not found an example where this is needed.
 
@@ -44,11 +45,12 @@ struct InternalMemoryAccess{
 void Repr(StringBuilder* builder,AddressAccess* access);
 void Print(AddressAccess* access);
 
+// nochecking - Propagate error info.
+AddressAccess* ConvertAddressGenDef(AddressGenDef* def,Arena* out);
+
 AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out);
 AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopIndex,Arena* out);
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 
 AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out);
-
-

@@ -913,7 +913,7 @@ int main(int argc,const char* argv[]){
         Parameter pFrom = def->parameterList[from];
         Parameter pTo = def->parameterList[to];
 
-        h->FunctionDeclBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_Map",UNPACK_SS(def->name)));
+        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_Map",UNPACK_SS(def->name)));
         h->Argument(pFrom.type->name,S8("val"));
         h->EndBlock(); // Function
       }
@@ -924,7 +924,7 @@ int main(int argc,const char* argv[]){
         Parameter pFrom = def->parameterList[from];
         Parameter pTo = def->parameterList[to];
 
-        h->FunctionDeclBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UNPACK_SS(def->name)));
+        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UNPACK_SS(def->name)));
         h->Argument(pFrom.type->name,S8("val"));
         h->EndBlock();
       }

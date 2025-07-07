@@ -1840,8 +1840,8 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
 
   bool debugPrintAST = false;
   
-  // Better way of detecting end, should be a check if expression did not change after an entire loop
-  for(int i = 0; i < 3; i++){
+  // TODO: Better way of detecting end, should be a check if expression did not change after an entire loop
+  for(int i = 0; i < 10; i++){
     BLOCK_REGION(temp);
     if(debugPrint) printf("%d:\n",i);
 

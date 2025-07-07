@@ -148,17 +148,19 @@ struct CEmitter{
   
   void Extern(const char* typeName,const char* name);
 
-  void FunctionDeclBlock(String returnType,String functionName);
+  // Only declares a function, no body
+  void FunctionDeclOnlyBlock(String returnType,String functionName);
   
   void FunctionBlock(String returnType,String functionName);
   void Argument(String type,String name);
-
+  
   // TODO: Var block + Var element + EndBlock
   void VarDeclare(String type,String name,String initialValue = {});
   
   void ArrayDeclareBlock(const char* type,const char* name,bool isStatic = false);
   void VarDeclareBlock(const char* type,const char* name,bool isStatic = false);
 
+  // Declaration of variable blocks (multiple elements inside a '{}');
   void VarBlock();
   void Elem(String value);
   void StringElem(String value);

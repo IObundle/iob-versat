@@ -115,18 +115,34 @@ struct MergeDef : public DefBase{
   Array<Token> mergeModifiers;
 };
 
-enum DefinitionType{
-  DefinitionType_MODULE,
-  DefinitionType_MERGE,
-  DefinitionType_ITERATIVE
+enum ConstructType{
+  ConstructType_MODULE,
+  ConstructType_MERGE,
+  ConstructType_ITERATIVE,
+  ConstructType_ADDRESSGEN
 };
 
-struct TypeDefinition{
-  DefinitionType type;
+struct AddressGenForDef{
+  Token loopVariable;
+  SymbolicExpression* start;
+  SymbolicExpression* end;
+};
+
+struct AddressGenDef{
+  AddressGenType type;
+  String name;
+  Array<Token> inputs;
+  Array<AddressGenForDef> loops;
+  SymbolicExpression* symbolic;
+};
+
+struct ConstructDef{
+  ConstructType type;
   union {
     DefBase base;
     ModuleDef module;
     MergeDef merge;
+    AddressGenDef addressGen;
   };
 };
 
@@ -141,29 +157,14 @@ struct HierarchicalName{
   Var subInstance;
 };
 
-struct AddressGenForDef{
-  Token loopVariable;
-  SymbolicExpression* start;
-  SymbolicExpression* end;
-};
-
 struct SymbolicExpression;
-
-struct AddressGenDef{
-  AddressGenType type;
-  String name;
-  Array<Token> inputs;
-  Array<AddressGenForDef> loops;
-  SymbolicExpression* symbolic;
-  Token externalName; // TODO: Probably not needed, could just infer from the AddressGenType.
-};
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
-Array<Token> TypesUsed(TypeDefinition def,Arena* out);
-Array<TypeDefinition> ParseVersatSpecification(String content,Arena* out);
+Array<Token> TypesUsed(ConstructDef def,Arena* out);
+Array<ConstructDef> ParseVersatSpecification(String content,Arena* out);
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,TypeDefinition def);
-FUDeclaration* InstantiateSpecifications(String content,TypeDefinition def);
+FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def);
+FUDeclaration* InstantiateSpecifications(String content,ConstructDef def);
 
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);

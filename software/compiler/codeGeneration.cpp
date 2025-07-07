@@ -2054,8 +2054,21 @@ String GenerateAddressGenCompilationFunction(AddressAccess access,String address
     }
   };
 
+  auto builder = StartString(temp);
+  Repr(builder,initial.internal);
+  String internalStr = EndString(temp,builder);
+  
+  builder = StartString(temp);
+  Repr(builder,initial.external);
+  String externalStr = EndString(temp,builder);
+  
   CEmitter* m = StartCCode(temp);
 
+  m->Comment(S8("[DEBUG] Internal address"));
+  m->Comment(internalStr);
+  m->Comment(S8("[DEBUG] External address"));
+  m->Comment(externalStr);
+  
   String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
   m->FunctionBlock(STRING("static AddressVArguments"),functionName);
 
@@ -2889,6 +2902,18 @@ assign data_wstrb = csr_wstrb;
       for(String str : META_AddressVParameters_Members){
         m->Member(STRING("iptr"),str);
       }
+
+      m->EndBlock();
+
+      if(true){
+        m->FunctionBlock(S8("static void"),S8("PrintArguments"));
+        m->Argument(S8("AddressVArguments"),S8("args"));
+
+        for(String str : META_AddressVParameters_Members){
+          m->Statement(PushString(temp,"printf(\"%.*s: %%ld\\n\",args.%.*s)",UN(str),UN(str)));
+        }
+      }
+      
       CAST* ast = EndCCode(m);
       auto b = StartString(temp);
       Repr(ast,b);
@@ -3001,7 +3026,7 @@ assign data_wstrb = csr_wstrb;
           printf("Did not find address gen with name: %.*s\n",UNPACK_SS(addressGenName));
         } else {
           if(!(def->type & unit->decl->supportedAddressGenType)){
-            printf("Cannot generate address gen for type %.*s\n",UNPACK_SS(unit->decl->name));
+            printf("[USER_ERROR] Cannot generate address gen for type %.*s\n",UNPACK_SS(unit->decl->name));
             exit(0);
           }
         
@@ -3014,68 +3039,6 @@ assign data_wstrb = csr_wstrb;
     
     // By getting the info directly from the structs, we make sure that we are always generating the functions needed for each possible structure that gets created/changed due to partial share or merge.
     // Address gen is therefore capable of handling all the struct modifing features as long as they are properly implemented inside structInfo.
-
-    auto ConvertAddressGenDef = [](AddressGenDef* def,Arena* out) -> AddressAccess*{
-      TEMP_REGION(temp,out);
-      
-      auto loopVarBuilder = StartArray<String>(temp);
-      for(int i = 0; i <  def->loops.size; i++){
-        AddressGenForDef loop  =  def->loops[i];
-
-        *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
-      }
-      Array<String> loopVars = EndArray(loopVarBuilder);
-      
-      // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
-      SymbolicExpression* loopExpression = PushLiteral(temp,1);
-      for(AddressGenForDef loop : def->loops){
-        SymbolicExpression* diff = SymbolicSub(loop.end,loop.start,temp);
-        loopExpression = SymbolicMult(loopExpression,diff,temp);
-      }
-      SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
-
-      // Building expression for the external address
-      SymbolicExpression* normalized = Normalize(def->symbolic,temp);
-      for(String str : loopVars){
-        normalized = Group(normalized,str,temp);
-      }
-        
-      LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
-      for(int i = 0; i < loopVars.size; i++){
-        String var = loopVars[i];
-
-        // TODO: This function is kinda too heavy for what is being implemented.
-        Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
-
-        SymbolicExpression* term = termOpt.value_or(nullptr);
-        if(!term){
-          term = PushLiteral(temp,0);
-        }
-        
-        AddressGenForDef loop = def->loops[i];
-          
-        LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,loop.end,temp);
-        expr = AddLoopLinearSum(sum,expr,temp);
-      }
-
-      // Extracts the constant term
-      SymbolicExpression* toCalcConst = normalized;
-
-      // TODO: Currently we are not dealing with loops that do not start at zero
-      SymbolicExpression* zero = PushLiteral(temp,0);
-      for(String str : loopVars){
-        toCalcConst = SymbolicReplace(toCalcConst,str,zero,temp);
-      }
-      toCalcConst = Normalize(toCalcConst,temp);
-
-      LoopLinearSum* freeTerm = PushLoopLinearSumFreeTerm(toCalcConst,temp);
-      
-      AddressAccess* result = PushStruct<AddressAccess>(out);
-      result->inputVariableNames = CopyArray<String>(def->inputs,out);
-      result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
-      result->external = AddLoopLinearSum(expr,freeTerm,out);
-      return result;
-    };
 
     GrowableArray<String> builder = StartArray<String>(temp2);
     
@@ -3116,8 +3079,6 @@ assign data_wstrb = csr_wstrb;
         *builder.PushElem() = data;
       }
     }
-    
-    // TODO: Missing the generic methods that use C++ overloading to simplify the name of the methods
 
     // Generates a function for each struct + address gen pair (if it does not depend on struct, it does not belong here)
     for(Pair<String,AddressGenDef*> p : structNameAndAddressGen){
@@ -3178,8 +3139,6 @@ assign data_wstrb = csr_wstrb;
       b->PushString(s);
       b->PushString("\n");
     }
-    
-    //TemplateSetCustom("addrGen",MakeValue(&content));
 
     TemplateSetString("allAddrGen",EndString(temp,b));
     
@@ -4117,13 +4076,13 @@ if(SimulateDatabus){
 
     if(globalOptions.useSymbolAddress){
       TemplateSetString("AXIAddr",R"FOO(
-      .m_waddr_i({2'b00,w_addr[AXI_ADDR_W-3:2]} + MEM_ADDR_OFFSET),
-      .m_raddr_i({2'b00,r_addr[AXI_ADDR_W-3:2]} + MEM_ADDR_OFFSET),
+assign axi_awaddr_o = temp_axi_awaddr_o[AXI_ADDR_W-3:2];
+assign axi_araddr_o = temp_axi_araddr_o[AXI_ADDR_W-3:2];
 )FOO");
     } else {
       TemplateSetString("AXIAddr",R"FOO(
-      .m_waddr_i(w_addr + MEM_ADDR_OFFSET),
-      .m_raddr_i(r_addr + MEM_ADDR_OFFSET),
+assign axi_awaddr_o = temp_axi_awaddr_o;
+assign axi_araddr_o = temp_axi_araddr_o;
 )FOO");
     }
 

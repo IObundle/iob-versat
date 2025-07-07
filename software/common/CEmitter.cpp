@@ -192,7 +192,7 @@ void CEmitter::Extern(const char* typeName,const char* name){
   InsertStatement(externDecl);
 }
 
-void CEmitter::FunctionDeclBlock(String returnType,String functionName){
+void CEmitter::FunctionDeclOnlyBlock(String returnType,String functionName){
   // TODO: C does not support nested functions
   Assert(!FindFirstCASTType(CASTType_FUNCTION,false));
 
@@ -203,7 +203,6 @@ void CEmitter::FunctionDeclBlock(String returnType,String functionName){
   function->funcDecl.statements = nullptr; // 
   
   InsertStatement(function);
-
   PushLevel(function);
 }
 

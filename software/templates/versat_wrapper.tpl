@@ -380,7 +380,7 @@ extern "C" void VersatSignalLoop(){
 #endif
 }
 
-extern "C" void VersatLoadDelay(const unsigned int* delayBuffer){
+extern "C" void VersatLoadDelay(volatile const unsigned int* delayBuffer){
   V@{typeName}* self = dut;
 
 @{setDelays}

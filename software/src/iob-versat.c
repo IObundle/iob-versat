@@ -79,7 +79,7 @@ void SignalLoop(){
   MEMSET(versat_base,0x0,0x40000000);
 }
 
-void VersatMemoryCopy(void* dest,const void* data,int size){
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   if(size <= 0){
     return;
   }
@@ -127,26 +127,26 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
       if(val) break;
     }
   } else {
-    int* destView = (int*) dest;
-    int* dataView = (int*) data;
+    volatile int* destView = (volatile int*) dest;
+    volatile int* dataView = (volatile int*) data;
     for(int i = 0; i < size / sizeof(int); i++){
       destView[i] = dataView[i];
     }
   }
 }
 
-void VersatUnitWrite(const void* baseaddr,int index,int val){
+void VersatUnitWrite(volatile const void* baseaddr,int index,int val){
   iptr base = (iptr) baseaddr;
 
   MEMSET(base,index,val);
 }
 
-int VersatUnitRead(const void* baseaddr,int index){
+int VersatUnitRead(volatile const void* baseaddr,int index){
   iptr base = (iptr) baseaddr;
   return MEMGET(base,index);
 }
 
-float VersatUnitReadFloat(const void* baseaddr,int index){
+float VersatUnitReadFloat(volatile const void* baseaddr,int index){
   iptr base = (iptr) baseaddr;
   int val = MEMGET(base,index);
   float* ptr = (float*) &val;
@@ -162,7 +162,7 @@ void ConfigSimulateDatabus(bool value){}
 int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){return 0;}
 SimulateVReadResult SimulateVRead(AddressVArguments args){return (SimulateVReadResult){};}
 
-void VersatLoadDelay(const unsigned int* buffer){
-  void* delayBase = (void*) (versat_base + delayStart);
+void VersatLoadDelay(volatile const unsigned int* buffer){
+  volatile void* delayBase = (void*) (versat_base + delayStart);
   VersatMemoryCopy(delayBase,buffer,sizeof(int) * ARRAY_SIZE(delayBuffer));
 }

@@ -107,7 +107,7 @@ void EndAccelerator(){
   // Do nothing. Start accelerator does everything, for now
 }
 
-void VersatMemoryCopy(void* dest,const void* data,int size){
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   CheckVersatInitialized();
 
   char* byteViewDest = (char*) dest;
@@ -132,14 +132,14 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
   }
 }
 
-void VersatUnitWrite(const void* baseaddr,int index,int val){
+void VersatUnitWrite(volatile const void* baseaddr,int index,int val){
   CheckVersatInitialized();
 
   iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
   MemoryAccess(addr,val,1);
 }
 
-int VersatUnitRead(const void* baseaddr,int index){
+int VersatUnitRead(volatile const void* baseaddr,int index){
   CheckVersatInitialized();
 
   iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
@@ -147,7 +147,7 @@ int VersatUnitRead(const void* baseaddr,int index){
   return res;
 }
 
-float VersatUnitReadFloat(const void* base,int index){
+float VersatUnitReadFloat(volatile const void* base,int index){
   int res = VersatUnitRead(base,index);
   float* view = (float*) &res;
   return *view;

@@ -9,6 +9,7 @@
 #include "declaration.hpp"
 #include "templateEngine.hpp"
 #include "codeGeneration.hpp"
+#include "addressGen.hpp"
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -74,7 +75,7 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
 
 // This structure needs to represent the entire work that is required to perform 
 struct Work{
-  TypeDefinition definition;
+  ConstructDef definition;
 
   bool calculateDelayFixedGraph;
   bool flattenWithMapping;
@@ -86,7 +87,7 @@ void Print(Work* work){
   printf("flattenWithMapping: %d\n",work->flattenWithMapping ? 1 : 0);
 }
 
-void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,TypeDefinition type){
+void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,ConstructDef type){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
   Array<Token> subTypesUsed = TypesUsed(type,temp);
@@ -299,6 +300,7 @@ int main(int argc,char* argv[]){
   BasicDeclaration::output = GetTypeByNameOrFail(S8("CircuitOutput"));
 
   // Collect all user verilog source files.
+  bool error = false;
   Array<String> allVerilogFiles = {};
   region(temp){
     TrieSet<String>* allVerilogFilesSet = PushTrieSet<String>(temp);
@@ -316,6 +318,7 @@ int main(int argc,char* argv[]){
 
         Opt<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
         if(!res){
+          error = true;
           printf("\n\nCannot open dir: %.*s\n\n",UNPACK_SS(path));
         } else {
           for(String& str : res.value()){
@@ -328,11 +331,16 @@ int main(int argc,char* argv[]){
 
     allVerilogFiles = PushArrayFromSet(perm,allVerilogFilesSet);
   }
+
+  if(error){
+    return -1;
+  }
+  
   // NOTE: We process all the folders and just replace verilogFiles with all the filepaths in here.
   globalOptions.verilogFiles = allVerilogFiles;
   
   // Parse verilog files and register all the user supplied units.
-  bool error = false;
+  error = false;
   for(String filepath : globalOptions.verilogFiles){
     String content = PushFile(temp,filepath);
     
@@ -374,7 +382,33 @@ int main(int argc,char* argv[]){
   if(!simpleType && specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
     
-    Array<TypeDefinition> types = ParseVersatSpecification(content,temp);
+    Array<ConstructDef> types = ParseVersatSpecification(content,temp);
+
+    int addressGens = 0;
+    for(ConstructDef t : types){
+      if(t.type == ConstructType_ADDRESSGEN){
+        addressGens += 1;
+      }
+    }
+
+    Hashmap<String,AddressAccess*>* addresses = PushHashmap<String,AddressAccess*>(perm,addressGens);
+
+    // For now we compile every single address gen that is used but eventually we want to only compile what we need, otherwise the address gen tests will always fail.
+    bool anyError = false;
+    for(ConstructDef t : types){
+      if(t.type != ConstructType_ADDRESSGEN){
+        continue;
+      }
+
+      AddressAccess* access = ConvertAddressGenDef(&t.addressGen,perm);
+
+      if(!access){
+        anyError = true;
+      }
+
+      addresses->Insert(t.addressGen.name,access);
+    }
+    
     int size = types.size;
     
     Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
@@ -415,7 +449,7 @@ int main(int argc,char* argv[]){
     }
     
     for(int i : order){
-      TypeDefinition type = types[i];
+      ConstructDef type = types[i];
       GetSubWorkRequirement(typeToWork,type);
     }
 
@@ -429,9 +463,9 @@ int main(int argc,char* argv[]){
 
       FUDeclaration* decl = nullptr;
       
-      if(work.definition.type == DefinitionType_MODULE){
+      if(work.definition.type == ConstructType_MODULE){
         decl = InstantiateBarebonesSpecifications(content,p.second->definition);
-      } else if(work.definition.type == DefinitionType_MERGE){
+      } else if(work.definition.type == ConstructType_MERGE){
         decl = InstantiateSpecifications(content,p.second->definition);
       }
       decl->signalLoop = true;
@@ -466,7 +500,7 @@ int main(int argc,char* argv[]){
 
       // Flatten with mapping seems to be specific to modules.
       // Merge circuits are already flatten by the way the merge is performed.
-      if(work.definition.type != DefinitionType_MERGE && work.flattenWithMapping){
+      if(work.definition.type != ConstructType_MERGE && work.flattenWithMapping){
         Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99);
   
         decl->flattenedBaseCircuit = p.first;

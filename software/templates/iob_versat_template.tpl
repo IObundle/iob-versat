@@ -142,6 +142,11 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .rst_i(arst_i)
    );
 
+wire [AXI_ADDR_W-1:0] temp_axi_awaddr_o;
+wire [AXI_ADDR_W-1:0] temp_axi_araddr_o;
+
+@{AXIAddr}
+
    SimpleAXItoAXI #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
@@ -162,10 +167,11 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .m_rlen_i  (r_len),
       .m_rlast_o (r_last),
 
-@{AXIAddr}
+      .m_waddr_i(w_addr + MEM_ADDR_OFFSET),
+      .m_raddr_i(r_addr + MEM_ADDR_OFFSET),
 
       .axi_awid_o(axi_awid_o), //Address write channel ID.
-      .axi_awaddr_o(axi_awaddr_o), //Address write channel address.
+      .axi_awaddr_o(temp_axi_awaddr_o), //Address write channel address.
       .axi_awlen_o(axi_awlen_o), //Address write channel burst length.
       .axi_awsize_o(axi_awsize_o), //Address write channel burst size. This signal indicates the size of each transfer in the burst.
       .axi_awburst_o(axi_awburst_o), //Address write channel burst type.
@@ -185,7 +191,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
       .axi_bvalid_i(axi_bvalid_i), //Write response channel valid.
       .axi_bready_o(axi_bready_o), //Write response channel ready.
       .axi_arid_o(axi_arid_o), //Address read channel ID.
-      .axi_araddr_o(axi_araddr_o), //Address read channel address.
+      .axi_araddr_o(temp_axi_araddr_o), //Address read channel address.
       .axi_arlen_o(axi_arlen_o), //Address read channel burst length.
       .axi_arsize_o(axi_arsize_o), //Address read channel burst size. This signal indicates the size of each transfer in the burst.
       .axi_arburst_o(axi_arburst_o), //Address read channel burst type.
