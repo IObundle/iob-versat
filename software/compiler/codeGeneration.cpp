@@ -552,6 +552,8 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
   int externalSeen = 0;
     
   for(int instIndex = 0; instIndex < instances.Size(); instIndex++){
+    BLOCK_REGION(temp);
+
     FUInstance* inst = instances.Get(instIndex);
 
     FUDeclaration* decl = inst->declaration;
@@ -572,7 +574,6 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
       SymbolicExpression* expr = PushLiteral(temp,decl->memoryMapBits.value());
       params->Insert(S8("ADDR_W"),expr);
     }
-
     
     for(int i = 0; i < inst->outputs.size; i++){
       if(inst->outputs[i]){

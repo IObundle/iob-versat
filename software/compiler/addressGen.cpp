@@ -451,7 +451,7 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
 
   if(internal.size > 3){
     // TODO: Proper error reporting requires us to lift the data up.
-    printf("Error instantiating address gen. Contains more loops than the unit is capable of handling\n");
+    printf("[ERROR] Address gen contains more loops than the unit is capable of handling\n");
     exit(-1);
   }
   
