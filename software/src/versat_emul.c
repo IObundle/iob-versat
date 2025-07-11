@@ -45,6 +45,7 @@ AcceleratorStatic* GetStartOfStatic();
 bool CreateVCD;
 bool SimulateDatabus;
 bool versatInitialized;
+VersatPrintf versatPrintf;
 
 void ConfigEnableDMA(bool value){
 }
@@ -71,6 +72,10 @@ void versat_init(int base){
   accelConfig = GetStartOfConfig();
   accelState = GetStartOfState();
   accelStatic = GetStartOfStatic();
+}
+
+void SetVersatDebugPrintfFunction(VersatPrintf function){
+  versatPrintf = function;
 }
 
 static void CheckVersatInitialized(){

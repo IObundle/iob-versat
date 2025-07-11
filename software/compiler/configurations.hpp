@@ -146,6 +146,7 @@ struct AccelInfoIterator{
   int index;
   int mergeIndex;
 
+  void SetMergeIndex(int index){mergeIndex = index;};
   Array<InstanceInfo>& GetCurrentMerge();
   int MergeSize();
 

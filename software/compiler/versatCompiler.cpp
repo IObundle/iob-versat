@@ -3,8 +3,11 @@
 #include <ftw.h>
 
 // TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
+#include "embeddedData.hpp"
+#include "memory.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
+#include "utilsCore.hpp"
 #include "versatSpecificationParser.hpp"
 #include "declaration.hpp"
 #include "templateEngine.hpp"
@@ -218,7 +221,7 @@ int main(int argc,char* argv[]){
 #ifdef VERSAT_DEBUG
   printf("Running in debug mode\n");
 #endif
-
+  
   InitDebug();
   
   Arena globalPermanentInst = InitArena(Megabyte(128));
@@ -275,6 +278,7 @@ int main(int argc,char* argv[]){
   globalDebug.outputVCD = true;
   
   // Register Versat common files. 
+  bool anyError = false;
   for(FileContent file : defaultVerilogUnits){
     String content = file.content;
     
@@ -283,10 +287,15 @@ int main(int argc,char* argv[]){
     
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm);
-      RegisterModuleInfo(&info,perm);
+      Opt<FUDeclaration*> inst = RegisterModuleInfo(&info,perm);
+      anyError |= !inst.has_value();
     }
   }
 
+  if(anyError){
+    return -1;
+  }
+  
   // We need to do this after parsing the modules because the majority of these special types come from verilog files
   // NOTE: This should never fail since the verilog files are embedded into the exe. A fail in here means that we failed to embed the necessary files at build time
   BasicDeclaration::buffer = GetTypeByNameOrFail(S8("Buffer"));
@@ -378,42 +387,44 @@ int main(int argc,char* argv[]){
 
   // TODO: Simplify this part. 
   FUDeclaration* simpleType = GetTypeByName(topLevelTypeStr);
-  
+
   if(!simpleType && specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
     String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
     
     Array<ConstructDef> types = ParseVersatSpecification(content,temp);
 
-    int addressGens = 0;
-    for(ConstructDef t : types){
-      if(t.type == ConstructType_ADDRESSGEN){
-        addressGens += 1;
-      }
-    }
-
-    Hashmap<String,AddressAccess*>* addresses = PushHashmap<String,AddressAccess*>(perm,addressGens);
-
-    // For now we compile every single address gen that is used but eventually we want to only compile what we need, otherwise the address gen tests will always fail.
-    bool anyError = false;
-    for(ConstructDef t : types){
-      if(t.type != ConstructType_ADDRESSGEN){
-        continue;
+    auto GetConstructOrFail = [&types](String name) -> ConstructDef{
+      for(ConstructDef def : types){
+        if(CompareString(def.base.name,name)){
+          return def;
+        }
       }
 
-      AddressAccess* access = ConvertAddressGenDef(&t.addressGen,perm);
-
-      if(!access){
-        anyError = true;
-      }
-
-      addresses->Insert(t.addressGen.name,access);
-    }
+      Assert(false);
+      return {};
+    };
     
-    int size = types.size;
+    auto moduleLike = PushArenaList<ConstructDef>(temp);
+    for(ConstructDef def : types){
+      if(IsModuleLike(def)){
+        *moduleLike->PushElem() = def;
+      }
+    }
+    auto modules = PushArrayFromList(temp,moduleLike);
+
+    auto addressGenList = PushArenaList<ConstructDef>(temp);
+    for(ConstructDef def : types){
+      if(def.type == ConstructType_ADDRESSGEN){
+        *addressGenList->PushElem() = def;
+      }
+    }
+    auto addressGen = PushArrayFromList(temp,addressGenList);
+    
+    int size = modules.size;
     
     Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
     for(int i = 0; i < size; i++){
-      typeToId->Insert(types[i].base.name,i);
+      typeToId->Insert(modules[i].base.name,i);
     }
     
     if(!typeToId->Exists(topLevelTypeStr)){
@@ -423,7 +434,7 @@ int main(int argc,char* argv[]){
     
     auto arr = StartArray<Pair<int,int>>(temp2);
     for(int i = 0; i < size; i++){
-      Array<Token> subTypesUsed = TypesUsed(types[i],temp);
+      Array<Token> subTypesUsed = TypesUsed(modules[i],temp);
 
       for(String str : subTypesUsed){
         int* index = typeToId->Get(str);
@@ -442,22 +453,110 @@ int main(int argc,char* argv[]){
 
     for(int i : order){
       Work work = {};
-      String name = types[i].base.name;
-      work.definition = types[i];
+      Token name = modules[i].base.name;
+      work.definition = modules[i];
       
       typeToWork->Insert(name,work);
     }
     
     for(int i : order){
-      ConstructDef type = types[i];
+      ConstructDef type = modules[i];
       GetSubWorkRequirement(typeToWork,type);
     }
 
+    // We first validity check merge and if the types they are merging actually exist.
+    bool anyError = false;
+    for(auto p : typeToWork){
+      Work work = *p.second;
+
+      if(work.definition.type == ConstructType_MERGE){
+        MergeDef merge = work.definition.merge;
+
+        for(TypeAndInstance tp : merge.declarations){
+          bool found = false;
+          for(auto p : typeToWork){
+            if(CompareString(p.first,tp.typeName)){
+              found = true;
+              break;
+            }
+          }
+
+          if(!found){
+            ReportError(content,tp.typeName,"Did not find type");
+            anyError = true;
+          }
+        }
+      }
+    }
+
+    if(anyError){
+      return -1;
+    }
+
+    // After getting all the types that we need to process, we first collect and compile all the address gens that are gonna be needed.
+    auto addressGenTokensUsed = PushArenaList<Token>(temp);
+    
+    for(auto p : typeToWork){
+      Work work = *p.second;
+
+      if(IsModuleLike(work.definition)){
+        Array<Token> tokens = AddressGenUsed(work.definition,types,temp);
+
+        for(Token t : tokens){
+          *addressGenTokensUsed->PushElem() = t;
+        }
+      }
+    }
+
+    Array<Token> allAddressGenUsed = PushArrayFromList(temp,addressGenTokensUsed);
+
+    for(Token t : allAddressGenUsed){
+      bool found = false;
+      for(ConstructDef def : addressGen){
+        if(CompareString(def.base.name,t)){
+          found = true;
+          break;
+        }
+      }
+
+      if(!found){
+        ReportError(content,t,"Did not find address gen definition");
+        anyError = true;
+      }
+    }
+    
+    if(anyError){
+      return -1;
+    }
+
+    // NOTE: From this point on, no missing address gen or missing module problem should exist. Everything has been validity in regards to missing definitions and everything passed. (There can still exist problems inherit to the construct itself).
+    
+    TrieSet<String>* allAddressGens = PushTrieSet<String>(temp);
+    for(Token t : allAddressGenUsed){
+      allAddressGens->Insert(t);
+    }
+
+    // For now we compile every single address gen that is used but eventually we want to only compile what we need, otherwise the address gen tests will always fail.
+    for(String name : allAddressGens){
+      ConstructDef def = GetConstructOrFail(name);
+
+      AddressAccess* access = ConvertAddressGenDef(&def.addressGen,content);
+
+      if(!access){
+        anyError = true;
+      }
+    }
+
+    // TODO: We could push more, we can technically parse the modules even if we have address gen errors.
+    if(anyError){
+      return -1;
+    }
+    
     // For the TOP unit, currently we do everything:
     Work* topWork = &typeToWork->GetOrFail(topLevelTypeStr);
     topWork->calculateDelayFixedGraph = true;
     topWork->flattenWithMapping = true;
-
+      
     for(auto p : typeToWork){
       Work work = *p.second;
 
@@ -618,17 +717,70 @@ int main(int argc,char* argv[]){
     }
   }
 
-  // TODO: Parameters need to be revised. We are kinda hacking this stuff for too long.
-  if(!SetParameter(TOP,STRING("AXI_ADDR_W"),STRING("AXI_ADDR_W"))){
-    printf("Error\n");
-  }
-  SetParameter(TOP,STRING("LEN_W"),STRING("LEN_W"));
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
+  FillStaticInfo(&info);
+  
+  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
 
+  Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
+  int externalIndex = 0;
+  for(InstanceInfo& in : info.infos[0].info){
+    if(!in.isComposite){
+      for(ExternalMemoryInterface& inter : in.decl->externalMemory){
+        external[externalIndex++] = inter;
+      }
+    }
+  }
+  external.size = externalIndex;
+  
   OutputTopLevelFiles(accel,type,
                      globalOptions.hardwareOutputFilepath.data,
                      globalOptions.softwareOutputFilepath.data,
-                     isSimple);
+                      isSimple,info,val,external);
 
+  // NOTE: This data is printed so it can be captured by the IOB python setup.
+  // TODO: Probably want a more robust way of doing this. Eventually want to printout some stats so we can
+  //       actually visualize what we are producing.
+  printf("Some stats\n");
+  printf("CONFIG_BITS: %d\n",val.configurationBits);
+  printf("STATE_BITS: %d\n",val.stateBits);
+
+  printf("MEM_USED: ");
+  String content = ReprMemorySize(val.totalExternalMemory,temp);
+  printf("%.*s",UN(content));
+  printf("\n");
+
+  printf("UNITS: %d\n",val.nUnits);
+  printf("ADDR_W:%d\n",val.memoryConfigDecisionBit + 1);
+  if(val.nUnitsIO){
+    printf("HAS_AXI:True\n");
+  }
+  
+  if(globalOptions.exportInternalMemories){
+    int index = 0;
+    for(ExternalMemoryInterface inter : external){
+      switch(inter.type){
+      case ExternalMemoryType::DP:{
+        printf("DP - %d",index++);
+        for(int i = 0; i < 2; i++){
+          printf(",%d",inter.dp[i].bitSize);
+          printf(",%d",inter.dp[i].dataSizeOut);
+          printf(",%d",inter.dp[i].dataSizeIn);
+        }
+        printf("\n");
+      }break;
+      case ExternalMemoryType::TWO_P:{
+        printf("2P - %d",index++);
+        printf(",%d",inter.tp.bitSizeOut);
+        printf(",%d",inter.tp.bitSizeIn);
+        printf(",%d",inter.tp.dataSizeOut);
+        printf(",%d",inter.tp.dataSizeIn);
+        printf("\n");
+      }break;
+      }
+    }
+  }
+  
   for(FUDeclaration* decl : globalDeclarations){
     BLOCK_REGION(temp);
 

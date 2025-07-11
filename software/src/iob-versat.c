@@ -24,6 +24,12 @@ extern "C"{
 typedef uint64_t uint64;
 
 iptr versat_base;
+VersatPrintf versatPrintf;
+
+// NOTE: Use PRINT instead of versatPrintf, since versatPrintf is not required to be set.
+// NOTE: This is mostly a debug tool that should not be built upon. We want to use pc-emul to report errors to user, we do not want to polute embedded with error checkings that waste precious cpu cycles.
+#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
+
 static bool enableDMA;
 
 // TODO: Need to dephase typeof, it is a gnu extension, not valid C until version C23 which is recent to support
@@ -36,7 +42,7 @@ void versat_init(int base){
   enableDMA = false; // It is more problematic for the general case if we start enabled. More error prone, especially when integrating with linux.
 
   // TODO: Need to receive a printf like function from outside to enable this, I do not want to tie the implementation to IObSoC.
-  //printf("Embedded Versat\n");
+  //PRINT("Embedded Versat\n");
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
@@ -47,13 +53,17 @@ void versat_init(int base){
   VersatLoadDelay(delayBuffer);
 }
 
+void SetVersatDebugPrintfFunction(VersatPrintf function){
+  versatPrintf = function;
+}
+
 void StartAccelerator(){
-  //printf("Start accelerator\n");
+  //PRINT("Start accelerator\n");
   MEMSET(versat_base,0x0,1);
 }
 
 void EndAccelerator(){
-  //printf("End accelerator\n");
+  //PRINT("End accelerator\n");
   while(1){
     volatile int val = MEMGET(versat_base,0x0);
     if(val){
@@ -102,11 +112,11 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
 
   if(dataInsideVersat == destInsideVersat){
     if(dataInsideVersat){
-      //printf("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
+      //PRINT("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
     } else {
-      //printf("Warning, Versat cannot use its DMA when both regions are outside its address space\n");
+      //PRINT("Warning, Versat cannot use its DMA when both regions are outside its address space\n");
     }
-    //printf("Using a simple copy loop for now\n");
+    //PRINT("Using a simple copy loop for now\n");
   }
 
   if(enableDMA && acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){

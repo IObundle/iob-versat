@@ -10,7 +10,6 @@
 #include "stdint.h"
 #endif
 
-#define MAX(A,B) (((A) > (B)) ? (A) : (B))
 typedef intptr_t iptr;
 
 // Config
@@ -51,6 +50,10 @@ extern "C" {
 // Always call first before calling any other function.
 void versat_init(int base);
 
+// Versat runtime does not provide any output unless provided with a printf like function by the user.
+typedef int (*VersatPrintf)(const char* format,...);
+void SetVersatDebugPrintfFunction(VersatPrintf function);
+
 // In pc-emul provides a low bound on performance.
 // In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
 int GetAcceleratorCyclesElapsed();
@@ -81,6 +84,7 @@ typedef struct{
 
 int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args);
 SimulateVReadResult SimulateVRead(AddressVArguments args);
+void SimulateAndPrintAddressGen(AddressVArguments args);
 
 #ifdef __cplusplus
 } // extern "C"

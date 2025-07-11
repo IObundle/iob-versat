@@ -624,6 +624,16 @@ bool Contains(Array<T> array,T toCheck){
    return false;
 }
 
+template<typename T>
+Opt<T> Find(Array<T> array,T toCheck){
+   for(int i = 0; i < array.size; i++){
+      if(array.data[i] == toCheck){
+         return array.data[i];
+      }
+   }
+   return {};
+}
+
 template<>
 inline bool Contains(Array<String> array,String toCheck){
    for(int i = 0; i < array.size; i++){

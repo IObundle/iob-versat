@@ -161,6 +161,8 @@ enum MergingStrategy{
   FIRST_FIT
 };
 
+bool EqualPortMapping(PortInstance p1,PortInstance p2);
+
 void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName);
 
 ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out);

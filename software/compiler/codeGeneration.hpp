@@ -3,6 +3,7 @@
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
 #include "utils.hpp"
+#include "accelerator.hpp"
 
 static const int DELAY_SIZE = 7;
 
@@ -70,7 +71,6 @@ static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
 }
 
 struct AddressGenDef;
-extern Pool<AddressGenDef> addressGens;
 
 struct StructInfo;
 
@@ -156,11 +156,11 @@ struct VerilogInterfaceSpec{
   bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
 };
 
-Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena* out);
+String GlobalStaticWireName(StaticId id,Wire w,Arena* out);
 
 void OutputCircuitSource(FUDeclaration* decl,FILE* file);
 void OutputIterativeSource(FUDeclaration* decl,FILE* file);
 
 // Versat_instance, all external memory files, makefile for pc-emul, basically everything that is only generated once.
 // For the top instance and support files.
-void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple);
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);

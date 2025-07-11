@@ -36,6 +36,116 @@ static char GetOperationSymbol(SymbolicExpression* expr){
   }
 }
 
+void PushSymbolicRepr(ArenaList<SymbolicReprAtom>* builder,int literal){
+  SymbolicReprAtom* atom = builder->PushElem();
+  atom->type = SymbolicReprType_LITERAL;
+  atom->literal = literal;
+};
+
+void PushSymbolicRepr(ArenaList<SymbolicReprAtom>* builder,String variable){
+  SymbolicReprAtom* atom = builder->PushElem();
+  atom->type = SymbolicReprType_VARIABLE;
+  atom->variable = variable;
+};
+
+void PushSymbolicRepr(ArenaList<SymbolicReprAtom>* builder,char op){
+  SymbolicReprAtom* atom = builder->PushElem();
+  atom->type = SymbolicReprType_OP;
+  atom->op = op;
+};
+
+void CompileRepresentationRecursive(ArenaList<SymbolicReprAtom>* b,SymbolicExpression* expr,bool top,int parentBindingStrength){
+  if(expr->negative){
+    PushSymbolicRepr(b,'-');
+  }
+
+  int bindingStrength = TypeToBingingStrength(expr);
+  bool bind = (parentBindingStrength >= bindingStrength);
+
+  //bind = true;
+  switch(expr->type){
+  case SymbolicExpressionType_FUNC: {
+    PushSymbolicRepr(b,'(');
+
+    bool first = true;
+    for(SymbolicExpression* terms : expr->terms){
+      if(first){
+        first = false;
+      } else {
+        PushSymbolicRepr(b,',');
+      }
+      CompileRepresentationRecursive(b,terms,false,0);
+    }
+    PushSymbolicRepr(b,')');
+
+  } break;
+  case SymbolicExpressionType_VARIABLE: {
+    PushSymbolicRepr(b,expr->variable);
+  } break;
+  case SymbolicExpressionType_LITERAL: {
+    PushSymbolicRepr(b,expr->literal);
+  } break;
+  case SymbolicExpressionType_DIV: {
+    if(expr->negative){
+      bind = true;
+    }
+    
+    bool hasNonOpSon = (expr->top->type != SymbolicExpressionType_DIV && expr->bottom->type != SymbolicExpressionType_DIV);
+    if(hasNonOpSon && !top && bind){
+      PushSymbolicRepr(b,'(');
+    }
+
+    CompileRepresentationRecursive(b,expr->top,false,bindingStrength);
+    PushSymbolicRepr(b,'/');
+
+    CompileRepresentationRecursive(b,expr->bottom,false,bindingStrength);
+    if(hasNonOpSon && !top && bind){
+      PushSymbolicRepr(b,')');
+    }
+  } break;
+  case SymbolicExpressionType_SUM:
+  case SymbolicExpressionType_MUL: {
+  //case SymbolicExpressionType_ARRAY: {
+    if(expr->negative){
+      bind = true;
+    }
+
+    if(bind){
+      PushSymbolicRepr(b,'(');
+    }
+
+    bool first = true;
+    for(SymbolicExpression* s : expr->terms){
+      if(!first){
+        if(s->negative && expr->type == SymbolicExpressionType_SUM){
+          //builder.PushString("-"); // Do not print anything  because we already printed the '-'
+        } else {
+          PushSymbolicRepr(b,GetOperationSymbol(expr));
+        }
+      } else {
+        //if(s->negative && expr->op == '+'){
+        //  builder.PushString("-");
+        //}
+      }
+      CompileRepresentationRecursive(b,s,false,bindingStrength);
+      first = false;
+    }
+    if(bind){
+      PushSymbolicRepr(b,')');
+    }
+  } break;
+  }
+}
+
+Array<SymbolicReprAtom> CompileRepresentation(SymbolicExpression* expr,Arena* out){
+  TEMP_REGION(temp,out);
+
+  auto list = PushArenaList<SymbolicReprAtom>(temp);
+  
+  CompileRepresentationRecursive(list,expr,true,0);
+  return PushArrayFromList(out,list);
+}
+
 static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,bool top,int parentBindingStrength){
   if(expr->negative){
     builder->PushString("-");
@@ -1011,7 +1121,6 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
     }
     
     Array<SymbolicExpression*> allLiterals = PushArrayFromList(temp,literals);
-    Array<SymbolicExpression*> allChilds = PushArrayFromList(temp,childs);
     
     bool isMul = (expr->type == SymbolicExpressionType_MUL);
     
@@ -1680,8 +1789,6 @@ SymbolicExpression* Group(SymbolicExpression* expr,String variableToGroupWith,Ar
     }
 
     SymbolicExpression* terms = Normalize(termsInside,out);
-    SymbolicExpression* varTerm = SymbolicDeepCopy(toGroup[0].base,out);
-    
     SymbolicExpression* grouped = SymbolicMult(terms,toGroup[0].base,out);
     
     return SymbolicAdd(left,grouped,out);
@@ -1972,17 +2079,20 @@ void TestSymbolic(){
   }
 }
 
-// Returns first found, assuming that the expression was normalized beforehand otherwise gonna miss literals
-static Opt<int> FindLiteralIndex(SymbolicExpression* expr){
-  int size = expr->terms.size;
-  for(int i = 0; i < size; i++){
-    SymbolicExpression* child = expr->terms[i];
-    if(child->type == SymbolicExpressionType_LITERAL){
-      return i;
+Array<String> GetAllSymbols(SymbolicExpression* expr,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  Array<SymbolicExpression*> allExpressions = GetAllExpressions(expr,temp);
+
+  TrieSet<String>* set = PushTrieSet<String>(temp);
+  
+  for(SymbolicExpression* expr : allExpressions){
+    if(expr->type == SymbolicExpressionType_VARIABLE){
+      set->Insert(expr->variable);
     }
   }
-
-  return {};
+  
+  return PushArrayFromSet(out,set);
 }
 
 Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,String variableName,Arena* out){

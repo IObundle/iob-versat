@@ -13,9 +13,6 @@ struct AccelInfo;
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
 
-#define PushInstanceMap(...) PushHashmap<FUInstance*,FUInstance*>(__VA_ARGS__)
-#define PushEdgeMap(...) PushHashmap<Edge,Edge>(__VA_ARGS__)
-
 struct PortInstance{
   FUInstance* inst;
   int port;
@@ -30,15 +27,6 @@ inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
   bool res = !(p1 == p2);
   return res;
 }
-
-template<> class std::hash<FUInstance*>{
-public:
-   std::size_t operator()(FUInstance* t) const noexcept{
-     int offset = sizeof(void*) == 8 ? 3 : 2;
-     std::size_t res = ((std::size_t) t) >> offset;
-     return res;
-   }
-};
 
 template<> class std::hash<PortInstance>{
 public:
@@ -274,8 +262,8 @@ template<> class std::hash<StaticId>{
 };
 
 struct StaticData{
-  FUDeclaration* decl; // Declaration of unit that contains the given configs
-  Array<Wire> configs;
+  FUDeclaration* decl; // Declaration of unit that contains the origin of the given configs
+  Array<Wire> configs; // The actual configs, which might differ from decl->configs because parameters might be instantiated 
 };
 
 struct StaticInfo{
@@ -288,93 +276,12 @@ struct CalculatedOffsets{
    int max;
 };
 
-enum MemType{
-   CONFIG,
-   STATE,
-   DELAY,
-   STATIC
+struct DelayToAdd{
+  Edge edge;
+  String bufferName;
+  String bufferParameters;
+  int bufferAmount;
 };
-
-Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
-
-Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
-Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,InstanceMap* map); // Maps instances from accel to the copy
-FUInstance*  CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
-
-bool NameExists(Accelerator* accel,String name);
-
-int GetFreeShareIndex(Accelerator* accel);
-void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
-void SetStatic(Accelerator* accel,FUInstance* instance);
-
-Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out);
-
-// TODO: This could work on top of AccelInfo.
-Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out);
-
-int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
-int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
-
-// TODO: Instead of versatComputedValues, could return something like a FUDeclaration
-//       (or something that FUDeclaration would be composed off)
-//
-
-// This computes the values for the top accelerator only.
-// Different of a regular accelerator because it can add more configs for DMA and other top level things
-VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA,Arena* out);
-
-// Returns false if parameter does not exist 
-bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
-
-Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
-EdgeIterator IterateEdges(Accelerator* accel);
-
-// Unit connection
-Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
-void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
-void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
-void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
-
-void CalculateNodeType(FUInstance* node);
-void FixInputs(FUInstance* node);
-
-Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
-Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
-
-void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
-
-// Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
-
-// If we have A:X -> B:Y and we give this function B:Y, it returns A:X
-PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
-
-bool IsCombinatorial(Accelerator* accel);
-
-void ConnectUnits(PortInstance out,PortInstance in,int delay);
-
-String GlobalStaticWireName(StaticId id,Wire w,Arena* out);
-
-// Accelerator mappings. A simple way of mapping nodes and port edges from one accelerator to another.
-void MappingCheck(AcceleratorMapping* map);
-void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
-AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out);
-AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int size,Arena* out);
-AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out);
-AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping* second,Arena* out);
-PortInstance MappingMapInput(AcceleratorMapping* mapping,PortInstance toMap);
-PortInstance MappingMapOutput(AcceleratorMapping* mapping,PortInstance toMap);
-void MappingInsertEqualNode(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second);
-void MappingInsertInput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
-void MappingInsertOutput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
-void MappingPrintInfo(AcceleratorMapping* map);
-void MappingPrintAll(AcceleratorMapping* map);
-
-FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
-
-Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 struct SubMappingInfo{
   FUDeclaration* subDeclaration;
@@ -382,8 +289,6 @@ struct SubMappingInfo{
   bool isInput;
   int subPort;
 };
-
-typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
 
 inline bool operator==(const SubMappingInfo& p1,const SubMappingInfo& p2){
   bool res = (p1.subDeclaration == p2.subDeclaration &&
@@ -404,5 +309,98 @@ public:
      return res;
    }
 };
+
+typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
+
+//
+// Accelerator creation
+//
+
+Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
+Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds);
+Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
+
+//
+// Unit creation and operations
+FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
+FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
+
+// Returns false if parameter does not exist 
+bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
+
+int GetFreeShareIndex(Accelerator* accel);
+void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
+void SetStatic(Accelerator* accel,FUInstance* instance);
+
+// 
+// Edge iteration and edge operations, including connecting units
+Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
+EdgeIterator IterateEdges(Accelerator* accel);
+
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
+void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
+void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
+void ConnectUnits(PortInstance out,PortInstance in,int delay);
+void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
+
+// Fixes edges such that unit before connected to after, are reconnected to new unit
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
+
+//
+// Graph info and connection calculations
+FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
+FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
+Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
+Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
+
+// If we have A:X -> B:Y and we give this function B:Y, it returns A:X
+PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
+
+
+//
+// Graph fixes and operations
+void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays);
+Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times);
+DAGOrderNodes CalculateDAGOrder(Accelerator* accel,Arena* out);
+
+
+bool IsCombinatorial(Accelerator* accel);
+bool IsUnitCombinatorial(FUInstance* inst);
+bool NameExists(Accelerator* accel,String name);
+
+Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out);
+
+Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out);
+
+// TODO: We kinda want to "remove" this since memories should be able to depend on parameters, but we currently calculate and instantiate memories because we cannot export memory info.
+int ExternalMemoryByteSize(ExternalMemoryInterface* inter);
+int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size of a simple memory mapping.
+
+// This computes the values for the top accelerator only.
+// Different of a regular accelerator because it can add more configs for DMA and other top level things
+VersatComputedValues ComputeVersatValues(AccelInfo* accel,bool useDMA,Arena* out);
+
+//
+// Accelerator mappings. A simple way of mapping nodes and port edges from one accelerator to another.
+void MappingCheck(AcceleratorMapping* map);
+void MappingCheck(AcceleratorMapping* map,Accelerator* first,Accelerator* second);
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,Arena* out);
+AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int size,Arena* out);
+AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out);
+AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping* second,Arena* out);
+PortInstance MappingMapInput(AcceleratorMapping* mapping,PortInstance toMap);
+PortInstance MappingMapOutput(AcceleratorMapping* mapping,PortInstance toMap);
+void MappingInsertEqualNode(AcceleratorMapping* mapping,FUInstance* first,FUInstance* second);
+void MappingInsertInput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
+void MappingInsertOutput(AcceleratorMapping* mapping,PortInstance first,PortInstance second);
+void MappingPrintInfo(AcceleratorMapping* map);
+void MappingPrintAll(AcceleratorMapping* map);
+
+FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
+
+Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 void PrintSubMappingInfo(SubMap* info);

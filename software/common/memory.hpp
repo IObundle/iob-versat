@@ -6,7 +6,6 @@
 #include <stdarg.h>
 
 #include "utilsCore.hpp"
-#include "logger.hpp"
 
 struct Arena;
 extern Arena* contextArenas[2];
@@ -896,25 +895,6 @@ GetOrAllocateResult<Data> Hashmap<Key,Data>::GetOrAllocate(Key key){
   res.data = ptr;
   return res;
 }
-
-#if 0
-template<typename Key,typename Data>
-HashmapIterator<Key,Data> Hashmap<Key,Data>::begin(){
-  HashmapIterator<Key,Data> iter = {};
-  iter.pairs = this->data;
-  return iter;
-}
-
-template<typename Key,typename Data>
-HashmapIterator<Key,Data> Hashmap<Key,Data>::end(){
-  HashmapIterator<Key,Data> iter = {};
-
-  iter.pairs = this->data;
-  iter.index = this->nodesUsed;
-
-  return iter;
-}
-#endif
 
 template<typename Key,typename Data>
 HashmapIterator<Key,Data> begin(Hashmap<Key,Data>* hashmap){

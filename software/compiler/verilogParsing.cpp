@@ -218,9 +218,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek();
 
-      auto mark = tok->Mark();
       Token defineName = tok->NextToken();
-      
       Token emptySpace = tok->PeekWhitespace();
 
       if(emptySpace.size == 0){ // Function macro

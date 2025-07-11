@@ -14,11 +14,11 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
 
   FUInstance* instance = (FUInstance*) inst;
 
-  bool expl  = format & GRAPH_DOT_FORMAT_EXPLICIT;
-  bool name  = format & GRAPH_DOT_FORMAT_NAME;
-  bool type  = format & GRAPH_DOT_FORMAT_TYPE;
-  bool id    = format & GRAPH_DOT_FORMAT_ID;
-  bool delay = format & GRAPH_DOT_FORMAT_DELAY;
+  bool expl  = format & GraphDotFormat_EXPLICIT;
+  bool name  = format & GraphDotFormat_NAME;
+  bool type  = format & GraphDotFormat_TYPE;
+  bool id    = format & GraphDotFormat_ID;
+  bool delay = format & GraphDotFormat_DELAY;
 
   bool buffer = (HasVariableDelay(inst->declaration) || inst->declaration == BasicDeclaration::fixedBuffer);
 
@@ -71,8 +71,8 @@ String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Are
   TEMP_REGION(temp,out);
   auto builder = StartString(temp);
 
-  bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
-  bool lat  = format & GRAPH_DOT_FORMAT_LATENCY;
+  bool expl = format & GraphDotFormat_EXPLICIT;
+  bool lat  = format & GraphDotFormat_LATENCY;
 
   builder->PushString(Repr(inPort,format,temp));
 
@@ -100,9 +100,9 @@ String Repr(PortInstance* port,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
   auto builder = StartString(temp);
 
-  builder->PushString(Repr(port->inst,GRAPH_DOT_FORMAT_NAME,temp));
+  builder->PushString(Repr(port->inst,GraphDotFormat_NAME,temp));
 
-  bool expl = format & GRAPH_DOT_FORMAT_EXPLICIT;
+  bool expl = format & GraphDotFormat_EXPLICIT;
 
   if(expl){
     builder->PushString("_Port:");
@@ -117,7 +117,7 @@ String Repr(Edge* edge,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
   auto builder = StartString(temp);
 
-  format |= GRAPH_DOT_FORMAT_NAME;
+  format = (GraphDotFormat) ((int) format | (int)GraphDotFormat_NAME);
 
   builder->PushString(Repr(&edge->units[0],format,temp));
   builder->PushString(" -- ");
@@ -131,7 +131,7 @@ String Repr(MergeEdge* node,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
   auto builder = StartString(temp);
 
-  format |= GRAPH_DOT_FORMAT_NAME;
+  format = (GraphDotFormat) ((int) format | (int)GraphDotFormat_NAME);
 
   builder->PushString(Repr(node->instances[0],format,temp));
   builder->PushString(" -- ");
@@ -144,7 +144,7 @@ String Repr(MergeEdge* node,GraphDotFormat format,Arena* out){
 
 String Repr(MappingNode* node,Arena* out){
   String name = {};
-  GraphDotFormat format = GRAPH_DOT_FORMAT_NAME;
+  GraphDotFormat format = GraphDotFormat_NAME;
 
   if(node->type == MappingNode::NODE){
     name = Repr(&node->nodes,format,out);

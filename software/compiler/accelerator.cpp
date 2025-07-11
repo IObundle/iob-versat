@@ -90,6 +90,37 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String name)
   return inst;
 }
 
+Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds){
+  TEMP_REGION(temp,nullptr);
+  
+  Accelerator* newAccel = CreateAccelerator(accel->name,purpose);
+
+  TrieMap<FUInstance*,FUInstance*>* map = PushTrieMap<FUInstance*,FUInstance*>(temp);
+
+  // Copy of instances
+  for(FUInstance* ptr : accel->allocated){
+    FUInstance* inst = ptr;
+    FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
+    
+    map->Insert(inst,newInst);
+  }
+
+  EdgeIterator iter = IterateEdges(accel);
+
+  // Flat copy of edges
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+    FUInstance* out = map->GetOrFail(edge.units[0].inst);
+    int outPort = edge.units[0].port;
+    FUInstance* in = map->GetOrFail(edge.units[1].inst);
+    int inPort = edge.units[1].port;
+    
+    ConnectUnits(out,outPort,in,inPort,edge.delay);
+  }
+  
+  return newAccel;
+}
+
 Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out){
   Accelerator* newAccel = CreateAccelerator(accel->name,purpose);
 
@@ -115,39 +146,6 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
   }
   
   return {newAccel,map};
-}
-
-Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,InstanceMap* map){
-  TEMP_REGION(temp,nullptr);
-  
-  Accelerator* newAccel = CreateAccelerator(accel->name,purpose);
-
-  if(map == nullptr){
-    map = PushHashmap<FUInstance*,FUInstance*>(temp,999);
-  }
-
-  // Copy of instances
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
-    
-    map->Insert(inst,newInst);
-  }
-
-  EdgeIterator iter = IterateEdges(accel);
-
-  // Flat copy of edges
-  while(iter.HasNext()){
-    Edge edge = iter.Next();
-    FUInstance* out = map->GetOrFail(edge.units[0].inst);
-    int outPort = edge.units[0].port;
-    FUInstance* in = map->GetOrFail(edge.units[1].inst);
-    int inPort = edge.units[1].port;
-    
-    ConnectUnits(out,outPort,in,inPort,edge.delay);
-  }
-  
-  return newAccel;
 }
 
 FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserveIds,String newName){
@@ -291,7 +289,8 @@ static int Visit(Array<FUInstance*> ordering,int& nodesFound,FUInstance* node,Ha
   return count;
 }
 
-DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
+DAGOrderNodes CalculateDAGOrder(Accelerator* accel,Arena* out){
+  Pool<FUInstance>* instances = &accel->allocated;
   int size = instances->Size();
 
   DAGOrderNodes res = {};
@@ -310,7 +309,6 @@ DAGOrderNodes CalculateDAGOrder(Pool<FUInstance>* instances,Arena* out){
     tags->Insert(ptr,0);
   }
 
-  int mark = res.instances.size;
   // Add source units, guaranteed to come first
   for(FUInstance* ptr : *instances){
     FUInstance* inst = ptr;
@@ -409,34 +407,6 @@ bool IsUnitCombinatorial(FUInstance* instance){
 
   return true;
 #endif
-}
-
-Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out){
-  TEMP_REGION(temp,out);
-
-  ArenaList<DelayToAdd>* list = PushArenaList<DelayToAdd>(temp);
-  
-  int buffersInserted = 0;
-  for(auto edgePair : edgeDelays){
-    Edge edge = edgePair.first;
-    DelayInfo delay = *edgePair.second;
-
-    if(delay.value == 0 || delay.isAny){
-      continue;
-    }
-
-    Assert(delay.value > 0); // Cannot deal with negative delays at this stage.
-
-    DelayToAdd var = {};
-    var.edge = edge;
-    var.bufferName = PushString(out,"buffer%d",buffersInserted++);
-    var.bufferAmount = delay.value - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
-    var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
-
-    *list->PushElem() = var;
-  }
-
-  return PushArrayFromList(out,list);
 }
 
 void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
@@ -783,7 +753,7 @@ bool SetParameter(FUInstance* inst,String parameterName,String parameterValue){
   return false;
 }
 
-void CalculateNodeType(FUInstance* node){
+static void CalculateNodeType(FUInstance* node){
   bool hasInput = (node->allInputs != nullptr);
   bool hasOutput = (node->allOutputs != nullptr);
 
@@ -803,7 +773,7 @@ void CalculateNodeType(FUInstance* node){
   }
 }
 
-void FixInputs(FUInstance* node){
+static void FixInputs(FUInstance* node){
   Memset(node->inputs,{});
   node->multipleSamePortInputs = false;
 

@@ -11,7 +11,6 @@
 #include <cstdarg>
 #include <cstdlib>
 
-#include "logger.hpp"
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
 
@@ -280,7 +279,7 @@ void StringBuilder::PushString(String string){
   
   String str = string;
   while(1){
-    i16 toCopyAmount = MIN(str.size,(STRING_NODE_SIZE - ptr->used));
+    i16 toCopyAmount = MIN((long unsigned) str.size,(STRING_NODE_SIZE - ptr->used));
     memcpy(&ptr->buffer[ptr->used],str.data,toCopyAmount);
 
     str.data += toCopyAmount;

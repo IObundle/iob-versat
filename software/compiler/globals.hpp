@@ -38,8 +38,10 @@ struct Options{
   bool useSymbolAddress; // If the system removes the LSB bits of the address (alignment info) and if we must generate code to account for that.
 };
 
+enum GraphDotFormat : int;
+
 struct DebugState{
-  uint dotFormat;
+  GraphDotFormat dotFormat;
   bool outputGraphs;
   bool outputConsolidationGraphs;
   bool outputAccelerator;
@@ -56,6 +58,5 @@ extern DebugState globalDebug;
 extern Arena* globalPermanent;
 
 extern Pool<FUDeclaration> globalDeclarations;
-extern Pool<AddressGenDef> addressGens;
 
 Options DefaultOptions(Arena* out);

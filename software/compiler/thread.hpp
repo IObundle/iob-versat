@@ -1,5 +1,11 @@
 #pragma once
 
+/*
+  Most of this code was made in an attempt to accelerate max clique, but for the most part this is
+  mostly unused. Maybe in the future we might make use of this and for now we keep it as is.
+
+*/
+
 #include "memory.hpp"
 
 typedef void (*TaskFunction)(int id,void* args);

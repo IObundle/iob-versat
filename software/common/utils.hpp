@@ -22,12 +22,11 @@ Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute);
 void   PrintEscapedString(String toEscape,char spaceSubstitute);
 
-String CurrentWorkingDirectory(Arena* out);
 String GetAbsolutePath(String path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
 
-String ReprMemorySize(int val,Arena* out);
+String ReprMemorySize(size_t val,Arena* out);
 
 String JoinStrings(Array<String> strings,String separator,Arena* out);
 
@@ -110,7 +109,6 @@ struct ArenaList{
 
   T* PushElem();
 };
-
 
 // Implement C++ style foreach 
 template<typename T>

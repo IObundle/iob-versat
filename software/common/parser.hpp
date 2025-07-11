@@ -45,7 +45,7 @@ struct Cursor{
 
 struct Token : public String{
   Range<Cursor> loc;
-
+  
   Token& operator=(String str){
     this->data = str.data;
     this->size = str.size;
@@ -53,11 +53,34 @@ struct Token : public String{
   }
 };
 
+#if 0
+inline bool operator==(const Token& lhs,const Token& rhs){
+  bool first = CompareString(lhs,rhs);
+  if(!first){
+    return false;
+  }
+  if(lhs.loc.start.column != rhs.loc.start.column ||
+     lhs.loc.start.line != rhs.loc.start.line ||
+     lhs.loc.end.column != rhs.loc.end.column ||
+     lhs.loc.end.line != rhs.loc.end.line){
+    return false;
+  }
+  
+  return true;
+}
+
+inline bool operator!=(const Token& lhs,const Token& rhs){
+  bool res = !(lhs == rhs);
+
+  return res;
+}
+#endif
+
 template<> class std::hash<Token>{
 public:
-   std::size_t operator()(Token const& s) const noexcept{
-     return std::hash<String>()(s);
-   }
+  std::size_t operator()(Token const& s) const noexcept{
+    return std::hash<String>()(s);
+  }
 };
 
 struct FindFirstResult{

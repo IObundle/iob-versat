@@ -41,3 +41,5 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out);
 CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out);
 
 GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,Arena* out);
+
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out);

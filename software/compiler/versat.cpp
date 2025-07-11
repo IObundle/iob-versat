@@ -67,7 +67,7 @@ SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out
 }
 
 // TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
-FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
+Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   TEMP_REGION(temp,nullptr);
 
   Arena* perm = globalPermanent;
@@ -75,7 +75,8 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
   // Check same name
   for(FUDeclaration* decl : globalDeclarations){
     if(CompareString(decl->name,info->name)){
-      LogFatal(LogModule::TOP_SYS,"Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+      printf("Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+      return {};
     }
   }
 
@@ -96,7 +97,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
 
-#if 1
     // TODO: We cannot remove this because the external memories are instantiated based on this value and we currently have no way of exporting this value.
     //       This essentially means that the accelerator is still dependent on the setup phase, but this only affects the datapath size and the datapath size is mostly a setup phase thing anyway, so it is not the worst. 
     if(CompareString(def.name,STRING("AXI_DATA_W"))){
@@ -108,7 +108,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info,Arena* out){
 
       def.expr = expr;
     }
-#endif
 
     instantiated[i] = def;
   }
@@ -244,13 +243,10 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     
   decl->configs = PushArray<Wire>(out,val.configs);
   decl->states = PushArray<Wire>(out,val.states);
-  
-  Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
 
   int configIndex = 0;
   for(AccelInfoIterator iter = StartIteration(&val); iter.IsValid(); iter = iter.Step()){
     InstanceInfo* unit = iter.CurrentUnit();
-    bool isSimple = !unit->isComposite;
 
     Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(unit->inst,temp);
     
@@ -379,7 +375,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     return res;
   } else if(options == SubUnitOptions_BAREBONES){
     // TODO: Need to add back the OutputDebugDotGraph calls
-    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr); 
+    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true); 
 
     CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
@@ -390,7 +386,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     res->fixedDelayCircuit = circuit;
     res->fixedDelayCircuit->name = res->name;
   } else {
-    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
+    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true);
 
     Pair<Accelerator*,SubMap*> p = Flatten(res->baseCircuit,99);
   
@@ -648,7 +644,6 @@ int GetInputPortNumber(FUInstance* inputInstance){
 bool IsGlobalParameter(String name){
   if(CompareString(name,"AXI_ADDR_W") ||
      CompareString(name,"AXI_DATA_W") ||
-     //CompareString(name,"ADDR_W")     ||
      CompareString(name,"DATA_W")     ||
      CompareString(name,"LEN_W")      ||
      CompareString(name,"DELAY_W")){
@@ -665,23 +660,21 @@ Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena*
   
   for(int i = 0; i < decl->parameters.size; i++){
     Parameter param = decl->parameters[i];
-    ParameterValue val = inst->parameterValues[i];
+    String val = inst->parameterValues[i].val;
 
     if(IsGlobalParameter(param.name)){
       map->Insert(param.name,PushVariable(out,param.name));
     } else {
-      if(Empty(val.val)){
+      if(Empty(val)){
         map->Insert(param.name,param.valueExpr);
       } else {
-        map->Insert(param.name,ParseSymbolicExpression(val.val,out));
+        map->Insert(param.name,ParseSymbolicExpression(val,out));
       }
     }
   }
 
   return map;
 }
-
-#define DELAY_SIZE 7
 
 Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<StaticId,StaticData>* staticUnits,int addrOffset,Arena* out){
   TEMP_REGION(temp,out);
@@ -690,15 +683,12 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
 
   SymbolicExpression* expr = PushLiteral(temp,0);
   
-  int configBit = 0;
   int addr = addrOffset;
   for(auto n : nodes){
     for(Wire w : n->declaration->configs){
       WireInformation info = {};
       info.wire = w;
-      info.configBitStart = configBit;
-      configBit += w.bitSize;
-      info.addr = 4 * addr++;
+      info.addr = 4 * addr++; // TODO: This 4 is because we are using addresses that are byte aligned in a 32 bit system. We could make this proper instead of hardcoded.
 
       info.bitExpr = Normalize(expr,out);
       
@@ -724,8 +714,6 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.wire.name = ReprStaticConfig(n.first,&w,out);
       info.wire.sizeExpr = ReplaceVariables(w.sizeExpr,defaultParams,out);
 
-      info.configBitStart = configBit;
-      configBit += w.bitSize;
       info.addr = 4 * addr++;
       info.isStatic = true;
 
@@ -736,11 +724,13 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       *list->PushElem() = info;
     }
   }
+
+  int defaultDelaySize = 7;
   int delaysInserted = 0;
   for(auto n : nodes){
     for(int i = 0; i < n->declaration->NumberDelays(); i++){
       Wire wire = {};
-      wire.bitSize = DELAY_SIZE;
+      wire.bitSize = defaultDelaySize;
       wire.name = PushString(out,"Delay%d",delaysInserted++);
       wire.stage = VersatStage_COMPUTE;
 
@@ -748,8 +738,6 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.wire = wire;
       info.wire.sizeExpr = PushVariable(out,S8("DELAY_W"));
       
-      info.configBitStart = configBit;
-      configBit += DELAY_SIZE;
       info.addr = 4 * addr++;
 
       info.bitExpr = Normalize(expr,out);

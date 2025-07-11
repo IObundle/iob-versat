@@ -530,7 +530,12 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
       
       b->PushSpaces((level + 1) * 2);
 
-      b->PushString("%.*s = %.*s",UN(p.first),UN(p.second));
+      if(Empty(p.second)){
+        b->PushString("%.*s",UN(p.first));
+      } else {
+        b->PushString("%.*s = %.*s",UN(p.first),UN(p.second));
+      }
+      
       first = false;
     }
 

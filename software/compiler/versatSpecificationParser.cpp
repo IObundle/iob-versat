@@ -1,6 +1,7 @@
 #include "versatSpecificationParser.hpp"
 
 #include "declaration.hpp"
+#include "embeddedData.hpp"
 #include "templateEngine.hpp"
 #include "utilsCore.hpp"
 
@@ -18,14 +19,30 @@
 //         by actual error reporting. Not a single Assert is programmer error detector, all the current ones are
 //         user error that most be reported.
 
+
+// TODO: This functions could show more lines of code before and after so we can actually see where the problem is.
 void ReportError(String content,Token faultyToken,const char* error){
   TEMP_REGION(temp,nullptr);
 
   String loc = GetRichLocationError(content,faultyToken,temp);
 
   printf("\n");
-  printf("%s\n",error);
+  printf("%s:\n",error);
   printf("%.*s\n",UNPACK_SS(loc));
+  printf("\n");
+}
+
+void ReportError2(String content,Token faultyToken,Token goodToken,const char* faultyError,const char* good){
+  TEMP_REGION(temp,nullptr);
+
+  String loc = GetRichLocationError(content,faultyToken,temp);
+  String loc2 = GetRichLocationError(content,goodToken,temp);
+  
+  printf("\n");
+  printf("%s:\n",faultyError);
+  printf("%.*s\n",UNPACK_SS(loc));
+  printf("%s:\n",good);
+  printf("%.*s\n",UNPACK_SS(loc2));
   printf("\n");
 }
 
@@ -1646,11 +1663,14 @@ Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
         anyError = true;
       }
     } else if(CompareString(peek,"addressGen")){
-      Opt<AddressGenDef> def = ParseAddressGen(tok,out);
+      Opt<AddressGenDef> addressDef = ParseAddressGen(tok,out);
       
-      if(def.has_value()){
-        AddressGenDef* buffer = addressGens.Alloc();
-        *buffer = def.value();
+      if(addressDef.has_value()){
+        ConstructDef def = {};
+        def.type = ConstructType_ADDRESSGEN;
+        def.addressGen = addressDef.value();
+
+        *typeList->PushElem() = def;
       } else {
         anyError = true;
       }
@@ -1669,10 +1689,26 @@ Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
   return PushArrayFromList(out,typeList);
 }
 
+bool IsModuleLike(ConstructDef def){
+  FULL_SWITCH(def.type){
+  case ConstructType_MODULE:
+  case ConstructType_MERGE:
+  case ConstructType_ITERATIVE:
+    return true;
+    break;
+  case ConstructType_ADDRESSGEN:
+    return false;
+    break;
+} END_SWITCH();
+
+  Assert(false);
+  return false;
+}
+
 Array<Token> TypesUsed(ConstructDef def,Arena* out){
   TEMP_REGION(temp,out);
 
-  switch(def.type){
+  FULL_SWITCH(def.type){
   case ConstructType_MERGE: {
     // TODO: How do we deal with same types being used?
     //       Do we just ignore it?
@@ -1687,15 +1723,60 @@ Array<Token> TypesUsed(ConstructDef def,Arena* out){
   } break;
   case ConstructType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
-  }; 
-  default: Assert(false);
-  }
+  };
+  case ConstructType_ADDRESSGEN:{
+
+  } break;
+} END_SWITCH();
 
   return {};
 }
 
+Array<Token> AddressGenUsed(ConstructDef def,Array<ConstructDef> allConstructs,Arena* out){
+  TEMP_REGION(temp,out);
+
+  auto list = PushArenaList<Token>(temp);
+
+  FULL_SWITCH(def.type){
+  case ConstructType_MODULE: {
+    ModuleDef mod = def.module;
+
+    for(InstanceDeclaration decl : mod.declarations){
+      for(Token tok : decl.addressGenUsed){
+        *list->PushElem() = tok;
+      }
+    }
+  } break;
+  case ConstructType_MERGE: {
+    MergeDef merge = def.merge;
+
+    for(TypeAndInstance tp : merge.declarations){
+      for(ConstructDef defs : allConstructs){
+        if(CompareString(defs.base.name,tp.typeName)){
+          Array<Token> used = AddressGenUsed(defs,allConstructs,temp);
+
+          for(Token t : used){
+            *list->PushElem() = t;
+          }
+        }
+      }
+    }
+  } break;
+  case ConstructType_ITERATIVE: {
+    NOT_IMPLEMENTED("yet");
+  } break;
+  case ConstructType_ADDRESSGEN: {
+    // This function returns address gens that module like constructs used. It is not supposed to be called with an actual AddressGen construct
+    Assert(false);
+  } break;
+    
+} END_SWITCH();
+
+  return PushArrayFromList(out,list);
+}
+
 FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def){
-  switch(def.type){
+  FULL_SWITCH(def.type){
   case ConstructType_MERGE: {
     return InstantiateMerge(def.merge);
   } break;
@@ -1704,15 +1785,17 @@ FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef de
   } break;
   case ConstructType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
-  }; 
-  default: Assert(false);
-  }
+  } break;
+  case ConstructType_ADDRESSGEN:{
+    Assert(false);
+  } break;
+  } END_SWITCH();
 
   return nullptr;
 }
   
 FUDeclaration* InstantiateSpecifications(String content,ConstructDef def){
-  switch(def.type){
+  FULL_SWITCH(def.type){
   case ConstructType_MERGE: {
     return InstantiateMerge(def.merge);
   } break;
@@ -1722,8 +1805,11 @@ FUDeclaration* InstantiateSpecifications(String content,ConstructDef def){
   case ConstructType_ITERATIVE:{
     NOT_IMPLEMENTED("yet");
   }; 
+  case ConstructType_ADDRESSGEN:{
+    Assert(false);
+  } break;
   default: Assert(false);
-  }
+  } END_SWITCH();
 
   return nullptr;
 }
@@ -1731,7 +1817,7 @@ FUDeclaration* InstantiateSpecifications(String content,ConstructDef def){
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
 
-  EXPECT(tok,"AddressGen");
+  EXPECT(tok,"addressGen");
 
   Token typeStr = tok->NextToken();
 
@@ -1771,7 +1857,6 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
 
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
   SymbolicExpression* symbolic = nullptr;
-  Token externalName = {};
   while(!tok->Done()){
     Token construct = tok->NextToken();
     if(CompareString(construct,"for")){

@@ -71,12 +71,10 @@ struct FUDeclaration{
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
 
-  // Either we have the FUDeclaration be a instantiation of a FUType
-  // Or we have the memory keep the values in a expression format.
   Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
 
-  // Stores different accelerators depending on properties we want
+  // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
   Accelerator* baseCircuit;
   Accelerator* fixedDelayCircuit;
   Accelerator* flattenedBaseCircuit;
@@ -89,7 +87,6 @@ struct FUDeclaration{
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
-  // TODO: We do not need static units, but we want all the static wires and info like their size. It is helpful for code generation. We do not care about config pos since it only matters for the top level accelerator.
   Hashmap<StaticId,StaticData>* staticUnits;
 
   Array<Pair<String,int>> definitionArrays;
@@ -169,6 +166,7 @@ namespace BasicDeclaration{
   extern FUDeclaration* pipelineRegister;
 }
 
+FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
 FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();

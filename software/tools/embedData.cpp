@@ -240,6 +240,8 @@ GenericDef GetDefinition(Token name){
   }
   
   printf("Type '%.*s' does not exist\n",UNPACK_SS(name));
+  Assert(false);
+  return {};
 }
 
 static bool IsEnum(String name){
@@ -539,8 +541,6 @@ FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
   
   AssertToken(tok,"=");
 
-  auto mark = tok->Mark();
-
   auto list = PushArenaList<String>(temp);
   while(!tok->Done()){
     if(tok->IfPeekToken(";")){
@@ -553,7 +553,6 @@ FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
     tok->IfNextToken("|");
   }
 
-  String filepath = tok->Point(mark);
   AssertToken(tok,";");
 
   FileGroupDef* def = fileGroups.Alloc();
@@ -639,17 +638,17 @@ void ParseContent(String content,Arena* out){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"enum")){
-      EnumDef* def = ParseEnum(tok,out);
+      ParseEnum(tok,out);
     } else if(CompareString(peek,"struct")){
-      StructDef* def = ParseStruct(tok,out);
+      ParseStruct(tok,out);
     } else if(CompareString(peek,"table")){
-      TableDef* def = ParseTable(tok,out);
+      ParseTable(tok,out);
     } else if(CompareString(peek,"file")){
-      FileDef* def = ParseFile(tok,out);
+      ParseFile(tok,out);
     } else if(CompareString(peek,"map") || CompareString(peek,"define_map")){
-      MapDef* def = ParseMap(tok,out);
+      ParseMap(tok,out);
     } else if(CompareString(peek,"fileGroup")){
-      FileGroupDef* def = ParseFileGroup(tok,out);
+      ParseFileGroup(tok,out);
     } else {
       ReportError(tok,peek,"Unexpected token at global scope");
       tok->AdvancePeek();
@@ -705,7 +704,18 @@ static DataValue* EvaluateFunction(FunctionValue func,Arena* out){
       
       return EncodeArrayAsData(names,out);
     } break;
-    default: NOT_IMPLEMENTED("yet");
+    case DefType_MAP:{
+      NOT_IMPLEMENTED("yet");
+    } break;
+    case DefType_ENUM:{
+      NOT_IMPLEMENTED("yet");
+    } break;
+    case DefType_FILE:{
+      NOT_IMPLEMENTED("yet");
+    } break;
+    case DefType_TABLE:{
+      NOT_IMPLEMENTED("yet");
+    } break;
     }
   } else {
     printf("Did not find a function named %.*s\n",UNPACK_SS(func.name));
@@ -856,8 +866,12 @@ int main(int argc,const char* argv[]){
         h->EnumMember(p.first,p.second);
       }
       h->EndEnum();
+
+      h->FunctionDeclOnlyBlock(S8("String"),S8("META_Repr"));
+      h->Argument(def->name,S8("val"));
+      h->EndBlock();
     }
-    
+
     h->Comment(S8("Table definition"));
 
     for(TableDef* def : tables){
@@ -972,6 +986,28 @@ int main(int argc,const char* argv[]){
 
     c->Include(CS(headerFilenameOnly));
 
+    // Enum stuff
+    c->Comment(S8("Enum representation"));
+    for(EnumDef* def : enums){
+      c->FunctionBlock(S8("String"),S8("META_Repr"));
+      c->Argument(def->name,S8("val"));
+
+      c->SwitchBlock(S8("val"));
+      for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
+        String name = p.first;
+        String val = PushString(temp,"S8(\"%.*s\");",UN(name));
+
+        c->CaseBlock(name);
+        c->Return(val);
+        c->EndBlock();
+      }
+      c->EndBlock();
+
+      c->Statement(S8("Assert(false)"));
+      c->Return(S8("{}"));
+      c->EndBlock();
+    }
+      
     // Declare auxiliary data arrays
     c->Comment(S8("Raw c array auxiliary to Struct data"));
     for(StructDef* def : structs){

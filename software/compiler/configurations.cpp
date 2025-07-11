@@ -170,7 +170,7 @@ Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeInd
   auto builder = StartArray<InstanceInfo*>(out);
 
   AccelInfoIterator iter = StartIteration(info);
-  iter.mergeIndex = mergeIndex;
+  iter.SetMergeIndex(mergeIndex);
 
   for(; iter.IsValid(); iter = iter.Step()){
     InstanceInfo* unit = iter.CurrentUnit();
@@ -378,7 +378,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
       AccelInfoIterator iter = StartIteration(&inst->declaration->info);
 
       if(partitions.size > 0 && inst->declaration->info.infos.size > 1){
-        iter.mergeIndex = partitions[partitionIndex].value;
+        iter.SetMergeIndex(partitions[partitionIndex].value);
         elem->outputLatencies = partitions[partitionIndex].decl->info.infos[iter.mergeIndex].outputLatencies;
         elem->partitionIndex = partitions[partitionIndex].value;
         partitionIndex += 1;
@@ -441,7 +441,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     info->inputs = PushArrayFromList(out,list);
   }
 
-  DAGOrderNodes order = CalculateDAGOrder(&accel->allocated,temp);
+  DAGOrderNodes order = CalculateDAGOrder(accel,temp);
   {
     for(int index = 0; index < res.size; index++){
       InstanceInfo* info = &res[index];
@@ -560,7 +560,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   };
 
   auto allIteratorsPerLevel = GetIteratorsForEachLevel(initialIter,temp);
-  int levels = allIteratorsPerLevel.size;
 
   // Units that are instantiated already have their config position calculated previously.
   // Which is stored inside the declaration for the unit.
@@ -581,7 +580,6 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
   // local wire config pos as well.
   {
     TrieMap<int,int>* sharedWireIndexToConfig = PushTrieMap<int,int>(temp);
-    TrieMap<int,int>* sharedIndexToConfig = PushTrieMap<int,int>(temp);
     TrieMap<int,int>* firstAllocatedWire = PushTrieMap<int,int>(temp);
       
     int globalConfigPos = 0;
@@ -600,14 +598,12 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
 
       for(int i = 0; i < unit->individualWiresLocalConfigPos.size; i++){
         int indexForCurrentWire = globalConfigPos;
-        bool didShare = false;
         if(unit->individualWiresShared[i]){
           int sharedIndex = GetSharedIndex(unit->sharedIndex,i);
           GetOrAllocateResult<int> data = sharedWireIndexToConfig->GetOrAllocate(sharedIndex);
 
           if(data.alreadyExisted){
             indexForCurrentWire = *data.data;
-            didShare = true;
           } else {
             *data.data = globalConfigPos;
             globalConfigPos += 1;
@@ -654,7 +650,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       int parentGlobalPos = parent->globalConfigPos.value();
 
       AccelInfoIterator configIter = StartIteration(&parent->decl->info);
-      configIter.mergeIndex = parent->partitionIndex;
+      configIter.SetMergeIndex(parent->partitionIndex);
 
       for(AccelInfoIterator it = iter.StepInsideOnly(); it.IsValid(); it = it.Next(),configIter = configIter.Next()){
         InstanceInfo* unit = it.CurrentUnit();
@@ -685,7 +681,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator stateIter = StartIteration(&parent->decl->info);
-      stateIter.mergeIndex = parent->partitionIndex;
+      stateIter.SetMergeIndex(parent->partitionIndex);
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),stateIter = stateIter.Next()){
@@ -734,7 +730,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator parentIter = StartIteration(&parent->decl->info);
-      parentIter.mergeIndex = parent->partitionIndex;
+      parentIter.SetMergeIndex(parent->partitionIndex);
 
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),parentIter = parentIter.Next()){
         InstanceInfo* unit = it.CurrentUnit();
@@ -838,7 +834,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     InstanceInfo* parent = iter.GetParentUnit();
     if(parent){
       AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
-      delayIter.mergeIndex = parent->partitionIndex;
+      delayIter.SetMergeIndex(parent->partitionIndex);
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
@@ -885,7 +881,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
     if(parent){
       // TODO: Delays are weird.
       AccelInfoIterator delayIter = StartIteration(&parent->decl->info);
-      delayIter.mergeIndex = parent->partitionIndex;
+      delayIter.SetMergeIndex(parent->partitionIndex);
       
       int index = 0;
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next(),delayIter = delayIter.Next()){
@@ -940,7 +936,7 @@ void FillStaticInfo(AccelInfo* info){
   AccelInfoIterator iter = StartIteration(info);
   for(int i = 0; i < iter.MergeSize(); i++){
     AccelInfoIterator it = iter;
-    it.mergeIndex = i;
+    it.SetMergeIndex(i);
 
     TrieMap<StaticId,int>* statics = PushTrieMap<StaticId,int>(temp);
 
@@ -1186,7 +1182,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
   
   if(size > 1){
     for(int i = 0; i < iter.MergeSize(); i++,Next(partitions)){
-      iter.mergeIndex = i;
+      iter.SetMergeIndex(i);
 
       // We do need partitions here, I think
       result.infos[i].info = GenerateInitialInstanceInfo(accel,out,partitions);
@@ -1200,7 +1196,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
       result.infos[i].name = name;
     }
   } else {
-    iter.mergeIndex = 0;
+    iter.SetMergeIndex(0);
     result.infos[0].info = GenerateInitialInstanceInfo(accel,out,{});
     FillInstanceInfo(iter,out);
 

@@ -1,34 +1,23 @@
 #include "addressGen.hpp"
 
+#include "globals.hpp"
 #include "memory.hpp"
 #include "symbolic.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
 #include "versatSpecificationParser.hpp"
 
-static String GetDefaultVarNameForLoop(int loopIndex,int amountOfLoops,bool fromInnermost){
-  String vars[] = {
-    STRING("x"),
-    STRING("y"),
-    STRING("z"),
-    STRING("w"),
-    STRING("a"),
-    STRING("b"),
-    STRING("c"),
-    STRING("d"),
-    STRING("e")
-  };
+Pool<AddressAccess> globalAddressGen;
 
-  if(fromInnermost){
-    loopIndex = amountOfLoops - loopIndex;
-  }
-    
-  Assert(loopIndex >= 0);
-  if(loopIndex > ARRAY_SIZE(vars)){
-    printf("Error, either add more var names or put an hard cap on the amount of loops supported\n");
-    Assert(false);
+AddressAccess* GetAddressGenOrFail(String name){
+  for(AddressAccess* gen : globalAddressGen){
+    if(CompareString(gen->name,name)){
+      return gen;
+    }
   }
 
-  return vars[loopIndex];
+  Assert(false);
+  return nullptr;
 }
 
 Array<int> SimulateSingleAddressAccess(LoopLinearSum* access,Hashmap<String,int>* extraEnv,Arena* out){
@@ -181,7 +170,6 @@ AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out){
 AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopIndex,Arena* out){
   AddressAccess* result = Copy(access,out);
 
-  LoopLinearSum* internal = result->internal;
   LoopLinearSum* external = result->external;
   
   // We pretent that the free term does not exist and then shift the initial address of the final external expression by the free term.
@@ -199,12 +187,10 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
   SymbolicExpression* val = EvaluateMaxLinearSumValue(&temp,out);
   SymbolicExpression* maxLoopValueExpr = Normalize(SymbolicAdd(val,PushLiteral(out,1),out),out);
 
-#if 1
   Array<SymbolicExpression*> terms = PushArray<SymbolicExpression*>(out,2);
   terms[0] = maxLoopValueExpr;
   terms[1] = PushVariable(out,STRING("VERSAT_DIFF_W"));
   maxLoopValueExpr = SymbolicFunc(STRING("ALIGN"),terms,out);
-#endif
   
   result->internal = Copy(external,out);
   result->internal->terms[highestConstantIndex].term = maxLoopValueExpr; //PushLiteral(out,maxLoopValue);
@@ -472,9 +458,67 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
   return res;
 }
 
-AddressAccess* ConvertAddressGenDef(AddressGenDef* def,Arena* out){
+AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
+  Arena* out = globalPermanent;
+  
   TEMP_REGION(temp,out);
+ 
+  // Check if variables inside for loops and inside symbolic expression appear in the input list.
+
+  // TODO: Better error reporting by allowing code to call the ReportError from the spec parser 
+  bool anyError = false;
+  for(AddressGenForDef loop : def->loops){
+    Opt<Token> sameNameAsInput = Find(def->inputs,loop.loopVariable);
+
+    if(sameNameAsInput.has_value()){
+      // TODO: We want an error of the type : Loop variable in line: (show line) overshadows variable 'var' in: (show line). Where the show line part is where we print the line with arrows indicating where the mismatched token exists.
+      //ReportError2(content,loop.
       
+      ReportError2(content,loop.loopVariable,sameNameAsInput.value(),"Loop variable","Overshadows input variable");
+      anyError = true;
+    }
+
+    Array<String> allStart = GetAllSymbols(loop.start,temp);
+    Array<String> allEnd = GetAllSymbols(loop.end,temp);
+
+    for(String str : allStart){
+      Token asToken = {};
+      asToken = str;
+      if(!Contains(def->inputs,asToken)){
+        printf("[Error] Loop expression variable does not appear inside input list (did you forget to declare it as input?)\n");
+        anyError = true;
+      }
+    }
+    for(String str : allEnd){
+      Token asToken = {};
+      asToken = str;
+      if(!Contains(def->inputs,asToken)){
+        printf("[Error] Loop expression variable does not appear inside input list (did you forget to declare it as input?)\n");
+        anyError = true;
+      }
+    }
+  }
+
+  auto list = PushArenaList<Token>(temp);
+  for(AddressGenForDef loop : def->loops){
+    *list->PushElem() = loop.loopVariable;
+  }
+  auto allVariables = PushArrayFromList(temp,list);
+  
+  Array<String> symbSymbols = GetAllSymbols(def->symbolic,temp);
+  for(String str : symbSymbols){
+    Token asToken = {};
+    asToken = str;
+    if(!Contains(def->inputs,asToken) && !Contains(allVariables,asToken)){
+      printf("[Error] Symbol in expression does not exist (check if name is correct, symbols in expression can only be inputs or loop variables)\n");
+      anyError = true;
+    }
+  }
+  
+  if(anyError){
+    return nullptr;
+  }
+  
   auto loopVarBuilder = StartArray<String>(temp);
   for(int i = 0; i <  def->loops.size; i++){
     AddressGenForDef loop  =  def->loops[i];
@@ -527,9 +571,12 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,Arena* out){
 
   LoopLinearSum* freeTerm = PushLoopLinearSumFreeTerm(toCalcConst,temp);
       
-  AddressAccess* result = PushStruct<AddressAccess>(out);
+  AddressAccess* result = globalAddressGen.Alloc();
+  result->name = PushString(out,def->name);
+  result->type = def->type;
   result->inputVariableNames = CopyArray<String>(def->inputs,out);
   result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
+
   return result;
 };

@@ -20,6 +20,22 @@ enum SymbolicExpressionType{
   SymbolicExpressionType_FUNC
 };
 
+enum SymbolicReprType{
+  SymbolicReprType_LITERAL,
+  SymbolicReprType_VARIABLE,
+  SymbolicReprType_OP
+};
+
+struct SymbolicReprAtom{
+  SymbolicReprType type;
+  
+  union{
+    String variable;
+    int literal;
+    char op;
+  };
+};
+
 struct SymbolicExpression{
   SymbolicExpressionType type;
   bool negative;
@@ -50,6 +66,8 @@ void Print(SymbolicExpression* expr,bool printNewLine = false);
 void Repr(StringBuilder* builder,SymbolicExpression* expr);
 char* DebugRepr(SymbolicExpression* expr);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
+
+Array<SymbolicReprAtom> CompileRepresentation(SymbolicExpression* expr,Arena* out);
 
 int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values);
 
@@ -103,6 +121,8 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out);
 SymbolicExpression* Group(SymbolicExpression* expr,String variableToGroupWith,Arena* out);
 
 void TestSymbolic();
+
+Array<String> GetAllSymbols(SymbolicExpression* expr,Arena* out);
 
 // Expr must be a sum of mul. Assuming that variableName only appears once. TODO: Probably would be best to create a function that first groups everything so that variableName only appears once and then call this function. Or maybe do the grouping inside here if needed.
 // TODO: This function is kinda not needed. We only use it to break apart a symbolic expression into a LoopLinearSumTerm, but even then we can do it better because we know the format of the variables inside the symbolic expression and we could simplify this.

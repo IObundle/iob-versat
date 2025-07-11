@@ -94,6 +94,13 @@ map mergeModifiers(MergeModifier m,String name){
    MergeModifier_NO_UNIT_MERGED : NoUnitMerged
 };
 
+enum ConstructType{
+  ConstructType_MODULE,
+  ConstructType_MERGE,
+  ConstructType_ITERATIVE,
+  ConstructType_ADDRESSGEN
+};
+
 define_map possibleAttributes{
    VERSAT_LATENCY : versat_latency,
    VERSAT_STATIC  : versat_static,

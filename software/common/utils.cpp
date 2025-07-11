@@ -224,15 +224,6 @@ String GetAbsolutePath(String path,Arena* out){
   return res;
 }
 
-String CurrentWorkingDirectory(Arena* out){
-  // NOTE: Kinda weird but since getcdw does not return the size, its simpler to do this.
-  char buffer[1024];
-  getcwd(buffer, sizeof(buffer));
-  Assert(buffer); // TODO: Do not like this, check how getcdw can fail
-  
-  return PushString(out,"%.*s",1024,buffer);
-}
-
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
   auto array = StartArray<int>(out);
   for(int i = 0; i < arr.size; i++){
@@ -243,18 +234,18 @@ Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
   return EndArray(array);
 }
 
-String ReprMemorySize(int val,Arena* out){
+String ReprMemorySize(size_t val,Arena* out){
   if(val < 1024){
-    return PushString(out,"%d bytes",val);
+    return PushString(out,"%d bytes",(int) val);
   } else if(val < Megabyte(1)){
     int leftover = val % 1024;
-    return PushString(out,"%d.%.3d kilobytes",val / 1024,leftover);
+    return PushString(out,"%d.%.3d kilobytes",(int) (val / 1024),leftover);
   } else if(val < Gigabyte(1)){
     int leftover = val % (1024 * 1024);
-    return PushString(out,"%d.%.3d megabytes",val / (1024 * 1024),leftover);
+    return PushString(out,"%d.%.3d megabytes",(int) (val / (1024 * 1024)),leftover);
   } else {
     int leftover = val % (1024 * 1024 * 1024);
-    return PushString(out,"%d.%.3d gigabytes",val / (1024 * 1024 * 1024),leftover);
+    return PushString(out,"%d.%.3d gigabytes",(int) (val / (1024 * 1024 * 1024)),leftover);
   }
   NOT_IMPLEMENTED("");
   return {};

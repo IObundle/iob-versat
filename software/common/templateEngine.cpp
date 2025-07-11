@@ -35,10 +35,6 @@ static Value* ValueExists(Frame* frame,String id){
   return nullptr;
 }
 
-static void CreateValue(Frame* frame,String id,Value val){
-  frame->table->Insert(id,val);
-}
-
 static void SetValue(Frame* frame,String id,Value val){
   Value* possible = ValueExists(frame,id);
   if(possible){

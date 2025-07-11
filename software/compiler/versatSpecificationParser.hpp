@@ -3,6 +3,8 @@
 #include "symbolic.hpp"
 #include "merge.hpp"
 
+#include "embeddedData.hpp"
+
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Set<String> InstanceName;
 
@@ -74,7 +76,7 @@ struct InstanceDeclaration{
   Token typeName;
   Array<VarDeclaration> declarations; // share(config) groups can have multiple different declarations. TODO: It is kinda weird that inside the syntax, the share allows groups of instances to be declared while this does not happen elsewhere. Not enought to warrant a look for now, but keep in mind for later.
   Array<Pair<String,String>> parameters;
-  Array<Token> addressGenUsed;
+  Array<Token> addressGenUsed; // NOTE: We do not check if address gen exists at parse time, we check it later.
   Array<Token> shareNames;
   bool negateShareNames;
 };
@@ -115,22 +117,14 @@ struct MergeDef : public DefBase{
   Array<Token> mergeModifiers;
 };
 
-enum ConstructType{
-  ConstructType_MODULE,
-  ConstructType_MERGE,
-  ConstructType_ITERATIVE,
-  ConstructType_ADDRESSGEN
-};
-
 struct AddressGenForDef{
   Token loopVariable;
   SymbolicExpression* start;
   SymbolicExpression* end;
 };
 
-struct AddressGenDef{
+struct AddressGenDef : public DefBase{
   AddressGenType type;
-  String name;
   Array<Token> inputs;
   Array<AddressGenForDef> loops;
   SymbolicExpression* symbolic;
@@ -161,7 +155,13 @@ struct SymbolicExpression;
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
+void ReportError(String content,Token faultyToken,const char* error);
+void ReportError2(String content,Token faultyToken,Token goodToken,const char* faultyError,const char* good);
+
+bool IsModuleLike(ConstructDef def);
 Array<Token> TypesUsed(ConstructDef def,Arena* out);
+Array<Token> AddressGenUsed(ConstructDef def,Array<ConstructDef> allConstructs,Arena* out);
+
 Array<ConstructDef> ParseVersatSpecification(String content,Arena* out);
 
 FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def);

@@ -519,3 +519,31 @@ GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> or
   
   return result;
 }
+
+Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out){
+  TEMP_REGION(temp,out);
+
+  ArenaList<DelayToAdd>* list = PushArenaList<DelayToAdd>(temp);
+  
+  int buffersInserted = 0;
+  for(auto edgePair : edgeDelays){
+    Edge edge = edgePair.first;
+    DelayInfo delay = *edgePair.second;
+
+    if(delay.value == 0 || delay.isAny){
+      continue;
+    }
+
+    Assert(delay.value > 0); // Cannot deal with negative delays at this stage.
+
+    DelayToAdd var = {};
+    var.edge = edge;
+    var.bufferName = PushString(out,"buffer%d",buffersInserted++);
+    var.bufferAmount = delay.value - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
+    var.bufferParameters = PushString(out,"#(.AMOUNT(%d))",var.bufferAmount);
+
+    *list->PushElem() = var;
+  }
+
+  return PushArrayFromList(out,list);
+}

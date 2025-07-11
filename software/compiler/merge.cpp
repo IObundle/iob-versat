@@ -1953,7 +1953,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
       // TODO: Need to see if we actually need reconOrder here or not.
       //       After previous changes, we might get away with only calculating it on the spot. Need to check this.
-      reconOrder[i] = CalculateDAGOrder(&accel->allocated,temp);
+      reconOrder[i] = CalculateDAGOrder(accel,temp);
       reconDelay[i] = CalculateDelay(accel,temp);
       
       Array<DelayToAdd> delaysToAdd = GenerateFixDelays(accel,reconDelay[i].edgesDelay,globalPermanent);
@@ -2019,7 +2019,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     for(int i = 0; i < size; i++){
       BLOCK_REGION(temp);
       String fileName = PushString(temp,"finalRecon_%d.dot",i);
-      String filePath = PushDebugPath(temp,permanentName,fileName);
       OutputDebugDotGraph(recon[i],fileName);
     }
   }
@@ -2049,7 +2048,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     
     decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,{});
     AccelInfoIterator iter = StartIteration(&decl->info);
-    iter.mergeIndex = i;
+    iter.SetMergeIndex(i);
     iter.accelName = decl->info.infos[i].name;
     FillInstanceInfo(iter,globalPermanent);
     
@@ -2117,7 +2116,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       Array<int> muxConfigs = EndArray(builder);
 
       AccelInfoIterator iter = StartIteration(&decl->info);
-      iter.mergeIndex = i;
+      iter.SetMergeIndex(i);
     
       for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
         InstanceInfo* info = it.CurrentUnit();
@@ -2158,7 +2157,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   AccelInfoIterator iter = StartIteration(&decl->info);
   for(int i = 0; i < iter.MergeSize(); i++){
     for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
-      it.mergeIndex = i;
+      it.SetMergeIndex(i);
       it.CurrentUnit()->parent = decl;
     }
   }

@@ -17,6 +17,8 @@ struct AddressGenDef;
 // NOTE: Majority of the approach taken in relation to memory allocations and how much we mutate data is not final, we do not care about things like that currently. More important is to start making the code correct and producing the correct data and later we can rewrite the code to be better in this aspect if needed.
 
 struct AddressAccess{
+  AddressGenType type;
+  String name;
   LoopLinearSum* internal;
   LoopLinearSum* external;
   
@@ -45,8 +47,9 @@ struct InternalMemoryAccess{
 void Repr(StringBuilder* builder,AddressAccess* access);
 void Print(AddressAccess* access);
 
-// nochecking - Propagate error info.
-AddressAccess* ConvertAddressGenDef(AddressGenDef* def,Arena* out);
+AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content);
+
+AddressAccess* GetAddressGenOrFail(String name);
 
 AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out);
 AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopIndex,Arena* out);

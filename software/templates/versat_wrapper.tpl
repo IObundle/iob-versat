@@ -61,8 +61,11 @@ static VerilatedVcdC* tfp = NULL;
 
 static V@{typeName}* dut = NULL;
 
+extern VersatPrintf versatPrintf;
 extern bool CreateVCD;
 extern bool SimulateDatabus;
+
+#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
 
 // TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
 #ifdef TRACE
@@ -152,7 +155,7 @@ extern "C" void VersatAcceleratorCreate(){
    V@{typeName}* self = new V@{typeName}();
 
    if(dut){
-      printf("Initialize function is being called multiple times\n");
+      PRINT("Initialize function is being called multiple times\n");
       exit(-1);
    }
 
@@ -298,9 +301,9 @@ extern "C" void VersatAcceleratorSimulate(){
     InternalUpdateAccelerator();
 
     if(i >= 10000000){
-      printf("Accelerator simulation has surpassed 10000000 cycles for a single run\n");
-      printf("Assuming that the accelerator is stuck in a never ending loop\n");
-      printf("Terminating simulation\n");
+      PRINT("Accelerator simulation has surpassed 10000000 cycles for a single run\n");
+      PRINT("Assuming that the accelerator is stuck in a never ending loop\n");
+      PRINT("Terminating simulation\n");
       fflush(stdout);
       exit(-1);
     }   
@@ -391,12 +394,12 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   iptr lengthAsTransfers = length / 4; // size of AXI_DATA_W;
   int current = index;
 
-  //printf("%p %p %p %p %d\n",start_address,amount_minus_one,length,addr_shift,index);
+  PRINT("A: %p %ld %ld %ld %d\n",start_address,amount_minus_one,length,addr_shift,index);
 
   for(int i = 0; i < amount_minus_one + 1; i++){
      if(current < lengthAsTransfers){
        iptr actualAddress = (address + 4 * current);
-       //printf("Return %p\n",actualAddress);
+       //PRINT("Return %p\n",actualAddress);
        return actualAddress;
      } else {
        address += addr_shift;
@@ -404,7 +407,7 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
      }
   }
 
-  printf("SimulateAddressPosition reached a not possible state\n");
+  PRINT("SimulateAddressPosition reached a not possible state\n");
   return 0;
 }
 
@@ -464,10 +467,10 @@ SimulateVReadResult SimulateVRead(AddressVArguments args){
    self->incr2_i = args.incr2;
    self->iterations2_i = args.iter2;
    self->shift2_i = args.shift2;
-   self->period3_i = 0;
-   self->incr3_i = 0;
-   self->iterations3_i = 0;
-   self->shift3_i = 0;
+   self->period3_i = args.per3;
+   self->incr3_i = args.incr3;
+   self->iterations3_i = args.iter3;
+   self->shift3_i = args.shift3;
 
    self->databus_length = 0;
    self->start_address_i = 0;
@@ -502,14 +505,14 @@ SimulateVReadResult SimulateVRead(AddressVArguments args){
           UP();
           loops += 1;
           if(loops > 10000){
-            printf("Failed on A\n");
+            PRINT("Failed on A\n");
             goto end;
           }
       }
       
       if(self->store_o){
         iptr addr = self->addr_o / 4; // DATA_W 
-        //printf("%d\n",addr);
+        //PRINT("%d\n",addr);
         seen[addr] = true;
       }
 
@@ -585,10 +588,10 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){
    self->incr2_i = args.incr2;
    self->iterations2_i = args.iter2;
    self->shift2_i = args.shift2;
-   self->period3_i = 0;
-   self->incr3_i = 0;
-   self->iterations3_i = 0;
-   self->shift3_i = 0;
+   self->period3_i = args.per3;
+   self->incr3_i = args.incr3;
+   self->iterations3_i = args.iter3;
+   self->shift3_i = args.shift3;
 
    self->databus_length = 0;
    self->start_address_i = 0;
@@ -623,7 +626,7 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){
           UP();
           loops += 1;
           if(loops > 10000){
-            printf("Failed on A\n");
+            PRINT("Failed on A\n");
             goto end;
           }
       }
@@ -648,6 +651,125 @@ end:
 
    return arrayIndex;
 }
+
+void SimulateAndPrintAddressGen(AddressVArguments args){
+   static VSuperAddress* self = nullptr;
+
+   Verilated::traceEverOn(true);
+
+   // Could also create and destroy everytime to make sure that we start fresh.
+   if(self == nullptr){
+      self = new VSuperAddress();
+   }
+   
+#ifdef TRACE_FST
+   VerilatedFstC* tfp = new VerilatedFstC;
+#else
+   VerilatedVcdC* tfp = new VerilatedVcdC;
+#endif
+
+   self->trace(tfp, 99);
+   tfp->open("simulate.vcd");
+
+   bool doTrace = true;
+   
+#define DO_TRACE() self->eval(); \
+   if(doTrace) {tfp->dump(contextp->time());} \
+   contextp->timeInc(2);
+
+#define UP() self->clk_i = 1; \
+    DO_TRACE(); \
+    self->clk_i = 0; \
+    DO_TRACE();
+
+   // These wires can always be set to these value.
+   self->delay_i = 0;
+   self->ignore_first_i = 0;
+   self->data_ready_i = 1;
+   self->data_valid_i = 1;
+   self->reading = 1; // TODO: Does this make a difference? Also not like this existing in hardware either
+   self->databus_ready = 1;
+   self->ready_i = 1;
+
+   self->run_i = 0;
+   self->clk_i = 0;
+   self->rst_i = 0;
+
+   self->start_i = 0;
+   self->duty_i = args.duty;
+   self->period_i = args.per;
+   self->incr_i = args.incr;
+   self->iterations_i = args.iter;
+   self->shift_i = args.shift;
+   self->period2_i = args.per2;
+   self->incr2_i = args.incr2;
+   self->iterations2_i = args.iter2;
+   self->shift2_i = args.shift2;
+   self->period3_i = args.per3;
+   self->incr3_i = args.incr3;
+   self->iterations3_i = args.iter3;
+   self->shift3_i = args.shift3;
+
+   self->databus_length = 0;
+   self->start_address_i = 0;
+   self->address_shift_i = 0;
+   self->count_i = 0;
+
+   DO_TRACE();
+
+   self->clk_i = 1;
+   DO_TRACE();
+
+   self->clk_i = 0;
+   self->run_i = 1;
+
+   DO_TRACE();
+
+   self->clk_i = 1;
+ 
+   DO_TRACE();
+
+   self->run_i = 0;
+   self->databus_last = 0;
+
+   self->clk_i = 0;
+   DO_TRACE();
+
+   // Maybe waiting for the databus is not needed.
+   int loops = 0;
+   int totalIndex = 0;
+   PRINT("LoopIndex : Index of position being accessed\n");
+   while(!self->doneAddress){
+      while(!self->valid_o){
+          UP();
+          loops += 1;
+          if(loops > 10000){
+            PRINT("Failed on A\n");
+            goto end;
+          }
+      }
+      
+      if(self->store_o){
+        iptr addr = self->addr_o / 4; // DATA_W 
+        iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
+
+        PRINT("%d : %ld\n",totalIndex++,(address - args.ext_addr) / 4);
+      }
+
+      UP();
+   }
+
+end:
+
+   UP();
+   UP();
+   UP();
+   UP();
+   UP();
+
+   tfp->close();
+}
+
 
 #undef UPDATE
 
