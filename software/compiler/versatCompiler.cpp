@@ -852,9 +852,6 @@ BUG: Since the name of the units are copied directly to the header file, it is p
 
 In fact, need to start checking every keyword used by C,C++ and Verilog and make sure that the names that are passed in the versat spec file never conflict with any special keyword.
 
-BUG: An empty accelerator is crashing versat. We do not need to do anything special, generate an empty accelerator or just give an error (an empty accelerator would just be the dma at that point, right?).
-     - Regardless, generating an empty accelerator might be a good way of testing whether the generated code is capable of handling empty structs (empty config, empty state, empty static, empty mem, etc.) because other accelerators might have one of these interfaces empty and in theory the empty accelerator would have all of them empty and as such we could test everything here.
-
 BUG: Partial share is missing in the spec parser for multiple units with different names. Only working for arrays.
 
 There is probably a lot of cleanup left (overall and inside Merge).
@@ -866,9 +863,9 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 /*
 
 Usability:
-
+x
 - Need to check parameters and sizes and report stuff at Versat compile time.
--- An example is the xunitF which requires input to be 32 bits, meaning that we cannot just 
+-- An example is the xunitF which requires input to be 32 bits, meaning that we cannot just change DATA_W and expect this to work.
 
 - Is there a reason to have versat_emul.c ?
 -- Couldn't we just put everything into versat_wrapper and be done with it? That way, the user would only need to add the lib to the compilation process and everything should work fine.

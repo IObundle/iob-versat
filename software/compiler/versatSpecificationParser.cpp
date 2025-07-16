@@ -26,7 +26,7 @@ void ReportError(String content,Token faultyToken,const char* error){
 
   String loc = GetRichLocationError(content,faultyToken,temp);
 
-  printf("\n");
+  printf("[Error]\n");
   printf("%s:\n",error);
   printf("%.*s\n",UNPACK_SS(loc));
   printf("\n");
@@ -38,7 +38,7 @@ void ReportError2(String content,Token faultyToken,Token goodToken,const char* f
   String loc = GetRichLocationError(content,faultyToken,temp);
   String loc2 = GetRichLocationError(content,goodToken,temp);
   
-  printf("\n");
+  printf("[Error]\n");
   printf("%s:\n",faultyError);
   printf("%.*s\n",UNPACK_SS(loc));
   printf("%s:\n",good);

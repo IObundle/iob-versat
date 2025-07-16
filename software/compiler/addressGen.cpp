@@ -485,7 +485,8 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
       Token asToken = {};
       asToken = str;
       if(!Contains(def->inputs,asToken)){
-        printf("[Error] Loop expression variable does not appear inside input list (did you forget to declare it as input?)\n");
+        printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
+        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(str));
         anyError = true;
       }
     }
@@ -493,7 +494,8 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
       Token asToken = {};
       asToken = str;
       if(!Contains(def->inputs,asToken)){
-        printf("[Error] Loop expression variable does not appear inside input list (did you forget to declare it as input?)\n");
+        printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
+        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(str));
         anyError = true;
       }
     }
@@ -510,7 +512,8 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
     Token asToken = {};
     asToken = str;
     if(!Contains(def->inputs,asToken) && !Contains(allVariables,asToken)){
-      printf("[Error] Symbol in expression does not exist (check if name is correct, symbols in expression can only be inputs or loop variables)\n");
+      printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
+      printf("\t[Error] Symbol '%.*s' inside address expression does not exist (check if name is correct, symbols inside expressions can only be inputs or loop variables)\n",UN(str));
       anyError = true;
     }
   }
