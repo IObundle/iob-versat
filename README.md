@@ -21,7 +21,8 @@ At its core, Versat is a compiler that transforms a high-level specification int
   - [Configuration Shadow Register](#configuration-shadow-register)
   - [Configuration Sharing](#configuration-sharing)
   - [Merging Units](#merging-units)
-  - [Advanced Specification Syntax](#advanced-specification-syntax)
+    - [Advanced Specification Syntax](#advanced-specification-syntax)
+  - [Address Generation](#address-generation)
 - [Publications](#publications)
 - [License](#license)
 - [Acknowledgement](#acknowledgement)
@@ -549,6 +550,38 @@ module ModuleUsage(){
   example:0..1 -> result[0..1]; 
 }
 ```
+
+## Address Generation
+
+To simplify the usage of VUnits (VRead and VWrite) we allow the user to describe complex address generation expressions using for loops and mathematical expressions.
+
+A couple of example of such usage can be found in [iob-soc-versat](https://github.com/IObundle/iob-soc-versat). A simple address gen is as follows:
+
+```verilog
+addressGen Read Simple(a){
+   for x 0..a
+   addr = 2 * x;
+}
+
+module AddressGenUserExample(){
+  using(Simple) VRead v;
+  using(Simple) Mem  m;
+#
+  v -> m;
+}
+```
+
+This address generator construct will generate a C function that is capable of configuring both the VRead and the Mem to generate the addresses defined by the expression 2 * x. Note that the x variable is the variable of a simple for loop construct and that this for loop depends on an input. This input is provided at runtime. The C code generated takes an integer as an input and therefore the user code running on the firmware is capable of programming both the VRead and the Mem unit to read different amount of values depending on the value provided. 
+
+```C
+  int* input = ...;
+  Simple_VRead(&accelConfig->v,input,2);
+  Simple_Mem(&accelConfig->m,2);
+```
+
+This C code example demonstrates how to use the generated functions. The first argument is a pointer to the configuration struct of the unit. The VRead function also needs and aditional argument since it is gonna read from memory. The last argument is the input that is defined by adddressGen as input 'a'. 
+
+Note that the for loops include the start and exclude the end. That means that if we called the functions with the value 'a = 0', the units would perform no transfer.
 
 # Publications
 
