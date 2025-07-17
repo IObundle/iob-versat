@@ -14,7 +14,30 @@ module SimpleAXItoAXIRead #(
    input      [     LEN_W-1:0] m_rlen_i,
    output                      m_rlast_o,
 
-   `include "axi_m_read_port.vs"
+   /*
+      NOTE: Using the burst aligner to calculate the logic for rlast is error prone.
+      At the beginning, we receive a length. Because the outside expects data aligned, it also means that it expects a constant amount of transfers.
+      It does not matter if everything is align or not, the ouside code expects the same number of transfers for the same length.
+      It is therefore easier to calculate the number of transfers from the length and to control the transfer logic from that aspect.
+   */ 
+
+   output [AXI_ID_W-1:0] axi_arid_o,
+   output [AXI_ADDR_W-1:0] axi_araddr_o,
+   output [AXI_LEN_W-1:0] axi_arlen_o,
+   output [3-1:0] axi_arsize_o,
+   output [2-1:0] axi_arburst_o,
+   output [2-1:0] axi_arlock_o,
+   output [4-1:0] axi_arcache_o,
+   output [3-1:0] axi_arprot_o,
+   output [4-1:0] axi_arqos_o,
+   output [1-1:0] axi_arvalid_o,
+   input [1-1:0] axi_arready_i,
+   input [AXI_ID_W-1:0] axi_rid_i,
+   input [AXI_DATA_W-1:0] axi_rdata_i,
+   input [2-1:0] axi_rresp_i,
+   input [1-1:0] axi_rlast_i,
+   input [1-1:0] axi_rvalid_i,
+   output [1-1:0] axi_rready_o,
 
    input clk_i,
    input rst_i
@@ -59,7 +82,7 @@ module SimpleAXItoAXIRead #(
       .burst_last_i   (axi_rvalid_i && axi_rready_o && axi_rlast_i),
       .transfer_last_i(read_last_transfer),
 
-      .last_transfer_o(m_rlast_o),
+      .last_transfer_o(/* m_rlast_o */),
       .empty_o        (burst_i_align_empty),
 
       // Simple interface for data_in
@@ -80,6 +103,15 @@ module SimpleAXItoAXIRead #(
    reg [AXI_LEN_W-1:0] read_axi_len;
    assign axi_arlen_o = read_axi_len;
 
+   wire [31:0] symbolsToRead;
+   reg [31:0] symbolsRead;
+
+   // TODO:
+   // Read the text on the interface.
+   // This is mostly a hack to make things work correct, but it is more logic than we actually need.
+   // We can probably save a good deal of resources by simplifying this following the approach mentioned on the interface text.
+   assign m_rlast_o = (read_state == 0 || (m_rready_o && (symbolsRead + 1) >= symbolsToRead));
+
    AXITransferController #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
@@ -95,7 +127,7 @@ module SimpleAXItoAXIRead #(
       // Do not need them for read operation
       .initial_strb_o      (),
       .final_strb_o        (),
-      .symbolsToRead_o     (),
+      .symbolsToRead_o     (symbolsToRead),
       .last_transfer_next_o(),
 
       .true_axi_axaddr_o(axi_araddr_o),
@@ -113,11 +145,19 @@ module SimpleAXItoAXIRead #(
          read_state   <= 0;
          arvalid      <= 0;
          read_axi_len <= 0;
+         symbolsRead  <= 0;
       end else begin
+         if(read_state > 0) begin
+            if(m_rvalid_i && m_rready_o) begin
+               symbolsRead <= symbolsRead + 1;
+            end
+         end
+
          case (read_state)
             2'h0: begin
                if (m_rvalid_i && burst_i_align_empty) begin
                   read_state <= 2'h1;
+                  symbolsRead <= 0;
                end
             end
             2'h1: begin

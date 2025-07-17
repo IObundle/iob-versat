@@ -1,12 +1,8 @@
 #pragma once
 
-#include <cstdio>
-
 #include "configurations.hpp"
-#include "accelerator.hpp"
-#include "verilogParsing.hpp"
 
-//struct FUInstance;
+struct FUInstance;
 struct FUDeclaration;
 struct Edge;
 struct InstanceInfo;
@@ -51,6 +47,11 @@ enum FUDeclarationType{
   FUDeclarationType_ITERATIVE
 };
 
+struct Parameter{
+  String name;
+  SymbolicExpression* valueExpr;
+};
+
 // TODO: A lot of duplicated data exists since the change to merge.
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
@@ -59,24 +60,21 @@ struct FUDeclaration{
   String name;
 
   // These always exist, regardless of merge info 
-
   Array<Wire> configs;
   Array<Wire> states;
 
   AccelInfo info;
   
   int numberDelays;
-  Array<String> parameters; // For now, only the parameters extracted from verilog files
+  Array<Parameter> parameters;
   
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
 
-  // Either we have the FUDeclaration be a instantiation of a FUType
-  // Or we have the memory keep the values in a expression format.
   Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
 
-  // Stores different accelerators depending on properties we want
+  // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
   Accelerator* baseCircuit;
   Accelerator* fixedDelayCircuit;
   Accelerator* flattenedBaseCircuit;
@@ -84,11 +82,11 @@ struct FUDeclaration{
   const char* operation;
 
   SubMap* flattenMapping;
+
+  AddressGenType supportedAddressGenType;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
-  // TODO: this is probably not needed, only used for verilog generation (which could be calculated inside the code generation functions)
-  //       the info is all contained inside the units themselves and inside the calculated offsets
   Hashmap<StaticId,StaticData>* staticUnits;
 
   Array<Pair<String,int>> definitionArrays;
@@ -101,8 +99,21 @@ struct FUDeclaration{
   bool signalLoop;
 
   // Simple access functions
-  int NumberInputs(){return info.infos[0].inputDelays.size;};
-  int NumberOutputs(){return info.infos[0].outputLatencies.size;};
+  int NumberInputs(){
+    if(info.infos.size > 0){
+      return info.infos[0].inputDelays.size;
+    } else {
+      return 0;
+    }
+  };
+
+  int NumberOutputs(){
+    if(info.infos.size > 0){
+      return info.infos[0].outputLatencies.size;
+    } else {
+      return 0;
+    }
+  };
 
   // This only works for base units.
   // TODO: When things start settling in, need to move all these calculations to a specific file.
@@ -115,23 +126,30 @@ struct FUDeclaration{
     return info.infos.size;
   };
 
+  // TODO: Probably better to see all the outputs and all the infos, at the very least in Debug mode.
+  bool IsCombinatorialOperation(){
+    bool res = (isOperation && info.infos[0].outputLatencies[0] == 0);
+    return res;
+  }
+  bool IsSequentialOperation(){
+    bool res = (isOperation && info.infos[0].outputLatencies[0] != 0);
+    return res;
+  }
+  
   Array<int> GetOutputLatencies(){
-    return info.infos[0].outputLatencies;
+    if(info.infos.size > 0){
+      return info.infos[0].outputLatencies;
+    } else {
+      return {};
+    }
   }
 
   Array<int> GetInputDelays(){
-    return info.infos[0].inputDelays;
-  }
-
-  int MaxConfigs(){
-    int max = 0;
-    for(AccelInfoIterator iter = StartIteration(&this->info); iter.IsValid(); iter = iter.Next()){
-      InstanceInfo* unit = iter.CurrentUnit();
-      if(unit->configPos.has_value()){
-        max = std::max(max,unit->configPos.value());
-      }
+    if(info.infos.size > 0){
+      return info.infos[0].inputDelays;
+    } else {
+      return {};
     }
-    return max + 1;
   }
 };
 
@@ -148,8 +166,7 @@ namespace BasicDeclaration{
   extern FUDeclaration* pipelineRegister;
 }
 
-extern Pool<FUDeclaration> globalDeclarations;
-
+FUDeclaration* RegisterFU(FUDeclaration declaration);
 FUDeclaration* GetTypeByName(String str);
 FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();

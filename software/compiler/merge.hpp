@@ -1,12 +1,6 @@
 #pragma once
 
 #include "versat.hpp"
-#include "thread.hpp"
-#include <unordered_map>
-
-#include "accelerator.hpp"
-
-//#define MAX_CLIQUE_TIME 10.0f
 
 struct FUInstance;
 struct Accelerator;
@@ -167,6 +161,8 @@ enum MergingStrategy{
   FIRST_FIT
 };
 
+bool EqualPortMapping(PortInstance p1,PortInstance p2);
+
 void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName);
 
 ConsolidationResult GenerateConsolidationGraph(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out);
@@ -199,5 +195,5 @@ FUDeclaration* MergeAccelerators(FUDeclaration* accel1,FUDeclaration* accel2,Str
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
+                     MergeModifier = MergeModifier_NO_UNIT_MERGED,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 

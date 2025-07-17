@@ -13,85 +13,21 @@
 typedef intptr_t iptr;
 
 // Config
+@{configStructs}
 
-#{for type configStructures}
-#define VERSAT_DEFINED_@{type.name}
-typedef struct {
-#{for entry type.entries}
-#{if entry.typeAndNames.size > 1}
-  union{
-#{for typeAndName entry.typeAndNames}
-#{if typeAndName.arraySize > 1}
-  @{typeAndName.type} @{typeAndName.name}[@{typeAndName.arraySize}];
-#{else}
-  @{typeAndName.type} @{typeAndName.name};
-#{end}
-#{end}
-};
-#{else}
-#{if entry.typeAndNames[0].arraySize > 1}
-  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name}[@{entry.typeAndNames[0].arraySize}];
-#{else}
-  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
-#{end}
-#{end}
-#{end}
-} @{type.name}Config;
-#{end}
+// State
+@{stateStructs}
 
-typedef struct{
-#{for name namedStates}
-  int @{name};
-#{end}
-} @{accelName}State;
+@{acceleratorState}
 
 // Address
+@{addrStructs}
 
-#{for type addressStructures}
-#define VERSAT_DEFINED_@{type.name}Addr
-typedef struct {
-#{for entry type.entries}
-  @{entry.typeAndNames[0].type} @{entry.typeAndNames[0].name};
-#{end}
-} @{type.name}Addr;
+@{acceleratorConfig}
 
-#{end}
+@{acceleratorStatic}
 
-typedef struct{
-#{for elem structuredConfigs}
-#{if elem.typeAndNames.size > 1}
-  union{
-#{for typeAndName elem.typeAndNames}
-    @{typeAndName.type} @{typeAndName.name};
-#{end}
-  };
-#{else}
-  @{elem.typeAndNames[0].type} @{elem.typeAndNames[0].name};
-#{end}
-#{end}
-} AcceleratorConfig;
-
-typedef struct {
-#{for elem allStatics}
-  iptr @{elem.name};
-#{end}
-} AcceleratorStatic;
-
-typedef struct {
-  union{
-    struct{
-#{for i delays}
-      iptr TOP_Delay@{i};
-#{end}
-    };
-    iptr delays[@{delays}]; 
-  };
-} AcceleratorDelay;
-
-static const int memMappedStart = @{memoryMappedBase |> Hex};
-static const int versatAddressSpace = 2 * @{memoryMappedBase |> Hex};
-
-extern iptr versat_base;
+@{acceleratorDelay}
 
 // NOTE: The address for memory mapped units depends on the address of
 //       the accelerator.  Because of this, the full address can only
@@ -102,14 +38,10 @@ extern iptr versat_base;
 //       versat_init.
 
 // Base address for each memory mapped unit
-#{for pair namedMem}
-#define @{pair.first} ((void*) (versat_base + memMappedStart + @{pair.second |> Hex}))
-#{end}
 
-#define ACCELERATOR_TOP_ADDR_INIT {#{join "," pair namedMem} @{pair.first} #{end}}
+@{memMappedAddresses}
 
-static unsigned int delayBuffer[] = {#{join "," d delay} @{d |> Hex} #{end}};
-static AcceleratorDelay accelDelay = {#{join "," d delay} @{d |> Hex} #{end}};
+extern iptr versat_base;
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +50,10 @@ extern "C" {
 // Always call first before calling any other function.
 void versat_init(int base);
 
+// Versat runtime does not provide any output unless provided with a printf like function by the user.
+typedef int (*VersatPrintf)(const char* format,...);
+void SetVersatDebugPrintfFunction(VersatPrintf function);
+
 // In pc-emul provides a low bound on performance.
 // In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
 int GetAcceleratorCyclesElapsed();
@@ -125,12 +61,12 @@ int GetAcceleratorCyclesElapsed();
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
-void VersatMemoryCopy(void* dest,const void* data,int size);
-void VersatUnitWrite(const void* baseaddr,int index,int val);
-int VersatUnitRead(const void* baseaddr,int index);
-float VersatUnitReadFloat(const void* baseaddr,int index);
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size);
+void VersatUnitWrite(volatile const void* baseaddr,int index,int val);
+int VersatUnitRead(volatile const void* baseaddr,int index);
+float VersatUnitReadFloat(volatile const void* baseaddr,int index);
 void SignalLoop();
-void VersatLoadDelay(const unsigned int* delayBuffer);
+void VersatLoadDelay(volatile const unsigned int* delayBuffer);
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
 // Their embedded counterparts simply do nothing
@@ -138,119 +74,76 @@ void ConfigEnableDMA(bool value);
 void ConfigCreateVCD(bool value);
 void ConfigSimulateDatabus(bool value); 
 
+@{AddressStruct}
+
+// PC-Emul side function only that allow us to simulate what addresses a V unit would access, instead of having to run the accelerator and having to inspect the VCD file, we can simulate it at pc-emul.
+typedef struct{
+  int amountOfExternalValuesRead;
+  int amountOfInternalValuesUsed; // Repeated values are only counted once. The VRead is simulated in order to calculate this.
+} SimulateVReadResult;
+
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args);
+SimulateVReadResult SimulateVRead(AddressVArguments args);
+void SimulateAndPrintAddressGen(AddressVArguments args);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
+// These value must match the same parameter used to instantiate the Versat hardware unit.
+// Bad things will happen if a mismatch occurs
+#ifndef VERSAT_AXI_DATA_W
+  #define VERSAT_AXI_DATA_W @{databusDataSize}
+#endif
+#ifndef VERSAT_DATA_W
+  #define VERSAT_DATA_W 32 // TODO: Techically Versat could support non 32 datapaths, but no attempt or test has been performed. It will most likely fail, especially the units which almost always expect 32 bits.
+#endif
+
+#define VERSAT_DIFF_W (VERSAT_AXI_DATA_W / VERSAT_DATA_W)
+
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
-static const char* acceleratorTypeName = "@{accelName}";
+static const char* acceleratorTypeName = "@{typeName}";
 static bool isSimpleAccelerator = @{isSimple};
 static bool acceleratorSupportsDMA = @{useDMA};
 
-static const int staticStart = @{nConfigs |> Hex} * sizeof(iptr);
-static const int delayStart = @{(nConfigs + nStatics) |> Hex} * sizeof(iptr);
-static const int configStart = @{versatConfig |> Hex} * sizeof(iptr);
-static const int stateStart = @{versatState |> Hex} * sizeof(int);
+static const int memMappedStart = @{memMappedStart};
+static const int versatAddressSpace = @{versatAddressSpace};
 
-#{if configStructures.size > 0}
-static const unsigned int AcceleratorConfigSize = sizeof(@{accelName}Config);
+#define ACCELERATOR_TOP_ADDR_INIT @{addrBlock}
+static unsigned int delayBuffer[] = @{delayBlock};
+static AcceleratorDelay accelDelay = @{delayBlock};
 
-extern volatile @{accelName}Config* accelConfig; // @{nConfigs}
-#{end}
+static const int staticStart = @{staticStart} * sizeof(iptr);
+static const int delayStart = @{delayStart} * sizeof(iptr);
+static const int configStart = @{configStart} * sizeof(iptr);
+static const int stateStart = @{stateStart} * sizeof(int);
 
-#{if nStates > 0}
-extern volatile @{accelName}State* accelState; // @{nStates}
-#{end}
+static const unsigned int AcceleratorConfigSize = sizeof(@{typeName}Config);
+
+extern volatile @{typeName}Config* accelConfig; // @{nConfigs}
+
+@{accelStateDecl}
+
+static inline iptr ALIGN(iptr base,iptr alignment){
+  // TODO: Because alignment is power of 2 (unless we want to support weird AXI_DATA_W values), we can use a faster implementation here.
+  iptr diff = base % alignment;
+  if(diff == 0){
+    return base;
+  }
+
+  iptr result = (base - diff + alignment);
+  return result;
+}
 
 extern volatile AcceleratorStatic* accelStatic;
 
-#{for elem allStatics}
-#define ACCEL_@{elem.name} accelStatic->@{elem.name}
-#{end}
+@{allStaticDefines}
 
-#{if isSimple}
-// Simple input and output connection for simple accelerators
-#define NumberSimpleInputs @{simpleInputs}
-#define NumberSimpleOutputs @{simpleOutputs}
-#define SimpleInputStart ((iptr*) accelConfig)
-#define SimpleOutputStart ((int*) accelState)
-#{end}
+@{simpleStuff}
 
-#{if mergeNames.size > 1}
+@{mergeStuff}
 
-#{for delayArray mergedDelays}
-static unsigned int delayBuffer_@{index}[] = {#{join "," d delayArray} @{d |> Hex} #{end}};
-#{end}
-
-static unsigned int* delayBuffers[] = {#{join "," name mergeNames}delayBuffer_@{index}#{end}};
-
-typedef enum{
-   #{join "," name mergeNames} MergeType_@{name} = @{index} #{end}  
-} MergeType;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#{if outputChangeDelay}
-static inline void ChangeDelay(int oldDelay,int newDelay){
-  if(oldDelay == newDelay){
-    return;
-  }
-
-  volatile int* delayBase = (volatile int*) (versat_base + delayStart);
-
-  switch(oldDelay){
-#{for amount amountMerged}
-    case @{amount}:{
-      switch(newDelay){
-  #{for diff differences}
-    #{if diff.oldIndex == amount}
-        case @{diff.newIndex}: {
-          #{for difference diff.differences}
-          delayBase[@{difference.index}] = @{difference.newValue |> Hex};
-          #{end}
-        } break;
-    #{end}
-  #{end}
-      }
-    } break;
-#{end}
-  }
-}
-#{end}
-
-static inline void ActivateMergedAccelerator(MergeType type){
-   static int lastLoaded = -1;
-   int asInt = (int) type;
-   
-   if(lastLoaded == asInt){
-     return;
-   }
-   lastLoaded = asInt;
-
-   switch(type){
-#{for i mergeNames.size}
-   case MergeType_@{mergeNames[i]}: {
-   #{for muxInfo mergeMux[i]}
-     accelConfig->@{muxInfo.name}.sel = @{muxInfo.val};
-   #{end}
-   } break;
-#{end}
-   }
-
-   VersatLoadDelay(delayBuffers[asInt]);
-}
-
-#ifdef __cplusplus
-}
-#endif
-
-#{end}
-
-#{for a addrGen}
-@{a}
-#{end}
+@{allAddrGen}
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
 

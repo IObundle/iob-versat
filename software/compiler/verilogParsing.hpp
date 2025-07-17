@@ -1,18 +1,19 @@
 #pragma once
 
-#include <vector>
-#include <unordered_map>
+#include "embeddedData.hpp"
 
 #include "utils.hpp"
 #include "parser.hpp"
 
-typedef std::unordered_map<String,Value> ValueMap;
-typedef std::unordered_map<String,String> MacroMap;
-
 struct Arena;
-struct CompiledTemplate;
+struct SymbolicExpression;
 
 typedef Range<Expression*> ExpressionRange;
+
+struct MacroDefinition{
+  String content;
+  Array<String> functionArguments;
+};
 
 enum VersatStage{
   VersatStage_COMPUTE, // The default is Compute
@@ -39,16 +40,20 @@ struct Module{
   bool isSource;
 };
 
-template<typename T>
-struct WireTemplate{
+struct Wire{
   String name;
-  T bitSize;
+  int bitSize;
   VersatStage stage;
-  bool isStatic; // This is only used by the verilog parser (?) to store info. TODO: Use a different structure in the verilog parser which contains this and remove from Wire   
+  bool isStatic;
+  SymbolicExpression* sizeExpr;
 };
 
-typedef WireTemplate<int> Wire;
-typedef WireTemplate<ExpressionRange> WireExpression;
+struct WireExpression{
+  String name;
+  ExpressionRange bitSize;
+  VersatStage stage;
+  bool isStatic;
+};
 
 enum ExternalMemoryType{TWO_P = 0,DP}; // Two ports: one input and one output (think FIFO). Dual port: two input or output ports (think LUT)
 
@@ -61,7 +66,6 @@ struct ExternalMemoryTwoPortsTemplate{ // tp
   T dataSizeOut;
 };
 
-typedef ExternalMemoryTwoPortsTemplate<int> ExternalMemoryTwoPorts;
 typedef ExternalMemoryTwoPortsTemplate<ExpressionRange> ExternalMemoryTwoPortsExpression;
 
 template<typename T>

@@ -3,17 +3,14 @@
 // Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
 
 #include <cstdio>
-#include <initializer_list>
-#include <iosfwd>
 #include <string.h>
-#include <new>
-#include <functional>
 #include <stdint.h>
-#include <optional>
 
-#include "signal.h"
+// Mostly for std::move and std::hash
+#include <utility>
+#include <string>
+
 #include "assert.h"
-
 #include "debug.hpp"
 
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
@@ -21,6 +18,17 @@
 #define CI(x) (x - '0')
 #define TWO_DIGIT(x,y) (CI(x) * 10 + CI(y))
 #define COMPILE_TIME (TWO_DIGIT(__TIME__[0],__TIME__[1]) * 3600 + TWO_DIGIT(__TIME__[3],__TIME__[4]) * 60 + TWO_DIGIT(__TIME__[6],__TIME__[7]))
+
+#define MIN(A,B) ((A) < (B) ? (A) : (B))
+#define MAX(A,B) ((A) > (B) ? (A) : (B))
+
+inline float ABS(float f){return (f < 0.0f ? -f : f);};
+
+// TODO: We probably want to standardize some of these. Do it right. Care about overflow and stuff like that
+//       Either that or use values from C or something.
+#ifndef INT_MAX
+#define INT_MAX ((1<<30) + ((1<<30) - 1))
+#endif
 
 #define ALIGN_DOWN(val,size) (val & (~(size - 1)))
 
@@ -59,6 +67,16 @@
 #define CAST_AND_DEREF(EXPR,TYPE) *((TYPE*) &EXPR)
 
 #define PrintFileAndLine() printf("%s:%d\n",__FILE__,__LINE__)
+
+// NOTE: This macro instructs gcc to give an error for any switch that does not implement every case.
+//       Always end the switch with the END_SWITCH macro to restore the proper diagnostic message (which is just a warning)
+#define FULL_SWITCH(expr) _Pragma("GCC diagnostic error \"-Wswitch-enum\"") \
+  switch(expr)
+
+#define SWITCH(expr) _Pragma("GCC diagnostic warning \"-Wswitch-enum\"") \
+  switch(expr)
+
+#define END_SWITCH() _Pragma("GCC diagnostic warning \"-Wswitch-enum\"")
 
 template<typename F>
 class _Defer{
@@ -152,13 +170,21 @@ if(_){ \
 
 #define DEBUG_BREAK() DEBUG_BREAK_IF(true)
 
+#define WARN_CODE() do{ \
+    once{ \
+      printf("\n\n===========\n"); \
+      printf("WARNING, reached a piece of code that is not properly implemented or tested and can give erroneous results:\n"); \
+      LOCATION(); \
+      printf("===========\n\n\n"); \
+    }; \
+  } while(0)
+
 // If possible use argument to put a simple string indicating the error that must likely occured
 // We do not print it for now but useful for long lasting code.
 #define NOT_IMPLEMENTED(...) do{ printf("%s:%d:1: error: Not implemented: %s",__FILE__,__LINE__,__PRETTY_FUNCTION__); fflush(stdout); Assert(false); } while(0) // Doesn't mean that something is necessarily future planned
-#define NOT_POSSIBLE(...) DEBUG_BREAK()
+#define NOT_POSSIBLE(...) do{DEBUG_BREAK(); __builtin_unreachable();} while(0)
 #define UNHANDLED_ERROR(...) do{ fflush(stdout); Assert(false); } while(0) // Know it's an error, but only exit, for now
 #define USER_ERROR(...) do{ fflush(stdout); exit(0); } while(0) // User error and program does not try to repair or keep going (report error before and exit)
-#define UNREACHABLE(...) do{Assert(false); __builtin_unreachable();} while(0)
 
 #define FOREACH_LIST(TYPE,ITER,START) for(TYPE ITER = START; ITER; ITER = ITER->next)
 #define FOREACH_LIST_INDEXED(TYPE,ITER,START,INDEX) for(TYPE ITER = START; ITER; ITER = ITER->next,INDEX += 1)
@@ -182,15 +208,22 @@ typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef unsigned int uint;
 
+// Nullopt similar to the one in std but we skip having to include a heavy templated file for this.
+struct nullopt_t {
+    constexpr explicit nullopt_t(int) {}
+};
+
 // Using std::optional is a pain when debugging 
 // This simple class basically does the same and much easier to debug
 template<typename T>
 struct Opt{
+  // Use the functions because the Opt for pointers does not contain hasVal
+private:
   T val;
   bool hasVal;
-
+  
+public:
   Opt():val{},hasVal(false){};
-  Opt(std::nullopt_t):val{},hasVal(false){};
   Opt(T t):val(t),hasVal(true){};
   
   Opt<T>& operator=(T& t){
@@ -199,11 +232,12 @@ struct Opt{
     return *this;
   };
 
-  Opt<T>& operator=(std::nullopt_t){
+  Opt<T>& operator=(nullopt_t){
     hasVal = false;
     return *this;
   };
 
+  explicit operator bool(){return hasVal;}
   bool operator!(){return !hasVal;};
 
   // Match the std interface to make it easier to replace if needed
@@ -213,47 +247,48 @@ struct Opt{
   T value_or(T other){return hasVal ? val : other;};
 }; 
 
-#if 0
-// Optimized Opt for pointers, but not tested yet and test benchs not currently working.
-// 
+// Optimized Opt for pointers, takes same space so if compiler is smart there should not be any cost to this.
 template<typename T>
 struct Opt<T*>{
+private:
   T* val;
 
+public:
   Opt():val(nullptr){};
-  Opt(std::nullopt_t):val(nullptr){};
+  Opt(nullopt_t):val(nullptr){};
   Opt(T* t):val(t){};
 
-  Opt<T>& operator=(T& t){
+  Opt<T*>& operator=(T& t){
     val = t;
     return *this;
   };
 
-  Opt<T>& operator=(std::nullopt_t){
+  Opt<T*>& operator=(nullopt_t){
     val = nullptr;
     return *this;
   };
 
+  explicit operator bool(){return (val != nullptr);}
   bool operator!(){return !val;};
 
   // Match the std interface to make it easier to replace if needed
   bool has_value(){return (val != nullptr);};
-  T& value() & {assert(val);return val;};
-  T&& value() && {assert(val);return std::move(val);};
-  T value_or(T other){return this->has_value() ? val : other;};
+  T*& value() & {assert(val);return val;};
+  T*&& value() && {assert(val);return std::move(val);};
+  T* value_or(T* other){return this->has_value() ? val : other;};
 };
-#endif
 
-//template<typename T>
-//using Opt = std::optional<T>;
-#define PROPAGATE(OPTIONAL) if(!(OPTIONAL).has_value()){return {};}
-#define PROPAGATE_POINTER(PTR) if((PTR) == nullptr){return (nullptr);}
-#define PROPAGATE_POINTER_OPT(PTR) if((PTR) == nullptr){return {};}
+template<typename T>
+inline bool ShouldPropagate_(Opt<T> val){return !val.has_value();}
+inline bool ShouldPropagate_(void* val){return val == nullptr;}
+
+#define PROPAGATE(OPTIONAL) if(ShouldPropagate_(OPTIONAL)){return {};}
 
 template<typename T>
 using BracketList = std::initializer_list<T>;
 
 // TODO: Time needs to be rewritted because we no longer need to support firmware code
+//       Probably can use the C time now but need to see first.
 struct Time{
    u64 microSeconds;
    u64 seconds;
@@ -292,17 +327,6 @@ public:
 
 #define timeRegionIf(ID,COND) if(TimeIt _timeRegion(__LINE__){ID,COND})
 
-// Can use break to end time region early. Not sure if useful, for now use the if trick
-//#define timeRegion(ID) for(struct{TimeIt m;bool flag;} _timeRegion(__LINE__) = {ID,true}; _timeRegion(__LINE__).flag; _timeRegion(__LINE__).flag = false)
-
-/*
-template<typename F>
-ALWAYS_INLINE void operator+(TimeIt&& timer,F&& f){
-   f();
-}
-#define timeRegion(ID) TimeIt(ID) + [&]()
-*/
-
 template<typename T>
 class ArrayIterator{
 public:
@@ -319,12 +343,13 @@ template<typename T>
 struct Array{
   T* data;
   int size;
-  
+
   inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
   ArrayIterator<T> begin() const{return ArrayIterator<T>{data};};
   ArrayIterator<T> end() const{return ArrayIterator<T>{data + size};};
 };
 
+// NOTE: Every String is also a C string since every string allocator function appends a final null byte
 typedef Array<const char> String;
 
 #define C_ARRAY_TO_ARRAY(C_ARRAY) {C_ARRAY,sizeof(C_ARRAY) / sizeof(C_ARRAY[0])}
@@ -332,10 +357,14 @@ typedef Array<const char> String;
 #define UNPACK_SS(STR) (STR).size,(STR).data
 #define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
 
-inline String STRING(const char* str){return (String){str,(int) strlen(str)};}
+#define UN(STR) UNPACK_SS(STR)
+
+inline String STRING(const char* str){if(str == nullptr) return {}; return (String){str,(int) strlen(str)};}
 inline String STRING(const char* str,int size){return (String){str,size};}
 inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
 inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
+
+#define S8(...) STRING(__VA_ARGS__)
 
 String Offset(String base,int amount);
 
@@ -417,9 +446,19 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 #define MASK_VALUE(VAL,BITS) (VAL & FULL_MASK(BITS))
 
 // Returns a statically allocated string, instead of implementing varg for everything
-// Returned string uses statically allocated memory. Intended to be used to create quick strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
+// Returned string uses statically allocated memory. Intended to be used to create quick small strings for other functions, instead of having to implement them as variadic. Can also be used to temporarely transform a String into a C-String
+// Two calls to StaticFormat do not overwrite, but the third call will overwrite the result of the first one.
 // NOTE: Extra care when using this function. Use it mainly to interface with C code style strings otherwise real risk of overwriting contents with other data
-char* StaticFormat(const char* format,...);
+
+
+// TODO: I wonder if it would be better to have a arena backed region where we can dump strings and it acts globally, meaning that we must call functions to init it and to clear it everytime we want to use it.
+// TODO: It would be better if we just have a malloc failsafe where we allocate more memory if needed.
+char* StaticFormat(const char* format,...) __attribute__ ((format (printf, 1, 2)));;
+// Shorthand
+#define SF(...) StaticFormat(__VA_ARGS__) 
+
+// Shorthand for CString ("converts" a String to a C string using StaticFormat). Instead of having to provide two different functions to handle "const char* str" and "String" 
+#define CS(STR) StaticFormat("%.*s",UN(STR))
 
 // Array useful functions
 int CountNonZeros(Array<int> arr);
@@ -468,8 +507,10 @@ uint GetRandomNumber();
 
 void OS_SetScriptPermissions(FILE* file);
 
+// Path OS related functions
+// TODO: Prefix these with a OS_ in the name and potentially use fs to implement this (or something that agrees with the POSIX standard)
+// TODO: We need to put some work in here, even if just calling fs on the other side. The path related functions are kinda of a mess
 bool RemoveDirectory(const char* path);
-//bool CheckIfFileExists(const char* file);
 long int GetFileSize(FILE* file);
 char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
@@ -485,10 +526,10 @@ bool CompareString(const char* str1,String str2);
 bool CompareString(String str1,const char* str2);
 bool CompareString(const char* str1,const char* str2);
 
-bool Empty(String str);
-
 // If strings are equal up until a given size, returns a order so that smallest comes first
 int CompareStringOrdered(String str1,String str2);
+
+bool Empty(String str);
 
 char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
@@ -542,11 +583,19 @@ template<typename T>
 Array<T> Offset(Array<T> in,int amount){
   Array<T> res = in;
   if(amount < in.size){
-    in.data += amount;
-    in.size -= amount;
+    res.data += amount;
+    res.size -= amount;
+    return res;
   } else {
     return {};
   }
+}
+
+template<typename T>
+inline Array<T> Shrink(Array<T> in,int amount){
+  Array<T> res = in;
+  res.size -= amount;
+  return res;
 }
 
 static inline bool Contains(String str,char ch){
@@ -557,7 +606,6 @@ static inline bool Contains(String str,char ch){
    }
    return false;
 }
-
 
 template<typename T>
 inline void Reverse(Array<T>& arr){
@@ -574,6 +622,16 @@ bool Contains(Array<T> array,T toCheck){
       }
    }
    return false;
+}
+
+template<typename T>
+Opt<T> Find(Array<T> array,T toCheck){
+   for(int i = 0; i < array.size; i++){
+      if(array.data[i] == toCheck){
+         return array.data[i];
+      }
+   }
+   return {};
 }
 
 template<>

@@ -17,6 +17,8 @@ module SkidBuffer #(
    input out_ready_i,
    output [DATA_W-1:0] out_data_o,
 
+   input forceReset,
+
    input clk_i,
    input rst_i
 );
@@ -74,6 +76,10 @@ always @(posedge clk_i,posedge rst_i) begin
       end
       2'b11:; // Nothing
       endcase
+
+      if(forceReset) begin
+         state <= EMPTY;
+      end
    end
 end
 

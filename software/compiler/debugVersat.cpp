@@ -9,7 +9,6 @@
 #include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
-#include "type.hpp"
 #include "utilsCore.hpp"
 
 #include "textualRepresentation.hpp"

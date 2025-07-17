@@ -1,57 +1,55 @@
-#{let TRACE_TYPE ""}
-#{if traceEnabled} 
-  #{set TRACE_TYPE "--trace"}
-  #{if arch.generateFSTFormat} #{set TRACE_TYPE "--trace-fst"} #{end}
-#{end}
-TYPE_NAME := @{typename}
+TYPE_NAME := @{typeName}
 
-# TODO: Everything here should be relative. Otherwise we are binding the setup with the build process, when in reality they should be separated.
-
-HARDWARE_FOLDER := @{generatedUnitsLocation}
+VSIM_HEADER := @{simLoopHeader}
+HARDWARE_FOLDER := @{hardwareFolder}
+VHEADER := V$(TYPE_NAME).h
 SOFTWARE_FOLDER := .
-
-HARDWARE_SRC := #{for name allFilenames}$(HARDWARE_FOLDER)/@{name} #{end} 
-HARDWARE_SRC += $(wildcard $(HARDWARE_FOLDER)/modules/*.v) # This can also be changed from wildcard to the relative path for each module. No point using wildcard when we have the entire information needed.
-
-#{for source extraSources}
-HARDWARE_SRC += $(wildcard @{source}/*.v)
-#{end}
-
+HARDWARE_SRC := @{hardwareUnits}
+HARDWARE_SRC += @{moduleUnits}
 VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)
-
 INCLUDE := -I$(HARDWARE_FOLDER)
+
+VERILATOR_COMMON_ARGS := --report-unoptflat -GLEN_W=20 -CFLAGS "-O2 -march=native" $(INCLUDE)
+VERILATOR_COMMON_ARGS += -GAXI_ADDR_W=$(shell getconf LONG_BIT)
+VERILATOR_COMMON_ARGS += -GAXI_DATA_W=@{databusDataSize}
+VERILATOR_COMMON_ARGS += -GDATA_W=32
+VERILATOR_COMMON_ARGS += -GDELAY_W=20
+VERILATOR_COMMON_ARGS += -GLEN_W=20
+VERILATOR_COMMON_ARGS += @{traceType}
 
 all: libaccel.a
 
 # Joins wrapper with verilator object files into a library
-libaccel.a: V@{typename}.h wrapper.o createVerilatorObjects
+libaccel.a: $(VHEADER) wrapper.o createVerilatorObjects $(VSIM_HEADER)
 	ar -rcs libaccel.a wrapper.o $(wildcard ./obj_dir/*.o)
 
-createVerilatorObjects: V@{typename}.h wrapper.o
+createVerilatorObjects: $(VHEADER) wrapper.o $(VSIM_HEADER)
 	$(MAKE) verilatorObjects
 
-#./obj_dir/V@{typename}_classes.mk: V@{typename}.h
+VUnitWireInfo.h: $(VHEADER)
+	./ExtractVerilatedSignals.py $(VHEADER) > VUnitWireInfo.h
 
-V@{typename}.h: $(HARDWARE_SRC)
-	verilator --report-unoptflat -GAXI_ADDR_W=@{arch.databusAddrSize} -GAXI_DATA_W=@{arch.databusDataSize} -GLEN_W=16 -CFLAGS "-O2 -march=native" @{TRACE_TYPE} --cc $(HARDWARE_SRC) $(INCLUDE) --top-module $(TYPE_NAME)
-	$(MAKE) -C ./obj_dir -f V@{typename}.mk
+$(VHEADER): $(HARDWARE_SRC)
+	verilator $(VERILATOR_COMMON_ARGS) -GADDR_W=@{addressSize} --cc $(HARDWARE_SRC) --top-module $(TYPE_NAME)
+	$(MAKE) -C ./obj_dir -f V$(TYPE_NAME).mk
 	cp ./obj_dir/*.h ./
 
-wrapper.o: V@{typename}.h wrapper.cpp
+VSuperAddress.h: $(HARDWARE_SRC)
+	verilator $(VERILATOR_COMMON_ARGS) -GADDR_W=32 --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress
+	$(MAKE) -C ./obj_dir -f VSuperAddress.mk
+	cp ./obj_dir/*.h ./
+
+wrapper.o: $(VHEADER) VUnitWireInfo.h wrapper.cpp $(VSIM_HEADER)
 	g++ -std=c++17 -march=native -O2 -g -c -o wrapper.o -I $(VERILATOR_ROOT)/include $(abspath wrapper.cpp)
 
-# Created after calling verilator. Need to recall make to have access to the variables 
--include ./obj_dir/V@{typename}_classes.mk
+# Created after calling verilator. Need to recall make to have access to the variables
+-include ./obj_dir/V$(TYPE_NAME)_classes.mk
 
 VERILATOR_SOURCE_DIR:=$(VERILATOR_ROOT)/include
 ALL_VERILATOR_FILES:=$(VM_GLOBAL_FAST) $(VM_GLOBAL_SLOW)
 ALL_VERILATOR_O:=$(patsubst %,./obj_dir/%.o,$(ALL_VERILATOR_FILES))
-ALL_VERILATOR_CPPS:=$(patsubst %,$(VERILATOR_SOURCE_DIR)/%.cpp,$(ALL_VERILATOR_FILES))
 
 ./obj_dir/%.o: $(VERILATOR_SOURCE_DIR)/%.cpp
 	g++ -w -march=native -O2 -c -o $@ $< -I$(VERILATOR_ROOT)/include
 
 verilatorObjects: $(ALL_VERILATOR_O)
-#	@echo $(ALL_VERILATOR_FILES)
-#	@echo $(ALL_VERILATOR_CPPS)
-#	@echo $(ALL_VERILATOR_O)

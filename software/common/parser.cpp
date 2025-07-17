@@ -33,6 +33,11 @@ void Tokenizer::ConsumeWhitespace(){
       continue;
     }
 
+    // Only one character left, cannot be a comment
+    if(ptr + 1 >= end){
+      return;
+    }
+
     if(!keepComments){
       if(ptr[0] == '/' && ptr[1] == '/'){
         while(ptr < end && *ptr != '\n') ptr += 1;
@@ -71,7 +76,6 @@ Tokenizer::Tokenizer(String content,const char* singleChars,BracketList<const ch
   keepWhitespaces = false;
   keepComments = false;
   leaky = InitArena(Kilobyte(16));
-  std::vector<const char*> specials;
 
   this->tmpl = CreateTokenizerTemplate(&leaky,singleChars,specialCharsList);
 }
@@ -737,6 +741,8 @@ bool Tokenizer::IsSpecialOrSingle(String toTest){
 }
 
 TokenizerTemplate* Tokenizer::SetTemplate(TokenizerTemplate* tmpl){
+  // TODO(major): Need to flush any parsed token.
+
   TokenizerTemplate* old = this->tmpl;
   this->tmpl = tmpl;
   return old;
@@ -900,7 +906,7 @@ Array<String> Split(String content,char sep,Arena* out){
   int index = 0;
   int size = content.size;
 
-  auto arr = StartGrowableArray<String>(out);
+  auto arr = StartArray<String>(out);
   
   while(1){
     int start = index;
@@ -910,7 +916,11 @@ Array<String> Split(String content,char sep,Arena* out){
     int end = index; // content[end] is either sep or last character.
     
     String line = {};
-    if(index >= size){
+    if(start >= size){
+      break;
+    } else if(index >= size){
+      line = {&content[start],end - start};
+      *arr.PushElem() = line;
       break;
     } else if(content[index] == sep){
       line = {&content[start],end - start};
@@ -942,56 +952,30 @@ bool Contains(String str,const char* toCheck){
   return false;
 }
 
-String TrimLeftWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*start) && start < end) ++start;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
-}
-
-String TrimRightWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*end) && end > start) --end;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
-}
-
-String TrimWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*start) && start < end) ++start;
-  while(std::isspace(*end) && end > start) --end;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
+bool StartsWith(String toSearch,String starter){
+  if(starter.size > toSearch.size){
+    return false;
+  }
+  for(int i = 0; i < starter.size; i++){
+    if(toSearch[i] != starter[i]){
+      return false;
+    }
+  }
+  return true;
 }
 
 String PushPointingString(Arena* out,int startPos,int size){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  StringBuilder* builder = StartString(temp);
+
   for(int i = 0; i < startPos; i++){
-    PushString(out," ");
+    builder->PushString(" ");
   }
   for(int i = 0; i < size; i++){
-    PushString(out,"^");
+    builder->PushString("^");
   }
-  String res = EndString(mark);
-  return res;
+
+  return EndString(out,builder);
 }
 
 int GetTokenPositionInside(String text,Token token){
@@ -1132,18 +1116,12 @@ static void PrintExpression(Expression* exp,int level){
   case Expression::IDENTIFIER:{
     printf("IDENTIFIER\n");
   }break;
-  case Expression::COMMAND:{
-    printf("COMMAND\n");
+  case Expression::FUNCTION:{
+    printf("FUNCTION\n");
   }break;
   case Expression::LITERAL:{
     Value val = exp->val;
     printf("LITERAL: %ld\n",val.number);
-  }break;
-  case Expression::ARRAY_ACCESS:{
-    printf("ARRAY_ACCESS\n");
-  }break;
-  case Expression::MEMBER_ACCESS:{
-    printf("MEMBER_ACCESS\n");
   }break;
   }
 
@@ -1179,7 +1157,7 @@ TokenizerTemplate* CreateTokenizerTemplate(Arena* out,const char* singleChars,Br
   TokenizerTemplate* tmpl = PushStruct<TokenizerTemplate>(out);
   *tmpl = {};
 
-  auto arr = StartGrowableArray<Trie>(out);
+  auto arr = StartArray<Trie>(out);
 
   Trie* topTrie = arr.PushElem();
   *topTrie = {};
@@ -1275,23 +1253,24 @@ String GetFullLineForGivenToken(String content,Token token){
 }
 
 String GetRichLocationError(String content,Token got,Arena* out){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+  StringBuilder* builder = StartString(temp);
 
   String fullLine = GetFullLineForGivenToken(content,got);
   int line = got.loc.start.line;
   int columnIndex = got.loc.start.column - 1;
 
-  PushString(out,"%6d | %.*s\n",line,UNPACK_SS(fullLine));
-  PushString(out,"      "); // 6 spaces to match the 6 digits above
-  PushString(out," | ");
+  builder->PushString("%6d | %.*s\n",line,UNPACK_SS(fullLine));
+  builder->PushString("      "); // 6 spaces to match the 6 digits above
+  builder->PushString(" | ");
 
-  PushPointingString(out,columnIndex,got.size);
+  builder->PushString(PushPointingString(temp,columnIndex,got.size));
 
-  return EndString(mark);
+  return EndString(out,builder);
 }
 
 Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){
-  auto res = StartGrowableArray<Token>(out);
+  auto res = StartArray<Token>(out);
 
   while(!tok->Done()){
     *res.PushElem() = tok->NextToken();
@@ -1300,4 +1279,28 @@ Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out){
   return EndArray(res);
 }
 
+Opt<Token> FindLastUntil(Tokenizer* tok,const char* toFind){
+  auto mark = tok->Mark();
+  String toFindStr = STRING(toFind);
+  Opt<Token> bestFind = {};
+  while(!tok->Done()){
+    Token peek = tok->PeekToken();
+    if(CompareString(peek,toFindStr)){
+      bestFind = tok->Point(mark);
+    }
+    tok->AdvancePeek();
+  }
+  return bestFind;
+}
 
+// TODO: Move this to a better place
+Opt<Token> ExtractTemplateArguments(String content){
+  Tokenizer tok(content,"<>",{});
+  Opt<Token> result = tok.NextFindUntil("<");
+  if(!result.has_value()){
+    return {};
+  }
+  tok.AssertNextToken("<");
+  
+  return FindLastUntil(&tok,">");
+}

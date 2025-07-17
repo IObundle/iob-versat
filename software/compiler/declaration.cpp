@@ -65,17 +65,17 @@ static void RegisterOperators(){
     const char* operation;
   };
 
-  Operation unary[] =  {{"NOT" ,"{0}_{1} = ~{2}"},
-                        {"NEG" ,"{0}_{1} = -{2}"}};
-  Operation binary[] = {{"XOR" ,"{0}_{1} = {2} ^ {3}"},
-                         {"ADD","{0}_{1} = {2} + {3}"},
-                         {"SUB","{0}_{1} = {2} - {3}"},
-                         {"AND","{0}_{1} = {2} & {3}"},
-                         {"OR" ,"{0}_{1} = {2} | {3}"},
-                         {"RHR","{0}_{1} = ({2} >> {3}) | ({2} << (32 - {3}))"}, // TODO: Only for 32 bits
-                         {"SHR","{0}_{1} = {2} >> {3}"},
-                         {"RHL","{0}_{1} = ({2} << {3}) | ({2} >> (32 - {3}))"}, // TODO: Only for 32 bits
-                         {"SHL","{0}_{1} = {2} << {3}"}};
+  Operation unary[] =  {{"NOT" ,"~{0}"},
+                        {"NEG" ,"-{0}"}};
+  Operation binary[] = {{"XOR" ,"{0} ^ {1}"},
+                         {"ADD","{0} + {1}"},
+                         {"SUB","{0} - {1}"},
+                         {"AND","{0} & {1}"},
+                         {"OR" ,"{0} | {1}"},
+                         {"RHR","({0} >> {1}) | ({0} << (DATA_W - {1}))"},
+                         {"SHR","{0} >> {1}"},
+                         {"RHL","({0} << {1}) | ({0} >> (DATA_W - {1}))"},
+                         {"SHL","{0} << {1}"}};
 
   FUDeclaration decl = {};
   decl.isOperation = true;
@@ -113,10 +113,7 @@ FUDeclaration* GetTypeByName(String name){
 
 FUDeclaration* GetTypeByNameOrFail(String name){
   FUDeclaration* decl = GetTypeByName(name);
-
-  if(!decl){
-    LogFatal(LogModule::TOP_SYS,"Didn't find the following type: %.*s",UNPACK_SS(name));
-  }
+  Assert(decl);
   return decl;
 }
 

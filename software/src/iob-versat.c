@@ -10,9 +10,6 @@
 extern "C"{
 #endif
 
-//#include "iob-uart.h"
-//#include "printf.h"
-
 #ifdef __cplusplus
   }
 #endif
@@ -26,10 +23,13 @@ extern "C"{
 
 typedef uint64_t uint64;
 
-// There should be a shared header for common structures, but do not share code.
-// It does not work as well and keeps giving compile and linker errors. It's not worth it.
-
 iptr versat_base;
+VersatPrintf versatPrintf;
+
+// NOTE: Use PRINT instead of versatPrintf, since versatPrintf is not required to be set.
+// NOTE: This is mostly a debug tool that should not be built upon. We want to use pc-emul to report errors to user, we do not want to polute embedded with error checkings that waste precious cpu cycles.
+#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
+
 static bool enableDMA;
 
 // TODO: Need to dephase typeof, it is a gnu extension, not valid C until version C23 which is recent to support
@@ -39,10 +39,10 @@ typeof(accelStatic) accelStatic = 0;
 
 void versat_init(int base){
   versat_base = (iptr) base;
-  //enableDMA = acceleratorSupportsDMA;
-  enableDMA = false;
-  
-  //printf("Embedded Versat\n");
+  enableDMA = false; // It is more problematic for the general case if we start enabled. More error prone, especially when integrating with linux.
+
+  // TODO: Need to receive a printf like function from outside to enable this, I do not want to tie the implementation to IObSoC.
+  //PRINT("Embedded Versat\n");
 
   MEMSET(versat_base,0x0,0x80000000); // Soft reset
 
@@ -53,13 +53,17 @@ void versat_init(int base){
   VersatLoadDelay(delayBuffer);
 }
 
+void SetVersatDebugPrintfFunction(VersatPrintf function){
+  versatPrintf = function;
+}
+
 void StartAccelerator(){
-  //printf("Start accelerator\n");
+  //PRINT("Start accelerator\n");
   MEMSET(versat_base,0x0,1);
 }
 
 void EndAccelerator(){
-  //printf("End accelerator\n");
+  //PRINT("End accelerator\n");
   while(1){
     volatile int val = MEMGET(versat_base,0x0);
     if(val){
@@ -85,7 +89,7 @@ void SignalLoop(){
   MEMSET(versat_base,0x0,0x40000000);
 }
 
-void VersatMemoryCopy(void* dest,const void* data,int size){
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   if(size <= 0){
     return;
   }
@@ -108,11 +112,11 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
 
   if(dataInsideVersat == destInsideVersat){
     if(dataInsideVersat){
-      //printf("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
+      //PRINT("Warning, Versat currently cannot DMA between two memory regions inside itself\n");
     } else {
-      //printf("Warning, Versat cannot use its DMA when both regions are outside its address space\n");
+      //PRINT("Warning, Versat cannot use its DMA when both regions are outside its address space\n");
     }
-    //printf("Using a simple copy loop for now\n");
+    //PRINT("Using a simple copy loop for now\n");
   }
 
   if(enableDMA && acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
@@ -133,31 +137,26 @@ void VersatMemoryCopy(void* dest,const void* data,int size){
       if(val) break;
     }
   } else {
-    int* destView = (int*) dest;
-    int* dataView = (int*) data;
+    volatile int* destView = (volatile int*) dest;
+    volatile int* dataView = (volatile int*) data;
     for(int i = 0; i < size / sizeof(int); i++){
       destView[i] = dataView[i];
     }
   }
 }
 
-void VersatUnitWrite(const void* baseaddr,int index,int val){
-  //int* ptr = (int*) (baseaddr + index * sizeof(int));
-  //*ptr = val;
+void VersatUnitWrite(volatile const void* baseaddr,int index,int val){
   iptr base = (iptr) baseaddr;
 
   MEMSET(base,index,val);
 }
 
-int VersatUnitRead(const void* baseaddr,int index){
+int VersatUnitRead(volatile const void* baseaddr,int index){
   iptr base = (iptr) baseaddr;
   return MEMGET(base,index);
-  //int* ptr = (int*) (base + index * sizeof(int));
-  //return *ptr;
 }
 
-float VersatUnitReadFloat(const void* baseaddr,int index){
-  // float* ptr = (float*) (base + index * sizeof(float)
+float VersatUnitReadFloat(volatile const void* baseaddr,int index){
   iptr base = (iptr) baseaddr;
   int val = MEMGET(base,index);
   float* ptr = (float*) &val;
@@ -170,8 +169,10 @@ void ConfigEnableDMA(bool value){
 
 void ConfigCreateVCD(bool value){}
 void ConfigSimulateDatabus(bool value){}
+int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){return 0;}
+SimulateVReadResult SimulateVRead(AddressVArguments args){return (SimulateVReadResult){};}
 
-void VersatLoadDelay(const unsigned int* buffer){
-  void* delayBase = (void*) (versat_base + delayStart);
+void VersatLoadDelay(volatile const unsigned int* buffer){
+  volatile void* delayBase = (void*) (versat_base + delayStart);
   VersatMemoryCopy(delayBase,buffer,sizeof(int) * ARRAY_SIZE(delayBuffer));
 }

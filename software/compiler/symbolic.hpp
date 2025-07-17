@@ -2,53 +2,104 @@
 
 #include "utils.hpp"
 
+// TODO: The logic in relation to negative is becoming a bit tiring. If we need to keep expanding this code, might need to find some pattern to simplify things. The main problem is when the structure is changed by any of the functions, in these cases the logic for how negativity is preserved is more complicated than simply copying what we already have.
+
+// TODO: We might have to implement a way of grouping variables, so we can group the loop variables for an address access. This might simplify things somewhat. Need to see further how the code turns out for the address access
+
+// TODO: A lot of places are normalizing when there is no need. The more normalizations we perform on the lower levels the worse performance and memory penalties we incur. Normalization only needs to be performed if needed, otherwise try to keep whatever format we have
+
 struct Tokenizer;
 struct Arena;
 
 enum SymbolicExpressionType{
   SymbolicExpressionType_LITERAL,
   SymbolicExpressionType_VARIABLE,
-  SymbolicExpressionType_OP, // For now this is only div. addition and multiply use ARRAY and sub does not exist.
-  SymbolicExpressionType_ARRAY // Arrays are for + and *. Since they are commutative, easier to handle them in an array setting. 
+  SymbolicExpressionType_SUM,
+  SymbolicExpressionType_MUL,
+  SymbolicExpressionType_DIV,
+  SymbolicExpressionType_FUNC
+};
+
+enum SymbolicReprType{
+  SymbolicReprType_LITERAL,
+  SymbolicReprType_VARIABLE,
+  SymbolicReprType_OP
+};
+
+struct SymbolicReprAtom{
+  SymbolicReprType type;
+  
+  union{
+    String variable;
+    int literal;
+    char op;
+  };
 };
 
 struct SymbolicExpression{
   SymbolicExpressionType type;
+  bool negative;
 
   // All these should be inside a union. Not handling this for now
   int literal;
-  String variable;
-  SymbolicExpression* left;
-  SymbolicExpression* right;
-  bool negative;
-  char op; // Used by both OP and ARRAY
-  Array<SymbolicExpression*> sum;
+
+  union {
+    String variable;
+    String name;
+  };
+    
+  // For div, imagine a fraction expression
+  struct {
+    SymbolicExpression* top;
+    SymbolicExpression* bottom;
+  };
+  
+  Array<SymbolicExpression*> terms; // Terms of SUM and MUL. Function arguments for FUNC
 };
 
 struct MultPartition{
   SymbolicExpression* base;
-  Array<SymbolicExpression*> leftovers;
+  SymbolicExpression* leftovers;
 }; 
 
-// TODO: It might be better to replace all the multiplications with something based on this approach.
-//       It is nice to only have a place to store negation (inside the literal).
-//       The only problem is the interaction with DIV.
-//       There is maybe some opportunity of representing negation as just the multiplication by a negative literal. Instead of having a negative flag, we just make it so negation is basically putting a mul by -1. Would this make things simpler? Idk, adding one more layer of AST seems to do the opposite. Maybe it would be easier if we did not add any more layer. Make it so that literals are numbers, variables are a number and a string, additions are an array, and multiplication are a number and an array.
-
-//       Anyway, need to handle division properly. Only when division is working and we can simplify the majority of equations into a nice form should we even start wondering about simplifying the code. Division might break a lot of our assumptions right now, no point in rushing, because the code is still malleable.
-
-struct TermsWithLiteralMultiplier{
-  // Negative is removed from mulTerms and pushed to literal
-  SymbolicExpression* mulTerms; 
-  SymbolicExpression* literal;
-};
-
-void Print(SymbolicExpression* expr);
+void Print(SymbolicExpression* expr,bool printNewLine = false);
+void Repr(StringBuilder* builder,SymbolicExpression* expr);
+char* DebugRepr(SymbolicExpression* expr);
 String PushRepresentation(SymbolicExpression* expr,Arena* out);
+
+Array<SymbolicReprAtom> CompileRepresentation(SymbolicExpression* expr,Arena* out);
+
+int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values);
+
+SymbolicExpression* PushLiteral(Arena* out,int value,bool negate = false);
+SymbolicExpression* PushVariable(Arena* out,String name,bool negate = false);
+
+SymbolicExpression* SymbolicAdd(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
+SymbolicExpression* SymbolicAdd(Array<SymbolicExpression*> terms,Arena* out);
+SymbolicExpression* SymbolicAdd(Array<SymbolicExpression*> terms,SymbolicExpression* extra,Arena* out);
+SymbolicExpression* SymbolicSub(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
+SymbolicExpression* SymbolicMult(SymbolicExpression* left,SymbolicExpression* right,Arena* out);
+SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,Arena* out);
+SymbolicExpression* SymbolicMult(Array<SymbolicExpression*> terms,SymbolicExpression* extra,Arena* out);
+SymbolicExpression* SymbolicDiv(SymbolicExpression* top,SymbolicExpression* bottom,Arena* out);
+
+SymbolicExpression* SymbolicFunc(String functionName,Array<SymbolicExpression*> terms,Arena* out);
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);
 
+SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out);
+
+// Use this function to get the literal value of a literal type expression, takes into account negation.
+int GetLiteralValue(SymbolicExpression* expr);
+
+bool IsZero(SymbolicExpression* expr);
+
+// Must call normalizeLiteral before calling this.
+// Furthermore, the negative is removed from leftovers and pushed onto the literal (base)
+MultPartition CollectTermsWithLiteralMultiplier(SymbolicExpression* expr,Arena* out);
+
+MultPartition PartitionMultExpressionOnVariable(SymbolicExpression* expr,String variableToPartition,Arena* out);
 
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out);
@@ -61,37 +112,46 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
 
 SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out);
+SymbolicExpression* ReplaceVariables(SymbolicExpression* expr,Hashmap<String,SymbolicExpression*>* values,Arena* out);
 
-SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out);
+SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrint = false);
 SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out);
+
+// Are allowed to call normalize
+SymbolicExpression* Group(SymbolicExpression* expr,String variableToGroupWith,Arena* out);
 
 void TestSymbolic();
 
-/*
-  For now, we store additions in a array and everything else in a AST like format.
-  Or, maybe what we want is to store equal operations into an array.
-  
-// The fundamental reason why I want to collect all the terms into an array is beacuse of commutativity. By having everything into an array, it is easier to figure out how to 
+Array<String> GetAllSymbols(SymbolicExpression* expr,Arena* out);
 
-// Let's imagine that we have an AST like view of the expression.
+// Expr must be a sum of mul. Assuming that variableName only appears once. TODO: Probably would be best to create a function that first groups everything so that variableName only appears once and then call this function. Or maybe do the grouping inside here if needed.
+// TODO: This function is kinda not needed. We only use it to break apart a symbolic expression into a LoopLinearSumTerm, but even then we can do it better because we know the format of the variables inside the symbolic expression and we could simplify this.
+Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,String variableName,Arena* out);
 
-If we stored additions in an array, we could have
+struct LoopLinearSumTerm{
+  String var;
+  SymbolicExpression* term;
+  SymbolicExpression* loopStart;
+  SymbolicExpression* loopEnd;
+};
 
-(A,B,C)
+// A Sum of expressions in the form term * X + term * Y + term * Z + ... + constant, where X,Y and Z are loop variables that range from a start expression to a end expression.
+struct LoopLinearSum{
+  // 0 is the innermost and size-1 the outermost loop
+  Array<LoopLinearSumTerm> terms;
+  SymbolicExpression* freeTerm;
+};
 
-A:*
-a   *
-  2  (x,y)
+LoopLinearSum* PushLoopLinearSumEmpty(Arena* out);
+LoopLinearSum* PushLoopLinearSumFreeTerm(SymbolicExpression* term,Arena* out);
+LoopLinearSum* PushLoopLinearSumSimpleVar(String loopVarName,SymbolicExpression* term,SymbolicExpression* start,SymbolicExpression* end,Arena* out);
 
-B: a
+LoopLinearSum* Copy(LoopLinearSum* in,Arena* out);
+LoopLinearSum* AddLoopLinearSum(LoopLinearSum* inner,LoopLinearSum* outer,Arena* out);
+LoopLinearSum* RemoveLoop(LoopLinearSum* in,int index,Arena* out);
+SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* out);
 
-C:
-a + b
+SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
-What operations do we need?
-Distributive.
-Push all divisions into a single final division. (To handle duty)
-
-
-
-*/
+void Print(LoopLinearSum* sum,bool printNewLine = false);
+void Repr(StringBuilder* builder,LoopLinearSum* sum);

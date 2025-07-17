@@ -18,99 +18,78 @@ VERSAT_COMPILER_DIR:=$(VERSAT_SW_DIR)/compiler
 BUILD_DIR:=$(VERSAT_DIR)/build
 _a := $(shell mkdir -p $(BUILD_DIR)) # Creates the folder
 
-VERSAT_REQUIRE_TYPE:=type verilogParsing templateEngine
-
-VERSAT_COMMON_SRC_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.cpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.cpp))
-VERSAT_COMMON_HDR_NO_TYPE := $(filter-out $(patsubst %,$(VERSAT_COMMON_DIR)/%.hpp,$(VERSAT_REQUIRE_TYPE)),$(wildcard $(VERSAT_COMMON_DIR)/*.hpp))
-VERSAT_COMMON_OBJ_NO_TYPE := $(patsubst $(VERSAT_COMMON_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(VERSAT_COMMON_SRC_NO_TYPE))
-
-VERSAT_COMMON_OBJ:=$(VERSAT_COMMON_OBJ_NO_TYPE) $(patsubst %,$(BUILD_DIR)/%.o,$(VERSAT_REQUIRE_TYPE))
-
+VERSAT_COMMON_HEADERS := $(wildcard $(VERSAT_COMMON_DIR)/*.hpp)
+VERSAT_COMMON_SOURCES := $(wildcard $(VERSAT_COMMON_DIR)/*.cpp)
+VERSAT_COMMON_OBJS := $(patsubst $(VERSAT_COMMON_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(VERSAT_COMMON_SOURCES))
 VERSAT_COMMON_INCLUDE := -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 
-VERSAT_DEFINE += -DPC
-
-# -rdynamic - used to allow backtraces
-$(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp
-	g++ $(VERSAT_DEFINE) -rdynamic $(VERSAT_COMMON_FLAGS) -std=c++17 -c -o $@ -DROOT_PATH=\"$(abspath ../)\" -DVERSAT_DEBUG $(GLOBAL_CFLAGS) $< $(VERSAT_COMMON_INCLUDE)
+VERSAT_ALL_HEADERS := $(VERSAT_COMMON_HEADERS) $(wildcard $(VERSAT_COMPILER_DIR)/*.hpp)
+VERSAT_ALL_HEADERS += $(BUILD_DIR)/embeddedData.hpp
 
 VERSAT_TEMPLATES:=$(wildcard $(VERSAT_TEMPLATE_DIR)/*.tpl)
-VERSAT_TEMPLATES_OBJ:=$(BUILD_DIR)/templateData.o
-
-# The fewer files the faster compilation time is
-# But the more likely is for type-info to miss something.
-
-TYPE_INFO_HDR += $(VERSAT_COMMON_DIR)/templateEngine.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/declaration.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/codeGeneration.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/versatSpecificationParser.hpp
-TYPE_INFO_HDR += $(VERSAT_COMPILER_DIR)/symbolic.hpp
 
 VERSAT_INCLUDE := -I$(VERSAT_PC_DIR) -I$(VERSAT_COMPILER_DIR) -I$(BUILD_DIR)/ -I$(VERSAT_COMMON_DIR) -I$(VERSAT_SW_DIR)
 
-VERSAT_DEBUG:=1
+VERSAT_COMPILER_SOURCES := $(wildcard $(VERSAT_COMPILER_DIR)/*.cpp)
+VERSAT_COMPILER_OBJS := $(patsubst $(VERSAT_COMPILER_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(VERSAT_COMPILER_SOURCES))
 
-BUILD_DIR:=$(VERSAT_DIR)/build
+CPP_OBJ := $(VERSAT_COMMON_OBJS)
+CPP_OBJ += $(VERSAT_COMPILER_OBJS)
+CPP_OBJ += $(BUILD_DIR)/embeddedData.o
 
-VERSAT_LIBS:=-lstdc++ -lm -lgcc -lc -pthread -ldl
+COMPILE_TOOL = g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -MMD -MP -DVERSAT_DEBUG -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" $(VERSAT_COMMON_INCLUDE) $(VERSAT_COMMON_OBJS)
 
-CPP_FILES := $(wildcard $(VERSAT_COMPILER_DIR)/*.cpp)
-VERSAT_COMPILER_OBJ := $(patsubst $(VERSAT_COMPILER_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CPP_FILES))
-CPP_OBJ := $(VERSAT_COMPILER_OBJ)
+# NOTE: Removed -MP flag. Any problem with makefiles in the future might be because of this
+COMPILE_OBJ  = g++ -DPC -rdynamic -std=c++17 $(VERSAT_COMMON_FLAGS) -MMD -DVERSAT_DEBUG -c -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -g $(VERSAT_COMMON_INCLUDE) $(VERSAT_INCLUDE)
+COMPILE_OBJ_NO_D = g++ -DPC -rdynamic -std=c++17 $(VERSAT_COMMON_FLAGS) -DVERSAT_DEBUG -c -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -g $(VERSAT_COMMON_INCLUDE) $(VERSAT_INCLUDE)
 
-# -rdynamic needed to ensure backtraces work
-VERSAT_FLAGS := -rdynamic -DROOT_PATH=\"$(abspath ../)\" 
+# Common objects (used by Versat and tools)
+$(BUILD_DIR)/%.o : $(VERSAT_COMMON_DIR)/%.cpp $(VERSAT_COMMON_HEADERS)
+	$(COMPILE_OBJ)
 
-CPP_OBJ += $(VERSAT_COMMON_OBJ)
-CPP_OBJ += $(VERSAT_TEMPLATES_OBJ)
-CPP_OBJ += $(BUILD_DIR)/typeInfo.o
+# Compiler objects
+$(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(VERSAT_ALL_HEADERS)
+	$(COMPILE_OBJ)
 
-CPP_OBJ_WITHOUT_COMPILER:=$(filter-out $(BUILD_DIR)/versatCompiler.o,$(CPP_OBJ))
+# Tools
+$(BUILD_DIR)/calculateHash: $(VERSAT_TOOLS_DIR)/calculateHash.cpp $(VERSAT_COMMON_OBJS) $(VERSAT_COMMON_HEADERS)
+	$(COMPILE_TOOL)
 
-FL:=-DVERSAT_DIR="$(VERSAT_DIR)"
+$(BUILD_DIR)/embedData: $(VERSAT_TOOLS_DIR)/embedData.cpp $(VERSAT_COMMON_OBJS) $(VERSAT_COMMON_HEADERS)
+	$(COMPILE_TOOL)
 
-VERSAT_COMPILER_DEPENDS := $(patsubst %.o,%.d,$(VERSAT_COMPILER_OBJ))
--include  $(VERSAT_COMPILER_DEPENDS)
+# Generate meta code
+$(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embedData
+	$(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData
 
-$(BUILD_DIR)/templateData.hpp $(BUILD_DIR)/templateData.cpp &: $(VERSAT_TEMPLATES) $(BUILD_DIR)/embedFile
-	$(BUILD_DIR)/embedFile $(BUILD_DIR)/templateData $(VERSAT_TEMPLATES)
+# Compile object files
+$(BUILD_DIR)/embeddedData.o: $(BUILD_DIR)/embeddedData.cpp $(BUILD_DIR)/embeddedData.hpp
+	$(COMPILE_OBJ_NO_D)
 
-$(BUILD_DIR)/templateData.o: $(BUILD_DIR)/templateData.cpp $(BUILD_DIR)/templateData.hpp
-	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -c -o $@ -g $(VERSAT_COMMON_INCLUDE) $<
+# Embedded data rules will bring the hardware and scripts rules. Any change to hardware and scripts should force make to rebuild through this rule
+$(BUILD_DIR)/embeddedData.d: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embedData
+	$(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData -d
 
-$(BUILD_DIR)/embedFile: $(VERSAT_TOOLS_DIR)/embedFile.cpp $(VERSAT_COMMON_OBJ_NO_TYPE)
-	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
+# Versat
+$(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
+	g++ -MMD -std=c++17 $(VERSAT_COMMON_FLAGS) -DVERSAT_DEBUG -DVERSAT_DIR="$(VERSAT_DIR)" -rdynamic -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -o $@ $(CPP_OBJ) $(VERSAT_INCLUDE) -lstdc++ -lm -lgcc -lc -pthread -ldl 
 
-$(BUILD_DIR)/calculateHash: $(VERSAT_TOOLS_DIR)/calculateHash.cpp $(VERSAT_COMMON_OBJ_NO_TYPE)
-	g++ -DPC -std=c++17 -MMD -MP -DVERSAT_DEBUG -DSTANDALONE -o $@ $(VERSAT_COMMON_FLAGS) $(VERSAT_COMMON_INCLUDE) $< $(VERSAT_COMMON_OBJ_NO_TYPE)
-
-$(BUILD_DIR)/typeInfo.cpp: $(TYPE_INFO_HDR)
-	python3 $(VERSAT_TOOLS_DIR)/structParser.py $(BUILD_DIR) $(TYPE_INFO_HDR) # -m cProfile -o temp.dat 
-
-$(BUILD_DIR)/typeInfo.o: $(BUILD_DIR)/typeInfo.cpp
-	g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE)
-
-$(BUILD_DIR)/%.o : $(VERSAT_COMPILER_DIR)/%.cpp $(BUILD_DIR)/templateData.hpp
-	g++ -MMD -std=c++17 $(VERSAT_FLAGS) $(FL) $(VERSAT_COMMON_FLAGS) -c -o $@ $(GLOBAL_CFLAGS) $< $(VERSAT_INCLUDE) #-DDEFAULT_UNIT_PATHS="$(SHARED_UNITS_PATH)" 
-
-$(shell mkdir -p $(BUILD_DIR))
-
-$(VERSAT_DIR)/versat: $(CPP_OBJ) 
-	g++ -MMD -std=c++17 $(FL) $(VERSAT_FLAGS) -o $@ $(VERSAT_COMMON_FLAGS) $(CPP_OBJ) $(VERSAT_INCLUDE) $(VERSAT_LIBS) 
-
-embedFile: $(BUILD_DIR)/templateData.hpp
-
-calculateHash: $(BUILD_DIR)/calculateHash
+-include $(BUILD_DIR)/embeddedData.d
+-include $(BUILD_DIR)/*.d
 
 versat: $(VERSAT_DIR)/versat $(BUILD_DIR)/calculateHash
 
-type-info: $(TYPE_INFO_HDR) $(BUILD_DIR)/typeInfo.cpp
+debug-embed-data: $(BUILD_DIR)/embedData
+	gdb --args $(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData
+
+embed-data: $(BUILD_DIR)/embedData
+	$(BUILD_DIR)/embedData $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embeddedData
 
 clean:
 	-rm -fr build
 	-rm -f *.a versat versat.d
 
-.PHONY: versat
+.PHONY: versat $(BUILD_DIR)/embeddedData.d
 
 .SUFFIXES:
 

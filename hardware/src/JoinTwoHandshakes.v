@@ -19,6 +19,8 @@ module JoinTwoHandshakes #(
    output [FIRST_DATA_W-1:0]  result_first_data_o,
    output [SECOND_DATA_W-1:0] result_second_data_o,
 
+   input forceReset,
+
    input clk_i,
    input rst_i
 );
@@ -34,6 +36,8 @@ SkidBuffer #(.DATA_W(FIRST_DATA_W)) firstBuffer(
    .out_ready_i(result_ready_i && buffered_second_valid),
    .out_data_o(result_first_data_o),
 
+   .forceReset(forceReset),
+
    .clk_i(clk_i),
    .rst_i(rst_i)
 );
@@ -46,6 +50,8 @@ SkidBuffer #(.DATA_W(SECOND_DATA_W)) secondBuffer(
    .out_valid_o(buffered_second_valid),
    .out_ready_i(result_ready_i && buffered_first_valid),
    .out_data_o(result_second_data_o),
+
+   .forceReset(forceReset),
 
    .clk_i(clk_i),
    .rst_i(rst_i)

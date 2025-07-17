@@ -1,9 +1,6 @@
 #include "dotGraphPrinting.hpp"
 
-#include "accelerator.hpp"
-#include "memory.hpp"
 #include "utils.hpp"
-#include "utilsCore.hpp"
 #include "versat.hpp"
 
 // Make sure that it matches the value of the corresponding enum
@@ -96,34 +93,34 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
 
 String GenerateDotGraph(GraphPrintingContent content,Arena* out){
   TEMP_REGION(temp,out);
-  auto result = StartString(out);
+  auto result = StartString(temp);
 
-  PushString(out,"digraph view {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+  result->PushString("digraph view {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
 
   if(content.graphLabel.size > 0){
-    PushString(out,"label=\"%.*s\";\n",UNPACK_SS(content.graphLabel));
+    result->PushString("label=\"%.*s\";\n",UNPACK_SS(content.graphLabel));
   }
   
   for(GraphPrintingNodeInfo& node : content.nodes){
     String color = graphPrintingColorTable[(int) node.color];
     String name = node.name;
     String label = node.content;
-    PushString(out,"\t\"%.*s\" [color=%.*s label=\"%.*s\"];\n",UNPACK_SS(name),UNPACK_SS(color),UNPACK_SS(label));
+    result->PushString("\t\"%.*s\" [color=%.*s label=\"%.*s\"];\n",UNPACK_SS(name),UNPACK_SS(color),UNPACK_SS(label));
   }
 
   for(GraphPrintingEdgeInfo info : content.edges){
-    PushString(out,"\t\"%.*s\" -> ",UNPACK_SS(info.first));
-    PushString(out,"\"%.*s\"",UNPACK_SS(info.second));
+    result->PushString("\t\"%.*s\" -> ",UNPACK_SS(info.first));
+    result->PushString("\"%.*s\"",UNPACK_SS(info.second));
 
     String color = graphPrintingColorTable[(int) info.color];
     String label = info.content;
       
-    PushString(out,"[color=%.*s label=\"%.*s\"];\n",UNPACK_SS(color),UNPACK_SS(label));
+    result->PushString("[color=%.*s label=\"%.*s\"];\n",UNPACK_SS(color),UNPACK_SS(label));
   }
 
-  PushString(out,"}\n");
+  result->PushString("}\n");
     
-  return EndString(result);
+  return EndString(out,result);
 }
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName){

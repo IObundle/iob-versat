@@ -38,98 +38,64 @@ module AddressGen2 #(
    output reg done_o
 );
 
-localparam OFFSET_W = $clog2(DATA_W / 8);
+   SuperAddress #(
+      .ADDR_W(ADDR_W),
+      .PERIOD_W(PERIOD_W),
+      .DELAY_W(DELAY_W),
+      .DATA_W(DATA_W)
+      ) reader (
+      .clk_i(clk_i),
+      .rst_i(rst_i),
+      .run_i(run_i),
+      .done_o(done_o),
 
-reg                                           [   DELAY_W-1:0] delay_counter;
+      .ignore_first_i(1'b0),
 
-reg                                           [  ADDR_W - 1:0] iter,iter2;
-reg                                           [PERIOD_W - 1:0] per,per2;
+      //configurations 
+      .period_i(period_i),
+      .delay_i (delay_i),
+      .start_i (start_i),
+      .incr_i  (incr_i),
 
-reg [ADDR_W-1:0] addr2;
+      .iterations_i(iterations_i),
+      .duty_i      (duty_i),
+      .shift_i     (shift_i),
 
-wire iter2Cond = ((iter2 + 1) == iterations2_i || iterations2_i == 0);
-wire per2Cond = ((per2 + 1) == period2_i || period2_i == 0);
+      .period2_i(period2_i),
+      .incr2_i(incr2_i),
+      .iterations2_i(iterations2_i),
+      .shift2_i(shift2_i),
 
-wire iterCond = ((iter + 1) == iterations_i || iterations_i == 0);
-wire perCond = ((per + 1) == period_i || period_i == 0);
+      .period3_i(0),
+      .incr3_i(0),
+      .iterations3_i(0),
+      .shift3_i(0),
 
-wire [3:0] cases = {iter2Cond,per2Cond,iterCond,perCond};
+      .doneDatabus(),
+      .doneAddress(),
 
-wire [ADDR_W-1:0] debugAddr = ({1'b0,addr_o[ADDR_W-2:0]} >> OFFSET_W);
+      //outputs 
+      .valid_o(valid_o),
+      .ready_i(ready_i),
+      .addr_o (addr_o),
+      .store_o(store_o),
 
-/* TODO:
-   
-   The address generation can be decoupled, but it is better if we separate it into individual modules.
-   Because we must take into account future iter and per conditations.
-   The idea of "runnning one ahead" does not work if we only take into account per. 
+      .databus_ready(1'b1),
+      .databus_valid(),
+      .databus_addr(),
+      .databus_len(),
+      .databus_last(1'b1),
 
-   Basically need a module that implements per and iter logic only.
+      // Data interface
+      .data_valid_i(1'b1),
+      .data_ready_i(1'b1),
+      .reading(1'b1),
+      .data_last_o(),
 
-*/
-
-assign store_o = (per < duty_i);
-
-always @(posedge clk_i, posedge rst_i) begin
-   if (rst_i) begin
-      delay_counter <= 0;
-      addr_o        <= 0;
-      addr2         <= 0;
-      iter          <= 0;
-      iter2         <= 0;
-      per           <= 0;
-      per2          <= 0;
-      valid_o       <= 0;
-      done_o        <= 1'b1;
-   end else if (run_i) begin
-      delay_counter <= delay_i;
-      addr_o        <= start_i;
-      addr2         <= start_i;
-      iter          <= 0;
-      iter2         <= 0;
-      per           <= 0;
-      per2          <= 0;
-      valid_o       <= 0;
-      done_o        <= 1'b0;
-      if (delay_i == 0) begin
-         valid_o <= 1'b1;
-      end
-   end else if (|delay_counter) begin
-      delay_counter <= delay_counter - 1;
-      valid_o       <= (delay_counter == 1);
-   end else if (valid_o && ready_i) begin
-      casez(cases)
-      4'b???0: begin
-         if (per < duty_i) begin
-            addr_o <= addr_o + (incr_i << OFFSET_W);
-         end
-         per <= per + 1;         
-      end
-      4'b??01: begin
-         addr_o <= addr_o + (shift_i << OFFSET_W);
-         per    <= 0;
-         iter   <= iter + 1;
-      end
-      4'b?011: begin
-         addr2  <= addr2 + (incr2_i << OFFSET_W);
-         addr_o <= addr2 + (incr2_i << OFFSET_W);
-         per    <= 0;
-         iter   <= 0;
-         per2   <= per2 + 1;
-      end
-      4'b0111: begin
-         addr2  <= addr2 + (shift2_i << OFFSET_W);
-         addr_o <= addr2 + (shift2_i << OFFSET_W);
-         per    <= 0;
-         iter   <= 0;
-         per2   <= 0;
-         iter2  <= iter2 + 1;
-      end
-      4'b1111: begin
-         done_o  <= 1'b1;
-         valid_o <= 0;
-      end
-      endcase
-   end
-end
+      .count_i(0),
+      .start_address_i(0),
+      .address_shift_i(0),
+      .databus_length(0)
+   );
 
 endmodule  // MyAddressGen

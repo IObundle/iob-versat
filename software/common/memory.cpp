@@ -11,9 +11,108 @@
 #include <cstdarg>
 #include <cstdlib>
 
-#include "logger.hpp"
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
+
+// Arena Usage recording and reporting. Mostly some statistics to figure out how much memory our program is used and if some function is doing something odd
+
+//static Arena debugArena; 
+
+struct ArenaInfo{
+  Arena* arena;
+  size_t used;
+};
+  
+struct FunctionPos{
+  const char* file;
+  const char* functionName;
+  int line;
+};
+
+struct FunctionAllocationInfo{
+  FunctionPos pos;
+  size_t memoryUsed;
+};
+
+static Arena debugMemoryArena;
+static Array<ArenaInfo> debugArenaStack;
+static int debugArenaIndex;
+static ArenaList<FunctionAllocationInfo>* debugInfo;
+
+static void InitMemoryDebug(){
+  static bool init = false;
+  if(init){
+    return;
+  }
+  init = true;
+
+  debugMemoryArena = InitArena(Megabyte(16));
+  debugArenaStack = PushArray<ArenaInfo>(&debugMemoryArena,100); // NOTE: 50 shoud be enough
+  debugArenaIndex = 0;
+
+  debugInfo = PushArenaList<FunctionAllocationInfo>(&debugMemoryArena);
+}
+
+void ReportArenaUsage(){
+  Array<FunctionAllocationInfo> asArray = PushArrayFromList(&debugMemoryArena,debugInfo);
+
+  auto CompareFunction = [](const void* f1,const void* f2) -> int{
+    FunctionAllocationInfo* v1 = (FunctionAllocationInfo*) f1;
+    FunctionAllocationInfo* v2 = (FunctionAllocationInfo*) f2;
+
+    if(v2->memoryUsed > v1->memoryUsed){
+      return 1;
+    } else if(v2->memoryUsed < v1->memoryUsed){
+      return -1;
+    } else {
+      return 0;
+    }
+  };
+  
+  qsort(asArray.data,asArray.size,sizeof(FunctionAllocationInfo),CompareFunction);
+
+  asArray.size = MIN(asArray.size,10);
+  
+  for(FunctionAllocationInfo info : asArray){
+    String prettyMemoryStr = ReprMemorySize(info.memoryUsed,&debugMemoryArena); // NOTE: Leaking
+    printf("%s:%s:%d : %.*s\n",info.pos.file,info.pos.functionName,info.pos.line,UN(prettyMemoryStr));
+  }
+}
+
+void DebugInitRegion(Arena* arena,const char* file,const char* function,int line){
+#ifndef VERSAT_DEBUG
+  return;
+#endif
+
+  InitMemoryDebug();
+  
+  debugArenaStack[debugArenaIndex].arena = arena;
+  debugArenaStack[debugArenaIndex].used = arena->used;
+
+  debugArenaIndex += 1;
+}
+
+void DebugEndRegion(Arena* arena,const char* file,const char* function,int line){
+#ifndef VERSAT_DEBUG
+  return;
+#endif
+
+  Assert(debugArenaIndex > 0);
+  debugArenaIndex -= 1;
+
+  ArenaInfo startInfo = debugArenaStack[debugArenaIndex];
+
+  size_t memoryUsed = arena->used - startInfo.used;
+
+  // NOTE: We currently do not store any small usages, otherwise we could easily overflow our debug arena
+  if(memoryUsed > 1024){
+    FunctionAllocationInfo* info = debugInfo->PushElem();
+    info->pos.file = file;
+    info->pos.functionName = function;
+    info->pos.line = line;
+    info->memoryUsed = memoryUsed;
+  }
+}
 
 Arena* contextArenas[2];
 
@@ -37,6 +136,12 @@ int GetPageSize(){
   }
 
   return pageSize;
+}
+
+int AlignToNextPage(int amount){
+  int pages = ((amount - 1) / GetPageSize()) + 1;
+  int aligned = pages * GetPageSize();
+  return aligned;
 }
 
 static int pagesAllocated = 0;
@@ -70,30 +175,21 @@ void AlignArena(Arena* arena,int alignment){
   }
 }
 
-Arena InitArena(size_t size){
+Arena InitArena_(size_t size,const char* file,int line){
   Arena arena = {};
 
   arena.used = 0;
   arena.totalAllocated = size;
   arena.mem = (Byte*) calloc(size,sizeof(Byte));
-  
+  arena.fileCreationPlace = file;
+  arena.lineCreationPlace = line;
+
   if(arena.mem == nullptr){
     fprintf(stderr,"Error allocating memory. Make sure enough memory is available\n");
     exit(1);
   }
 
   Assert(IS_ALIGNED_64(arena.mem));
-
-  return arena;
-}
-
-Arena InitLargeArena(){
-  Arena arena = {};
-
-  arena.used = 0;
-  arena.totalAllocated = Gigabyte(1);
-  arena.mem = (Byte*) AllocatePages(arena.totalAllocated / GetPageSize());
-  Assert(arena.mem);
 
   return arena;
 }
@@ -127,6 +223,10 @@ void Free(Arena* arena){
   arena->used = 0;
 }
 
+size_t MemoryUsage(Arena* arena){
+  return arena->used;
+}
+
 ArenaMark MarkArena(Arena* arena){
   ArenaMark mark = {};
   mark.arena = arena;
@@ -149,7 +249,7 @@ Byte* PushBytes(Arena* arena, size_t size){
   }
   
   arena->used += size;
-  arena->maximum = std::max(arena->maximum,arena->used);
+  arena->maximum = MAX(arena->maximum,arena->used);
   
   return ptr;
 }
@@ -159,38 +259,64 @@ size_t SpaceAvailable(Arena* arena){
   return remaining;
 }
 
-StringBuilder* StartStringBuilder(Arena* out){
+StringBuilder* StartString(Arena* out){
   StringBuilder* builder = PushStruct<StringBuilder>(out);
   builder->arena = out;
-  builder->head = nullptr;
-  builder->tail = nullptr;
+
+  // Simpler to preallocate one node, very rare for a StringBuilder to be started and not used once
+  builder->head = PushStruct<StringNode>(out);
+  builder->tail = builder->head;
   
   return builder;
 }
 
-void StringBuilder::PushString(String str){
-  StringNode* node = PushStruct<StringNode>(this->arena);
-  node->string = ::PushString(this->arena,str);
+void StringBuilder::PushString(String string){
+  StringNode* ptr = this->tail;
 
-  if(this->head == nullptr){
-    this->head = node;
-    this->tail = node;
-  } else {
-    this->tail->next = node;
-    this->tail = node;
+  if(debugPrint){
+    printf("%.*s",UNPACK_SS(string));
   }
+  
+  String str = string;
+  while(1){
+    i16 toCopyAmount = MIN((long unsigned) str.size,(STRING_NODE_SIZE - ptr->used));
+    memcpy(&ptr->buffer[ptr->used],str.data,toCopyAmount);
+
+    str.data += toCopyAmount;
+    str.size -= toCopyAmount;
+    ptr->used += toCopyAmount;
+    
+    if(ptr->used == STRING_NODE_SIZE){
+      ptr->next = PushStruct<StringNode>(arena);
+      ptr = ptr->next;
+    }
+
+    if(str.size == 0){
+      break;
+    }
+  }
+
+  this->tail = ptr;
+}
+
+// TODO: Performance will drop if this gets called repeatedly and in contexts where we are constantly pushing chars
+//       Need to start tracking that sort of stuff in debug mode.
+void StringBuilder::PushChar(char ch){
+  String str = {};
+  str.data = &ch;
+  str.size = 1;
+  PushString(str);
 }
 
 void StringBuilder::vPushString(const char* format,va_list args){
-  StringNode* node = PushStruct<StringNode>(this->arena);
-  node->string = ::vPushString(this->arena,format,args);
+  TEMP_REGION(temp,arena);
+  String toPush = ::vPushString(temp,format,args);
+  PushString(toPush);
+}
 
-  if(this->head == nullptr){
-    this->head = node;
-    this->tail = node;
-  } else {
-    this->tail->next = node;
-    this->tail = node;
+void StringBuilder::PushSpaces(int amount){
+  for(int i = 0; i < amount; i++){
+    this->PushChar(' ');
   }
 }
 
@@ -206,40 +332,22 @@ void StringBuilder::PushString(const char* format,...){
 String EndString(Arena* out,StringBuilder* builder){
   int totalSize = 0;
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
-    totalSize += ptr->string.size;
+    totalSize += ptr->used;
   }
 
-  Byte* data = PushBytes(out,totalSize);
+  Byte* data = PushBytes(out,totalSize + 1); // Null byte appended
 
   String res = {};
   res.data = (const char*) data;
   res.size = totalSize;
   
   for(StringNode* ptr = builder->head; ptr != nullptr; ptr = ptr->next){
-    memcpy(data,ptr->string.data,ptr->string.size);
-    data += ptr->string.size;
+    memcpy(data,ptr->buffer,ptr->used);
+    data += ptr->used;
   }
 
-  return res;
-}
-
-DynamicString StartString(Arena* out){
-  DynamicString res = {};
-  res.arena = out;
-  res.mark = &out->mem[out->used];
-  return res;
-}
-
-String EndString(DynamicString mark){
-  Arena* arena = mark.arena;
-  String res = {};
-  res.size = &arena->mem[arena->used] - mark.mark;
-  if(Empty(res)){ // Put data as NULL if size 0, probably less error prone. Not sure.
-    res.data = nullptr;
-  } else {
-    res.data = (char*) mark.mark;
-  }
-
+  *data = '\0';
+  
   return res;
 }
 
@@ -285,19 +393,18 @@ String PushFile(Arena* out,const char* filepath){
   return res;
 }
 
-String PushString(Arena* arena,int size){
-  Byte* mem = PushBytes(arena,size);
+String PushString(Arena* arena,String ss){
+  int size = ss.size;
+  
+  Byte* mem = PushBytes(arena,size + 1);
 
   String res = {};
   res.data = (const char*) mem;
   res.size = size;
 
-  return res;
-}
-
-String PushString(Arena* arena,String ss){
-  String res = PushString(arena,ss.size);
   memcpy((void*) res.data,ss.data,ss.size);
+  mem[size] = '\0';
+
   return res;
 }
 
@@ -306,10 +413,13 @@ String vPushString(Arena* arena,const char* format,va_list args){
   size_t maximum = arena->totalAllocated - arena->used;
   int size = vsnprintf(buffer,maximum,format,args);
 
+  int trueSize = size + 1;
+  buffer[size] = '\0';
+  
   Assert(size >= 0);
-  Assert(((size_t) size) < maximum);
+  Assert(((size_t) trueSize) < maximum);
 
-  arena->used += (size_t) (size);
+  arena->used += (size_t) (trueSize);
 
   String res = STRING(buffer,size);
 
@@ -690,10 +800,32 @@ void* Next(GenericPoolIterator& iter){
 PoolInfo CalculatePoolInfo(int elemSize){
   PoolInfo info = {};
 
-  info.unitsPerFullPage = (GetPageSize() - sizeof(PoolHeader)) / elemSize;
-  info.bitmapSize = RoundUpDiv(info.unitsPerFullPage,8);
-  info.unitsPerPage = (GetPageSize() - sizeof(PoolHeader) - info.bitmapSize) / elemSize;
-  info.pageGranuality = 1;
+  int minAmount = 8; // Should it be variable? Probably need more time using Pool to check if we do need to do anything extra here.
+
+  // Because the bitmap depends on the amount of units that exist, we first calculate a minimum size then calculate the amount of units that we can actually fit into that size.
+  auto CalculateBlockSize = [elemSize](int amountOfUnits){
+    int size = AlignToNextPage(amountOfUnits * elemSize + sizeof(PoolHeader) + RoundUpDiv(amountOfUnits,8));
+    return size;
+  };
+
+  int minBlockSize = CalculateBlockSize(minAmount);
+  int minPagesPerBlock = minBlockSize / GetPageSize();
+
+  // TODO: Stupid way of calculating true size for the given minimum.
+  int amount = minAmount + 1;
+  for(; true ; amount += 1){
+    int blockSize = CalculateBlockSize(amount);
+    int pagesPerBlock = blockSize / GetPageSize();
+
+    if(pagesPerBlock != minPagesPerBlock){
+      amount -= 1;
+      break;
+    }
+  }
+
+  info.unitsPerPageBlock = amount;
+  info.bitmapSize = RoundUpDiv(amount,8);
+  info.pagesPerBlock = CalculateBlockSize(amount) / GetPageSize();
 
   return info;
 }
@@ -701,7 +833,7 @@ PoolInfo CalculatePoolInfo(int elemSize){
 PageInfo GetPageInfo(PoolInfo poolInfo,Byte* page){
   PageInfo info = {};
 
-  info.header = (PoolHeader*) (page + poolInfo.pageGranuality * GetPageSize() - sizeof(PoolHeader));
+  info.header = (PoolHeader*) (page + poolInfo.pagesPerBlock * GetPageSize() - sizeof(PoolHeader));
   info.bitmap = (Byte*) info.header - poolInfo.bitmapSize;
 
   return info;
@@ -739,7 +871,7 @@ void GenericPoolIterator::operator++(){
       bit = 7;
     }
 
-    if(index * 8 + (7 - bit) >= poolInfo.unitsPerPage){
+    if(index * 8 + (7 - bit) >= poolInfo.unitsPerPageBlock){
       index = 0;
       bit = 7;
       page = pageInfo.header->nextPage;
@@ -765,44 +897,6 @@ Byte* GenericPoolIterator::operator*(){
 
   return val;
 }
-
-// Dynamic String
-
-void DynamicString::PushChar(const char ch){
-  Byte* mem = PushBytes(arena,1);
-  *mem = ch;
-}
-
-void DynamicString::PushString(String ss){
-  String res = ::PushString(this->arena,ss.size);
-  memcpy((void*) res.data,ss.data,ss.size);
-}
-
-void DynamicString::vPushString(const char* format,va_list args){
-  char* buffer = (char*) &arena->mem[arena->used];
-  size_t maximum = arena->totalAllocated - arena->used;
-  int size = vsnprintf(buffer,maximum,format,args);
-
-  Assert(size >= 0);
-  Assert(((size_t) size) < maximum);
-
-  arena->used += (size_t) (size);
-}
-
-void DynamicString::PushString(const char* format,...){
-  va_list args;
-  va_start(args,format);
-
-  vPushString(format,args);
-
-  va_end(args);
-}
-
-void DynamicString::PushNullByte(){
-  Byte* res = PushBytes(arena,1);
-  *res = '\0';
-}
-
 
 GenericArrayIterator IterateArray(void* array,int sizeOfType,int alignmentOfType){
   GenericArrayIterator res = {};

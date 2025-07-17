@@ -8,14 +8,25 @@
 
 FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose);
 
+Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
+
+String TrimLeftWhitespaces(String in);
+String TrimRightWhitespaces(String in);
+String TrimWhitespaces(String in);
+
+String GetCommonPath(String path1,String path2,Arena* out);
+String OS_NormalizePath(String in,Arena* out);
+
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out);
 
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute);
 void   PrintEscapedString(String toEscape,char spaceSubstitute);
 
-String GetAbsolutePath(const char* path,Arena* out);
+String GetAbsolutePath(String path,Arena* out);
 
 Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
+
+String ReprMemorySize(size_t val,Arena* out);
 
 String JoinStrings(Array<String> strings,String separator,Arena* out);
 
@@ -62,35 +73,72 @@ struct IndexedStruct : public T{
 
 template<typename T>
 struct SingleLink{
-  T elem;
   SingleLink<T>* next;
+  T elem;
 };
 
 template<typename T>
 struct DoubleLink{
-  T elem;
   DoubleLink<T>* next;
   DoubleLink<T>* prev;
+  T elem;
 };
 
-// A list inside an arena. Normally used with a temp arena and then converted to an array in a out arena 
+// NOTE: Do not use this if adding nodes to the list. This is mainly a helper for quick iterations that only need to read data
+template<typename T>
+struct ArenaListIterator{
+  SingleLink<T>* ptr;
+
+  bool operator!=(ArenaListIterator& iter){
+    return iter.ptr != this->ptr;
+  }
+  void operator++(){
+    ptr = ptr->next;
+  }
+  T& operator*(){
+    return ptr->elem;
+  }
+};
+
+// A list inside an arena. Normally used with a temp arena and then converted to an array in an out arena 
 template<typename T>
 struct ArenaList{
-  Arena* arena; // For now store arena inside structure. 
   SingleLink<T>* head;
   SingleLink<T>* tail;
+  Arena* arena; // For now store arena inside structure. 
 
   T* PushElem();
 };
+
+// Implement C++ style foreach 
+template<typename T>
+ArenaListIterator<T> begin(ArenaList<T>* list){if(!list){return end(list);};return ArenaListIterator<T>{list->head};};
+
+template<typename T>
+ArenaListIterator<T> end(ArenaList<T>* list){return ArenaListIterator<T>{nullptr};};
 
 template<typename T>
 struct ArenaDoubleList{
-  Arena* arena; // For now store arena inside structure. 
   DoubleLink<T>* head;
   DoubleLink<T>* tail;
+  Arena* arena; // For now store arena inside structure. 
 
   T* PushElem();
   T* PushNode(DoubleLink<T>* node); // Does not allocate anything in the arena. Need more testing to see if this is a good approach.
+};
+
+struct GenericArenaListIterator{
+  SingleLink<int>* ptr; // The type of T is irrelevant, since pointer size is always the same
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
+};
+
+struct GenericArenaDoubleListIterator{
+  DoubleLink<int>* ptr; // The type of T is irrelevant, since pointer size is always the same
+  int sizeOfType;
+  int alignmentOfType;
+  int index;
 };
 
 // TODO: This function leaks memory, because it does not return the free nodes
@@ -213,6 +261,15 @@ Array<T> CopyArray(Array<T> arr,Arena* out){
   return res;
 }
 
+template<typename T,typename D>
+Array<T> CopyArray(Array<D> arr,Arena* out){
+  Array<T> res = PushArray<T>(out,arr.size);
+  for(int i = 0; i < arr.size; i++){
+    res[i] = arr[i];
+  }
+  return res;
+}
+
 template<typename T>
 ArenaList<T>* PushArenaList(Arena* out){
   ArenaList<T>* res = PushStruct<ArenaList<T>>(out);
@@ -315,6 +372,11 @@ DoubleLink<T>* RemoveNodeFromList(ArenaDoubleList<T>* list,DoubleLink<T>* node){
   node->next = nullptr;
   node->prev = nullptr;
 
+  if(list->head == nullptr || list->tail == nullptr){
+    list->head = nullptr;
+    list->tail = nullptr;
+  }
+  
   return next;
 }
 
@@ -333,6 +395,15 @@ Hashmap<T,P>* PushHashmapFromList(Arena* out,ArenaList<Pair<T,P>>* list){
 
 template<typename T>
 bool Empty(ArenaList<T>* list){
+  if(list == nullptr){
+    return true;
+  }
+  bool empty = (list->head == nullptr);
+  return empty;
+}
+
+template<typename T>
+bool Empty(ArenaDoubleList<T>* list){
   bool empty = (list->head == nullptr);
   return empty;
 }
@@ -349,7 +420,7 @@ Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
     return {};
   }
 
-  auto arr = StartGrowableArray<T>(out);
+  auto arr = StartArray<T>(out);
   
   FOREACH_LIST(SingleLink<T>*,iter,list->head){
     T* ptr = arr.PushElem();
@@ -516,6 +587,61 @@ Array<T> Unique(Array<T> arr,Arena* out){
     set->Insert(t);
   }
   return PushArrayFromSet(out,set);
+}
+
+// Compares arrays directly, no "set" semantics or nothing. Mostly for simple tests where we need to check if different functions return the exact same values to confirm correctness.
+template<typename T>
+bool Equal(Array<T> left,Array<T> right){
+  if(left.size != right.size){
+    return false;
+  }
+
+  int size = left.size;
+  for(int i = 0; i < size; i++){
+    if(!(left[i] == right[i])){
+      return false; 
+    }
+  }
+  
+  return true;
+}
+
+template<typename T>
+Array<T> RemoveElement(Array<T> in,int index,Arena* out){
+  if(in.size <= 1){
+    return {};
+  }
+
+  Assert(index < in.size);
+  
+  Array<T> res = PushArray<T>(out,in.size - 1);
+  
+  int inserted = 0;
+  for(int i = 0; i < in.size; i++){
+    if(i == index){
+      continue;
+    }
+
+    res[inserted++] = in[i];
+  }
+
+  return res;
+}
+
+template<typename T>
+Array<T> AddElement(Array<T> in,int indexNewElement,Arena* out){
+  Array<T> res = PushArray<T>(out,in.size + 1);
+
+  int inserted = 0;
+  for(int i = 0; i < in.size; i++){
+    if(i == indexNewElement){
+      res[inserted++] = {};
+    }
+
+    res[inserted++] = in[i];
+  }
+
+  return res;
 }
 
 // Given [A,B,C], returns [(A,[B,C]),(B,[A,C]),(C,[A,B])] and so on

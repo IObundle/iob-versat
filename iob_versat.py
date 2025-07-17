@@ -134,28 +134,24 @@ class iob_versat(iob_module):
         cls.block_groups += []
 
 
-def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
+def RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path):
     versat_dir = os.path.dirname(__file__)
 
     versat_args = ["versat",os.path.realpath(versat_spec),
-                            "-s",
-                            "-b32",
-                            "-d", # DMA
-                            "-t",versat_top,
-                            "-u",os.path.realpath(versat_dir + "/hardware/src/units"), # Location of versat units
-                            "-I",os.path.realpath(build_dir  + "/hardware/src/"),
-                            "-o",os.path.realpath(build_dir + "/hardware/src"), # Output hardware files
-                            "-O",os.path.realpath(build_dir + "/software") # Output software files
-                            ]
+                    "-s",
+                    f"-b{axi_data_w}",
+                    "-d", # DMA
+                    "-t",versat_top,
+                    "-I",os.path.realpath(build_dir  + "/hardware/src/"),
+                    "-o",os.path.realpath(build_dir + "/hardware/src"), # Output hardware files
+                    "-O",os.path.realpath(build_dir + "/software") # Output software files
+                    ]
 
     if(debug_path):
         versat_args = versat_args + ["-g",debug_path]
 
     if(versat_extra):
         versat_args = versat_args + ["-u",versat_extra]
-
-    if(pc_emul):
-        versat_args = versat_args + ["-x64"]
 
     print(*versat_args,"\n",file=sys.stderr)
     result = None
@@ -168,15 +164,11 @@ def RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path):
     output = codecs.getdecoder("unicode_escape")(result.stdout)[0]
 
     errorOutput = codecs.getdecoder("unicode_escape")(result.stderr)[0]
-    #print(output)
     print(output,file=sys.stderr)
     print(errorOutput,file=sys.stderr)
 
     if(returnCode != 0):
         print("Failed to generate accelerator\n",file=sys.stderr)
-        errorOutput = codecs.getdecoder("unicode_escape")(result.stderr)[0]
-        print(output,file=sys.stderr)
-        print(errorOutput,file=sys.stderr)
 
         exit(returnCode)
 
@@ -192,7 +184,7 @@ def SaveSetupInfo(filepath,lines):
         print(f"Failed to open versat setup file: {filepath}",file=sys.stderr)
         print("This might cause versat to run multiple times even if not needed",file=sys.stderr)
 
-def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path=None):
+def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path=None):
     versat_dir = os.path.dirname(__file__)
 
     versatSetupFilepath = os.path.realpath(build_dir + "/software/versatSetup.txt")
@@ -205,24 +197,25 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debu
             with open(versatSetupFilepath,"r") as file:
                lines = [x.strip() for x in file.readlines()]
         except:
-            lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path)
+            lines = RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path)
             SaveSetupInfo(versatSetupFilepath,lines)
     else:
-        lines = RunVersat(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debug_path)
+        lines = RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path)
         SaveSetupInfo(versatSetupFilepath,lines)
 
     #print("Lines:",lines,file=sys.stderr)
 
     # Info needed by class, ADDR_W, HAS_AXI, lines
     ADDR_W = 32
+    AXI_DATA_W = axi_data_w
     HAS_AXI = False
 
     for line in lines:
-        tokens = line.split()
+        tokens = line.split(":")
 
-        if(len(tokens) == 3 and tokens[1] == '-'):
+        if(len(tokens) == 2):
             if(tokens[0] == "ADDR_W"):
-                ADDR_W = int(tokens[2])
+                ADDR_W = int(tokens[1])
             if(tokens[0] == "HAS_AXI"):
                 HAS_AXI = True
 
@@ -268,18 +261,29 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debu
                         "max": "?",
                         "descr": "description",
                     },
-                    {"name":"AXI_ADDR_W","type": "P","val": "24","min": "1","max": "32","descr": "AXI address bus width"}
+                    {
+                        "name": "AXI_DATA_W",
+                        "type": "P",
+                        "val": f"{AXI_DATA_W}",
+                        "min": "0",
+                        "max": "256",
+                        "descr": "Versat AXI datapath size",
+                    },
+                    {"name":"AXI_ADDR_W","type": "P","val": "32","min": "1","max": "32","descr": "AXI address bus width"}
                 ]
 
         @classmethod
         def _post_setup(cls):
             super()._post_setup()
-            shutil.copytree(
-                f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
-            )
-            shutil.copytree(
-                f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
-            )
+
+            # MARKED
+            #shutil.copytree(
+            #    f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
+            #)
+            # MARKED
+            #shutil.copytree(
+            #    f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
+            #)
             shutil.rmtree(f"{build_dir}/software/common")
             shutil.rmtree(f"{build_dir}/software/compiler")
             shutil.rmtree(f"{build_dir}/software/templates")
@@ -346,7 +350,8 @@ def CreateVersatClass(pc_emul,versat_spec,versat_top,versat_extra,build_dir,debu
                 confs.append({"name":"USE_EXTMEM","type": "M","val": True,"min": "0","max": "1","descr": "Versat AXI implies External memory"})
                 confs.append({'name':'AXI_ID_W', 'type':'P', 'val':'1', 'min':'1', 'max':'1', 'descr':'description here'})
                 confs.append({'name':'AXI_LEN_W', 'type':'P', 'val':'8', 'min':'1', 'max':'8', 'descr':'description here'})
-                confs.append({"name":"AXI_ADDR_W","type": "P","val": "30","min": "1","max": "32","descr": "AXI address bus width"}) # TODO: Changed 24 to 30. Realistically should receive from top the actual size.
+                confs.append({"name":"AXI_ADDR_W","type": "P","val": "32","min": "1","max": "32","descr": "AXI address bus width"}) # TODO: Changed 24 to 30. Realistically should receive from top the actual size.
+                confs.append({"name":"AXI_DATA_W","type": "P","val": f"{AXI_DATA_W}","min": "1","max": "256","descr": "AXI data bus width"})
 
             super()._setup_confs(confs)
 

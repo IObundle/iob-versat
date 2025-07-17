@@ -1,41 +1,12 @@
 #include "versat.hpp"
 
-#include <new>
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-#include <cstdarg>
-#include <unordered_map>
-
 #include "globals.hpp"
-#include "printf.h"
 
-#include "thread.hpp"
-#include "type.hpp"
-#include "debugVersat.hpp"
-#include "parser.hpp"
-#include "configurations.hpp"
+#include "declaration.hpp"
+#include "symbolic.hpp"
+#include "templateEngine.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
-#include "verilogParsing.hpp"
-#include "templateEngine.hpp"
-#include "textualRepresentation.hpp"
-#include "templateData.hpp"
-#include "declaration.hpp"
-
-namespace BasicTemplates{
-  CompiledTemplate* acceleratorTemplate;
-  CompiledTemplate* topAcceleratorTemplate;
-  CompiledTemplate* topConfigurationsTemplate;
-  CompiledTemplate* dataTemplate;
-  CompiledTemplate* wrapperTemplate;
-  CompiledTemplate* acceleratorHeaderTemplate;
-  CompiledTemplate* externalInternalPortmapTemplate;
-  CompiledTemplate* externalPortTemplate;
-  CompiledTemplate* externalInstTemplate;
-  CompiledTemplate* internalWiresTemplate;
-  CompiledTemplate* iterativeTemplate;
-}
 
 int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now.
@@ -52,8 +23,51 @@ int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   return size;
 }
 
+SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out){
+  FULL_SWITCH(topExpr->type){
+  case Expression::UNDEFINED: {
+    Assert(false);
+  } break;
+  case Expression::OPERATION: {
+    SymbolicExpression* left = SymbolicExpressionFromVerilog(topExpr->expressions[0],out);
+    SymbolicExpression* right = SymbolicExpressionFromVerilog(topExpr->expressions[1],out);
+    
+    switch(topExpr->op[0]){
+    case '+':{
+      return SymbolicAdd(left,right,out);
+    } break;
+    case '-':{
+      return SymbolicSub(left,right,out);
+    } break;
+    case '*':{
+      return SymbolicMult(left,right,out);
+    } break;
+    case '/':{
+      return SymbolicDiv(left,right,out);
+    } break;
+    default:{
+      // TODO: Better error message
+      NOT_IMPLEMENTED("");
+    } break;
+    } 
+  } break;
+  case Expression::IDENTIFIER: {
+    return PushVariable(out,topExpr->id);
+  } break;
+  case Expression::FUNCTION: {
+    // TODO: Better error message and we probably can do more stuff here
+    NOT_IMPLEMENTED("");
+  } break;
+  case Expression::LITERAL: {
+    return PushLiteral(out,topExpr->val.number);
+  } break;
+} END_SWITCH();
+  
+  return {};
+}
+
 // TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
-FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
+Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   TEMP_REGION(temp,nullptr);
 
   Arena* perm = globalPermanent;
@@ -61,7 +75,8 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   // Check same name
   for(FUDeclaration* decl : globalDeclarations){
     if(CompareString(decl->name,info->name)){
-      LogFatal(LogModule::TOP_SYS,"Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+      printf("Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+      return {};
     }
   }
 
@@ -70,30 +85,20 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   Array<Wire> configs = PushArray<Wire>(perm,info->configs.size);
   Array<Wire> states = PushArray<Wire>(perm,info->states.size);
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(perm,info->externalInterfaces.size);
-  int memoryMapBits = 0;
-
+  
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
-  decl.parameters = Extract(info->defaultParameters,perm,&ParameterExpression::name);
-  //decl.parameters = Map(info->defaultParameters,perm,[](ParameterExpression p) -> String{
-  //  return p.name;
-  //});
-  
+  decl.parameters = PushArray<Parameter>(perm,instantiated.size);
+  for(int i = 0; i < instantiated.size; i++){
+    decl.parameters[i].name = info->defaultParameters[i].name;
+    decl.parameters[i].valueExpr = SymbolicExpressionFromVerilog(info->defaultParameters[i].expr,perm);
+  }
+    
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
 
-    // TODO: Make this more generic. Probably gonna need to take a look at a FUDeclaration as a instance of a more generic FUType construct. FUDeclaration has constant values, the FUType stores the expressions to compute them.
-    // Override databus size for current architecture
-    if(CompareString(def.name,STRING("AXI_ADDR_W"))){
-      Expression* expr = PushStruct<Expression>(temp);
-
-      expr->type = Expression::LITERAL;
-      expr->id = def.name;
-      expr->val = MakeValue(globalOptions.databusAddrSize);
-
-      def.expr = expr;
-    }
-
+    // TODO: We cannot remove this because the external memories are instantiated based on this value and we currently have no way of exporting this value.
+    //       This essentially means that the accelerator is still dependent on the setup phase, but this only affects the datapath size and the datapath size is mostly a setup phase thing anyway, so it is not the worst. 
     if(CompareString(def.name,STRING("AXI_DATA_W"))){
       Expression* expr = PushStruct<Expression>(temp);
 
@@ -104,20 +109,11 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
       def.expr = expr;
     }
 
-    // Override length. Use 20 for now
-    if(CompareString(def.name,STRING("LEN_W"))){
-      Expression* expr = PushStruct<Expression>(temp);
-
-      expr->type = Expression::LITERAL;
-      expr->id = def.name;
-      expr->val = MakeValue(16);
-
-      def.expr = expr;
-    }
-
     instantiated[i] = def;
   }
 
+  auto literalOne = PushLiteral(temp,1);
+  
   for(int i = 0; i < info->configs.size; i++){
     WireExpression& wire = info->configs[i];
 
@@ -127,6 +123,10 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
     configs[i].bitSize = size;
     configs[i].isStatic = false;
     configs[i].stage = info->configs[i].stage;
+
+    SymbolicExpression* top = SymbolicExpressionFromVerilog(wire.bitSize.top,temp);
+    SymbolicExpression* bottom = SymbolicExpressionFromVerilog(wire.bitSize.bottom,temp);
+    configs[i].sizeExpr = Normalize(SymbolicAdd(SymbolicSub(top,bottom,temp),literalOne,temp),out);
   }
 
   for(int i = 0; i < info->states.size; i++){
@@ -162,8 +162,6 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
     }break;
     }
   }
-
-  memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
   
   decl.name = info->name;
 
@@ -177,7 +175,9 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
   decl.numberDelays = info->nDelays;
   decl.nIOs = info->nIO;
 
-  if(info->memoryMapped) decl.memoryMapBits = memoryMapBits;
+  if(info->memoryMapped) {
+    decl.memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
+  }
 
   decl.implementsDone = info->hasDone;
   decl.signalLoop = info->signalLoop;
@@ -186,40 +186,51 @@ FUDeclaration* RegisterModuleInfo(ModuleInfo* info){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
 
+  // TODO: Is this something generic that we could move into meta code?
+  for(AddressGenWireNames_GenType gen : AddressGenWireNames){
+    bool isType = true;
+    for(String str : gen.names){
+      bool foundOne = false;
+      for(Wire wire : configs){
+        if(CompareString(str,wire.name)){
+          foundOne = true;
+          break;
+        }
+      }
+      if(!foundOne){
+        isType = false;
+        break;
+      }
+    }
+
+    if(isType){
+      decl.supportedAddressGenType = (AddressGenType) (decl.supportedAddressGenType | gen.type);
+    }
+  }
+  
   FUDeclaration* res = RegisterFU(decl);
 
   return res;
 }
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel){
-  TEMP_REGION(temp,nullptr);
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out){
+  TEMP_REGION(temp,out);
   TEMP_REGION(temp2,temp);
-
-  Arena* perm = globalPermanent;
 
   // TODO: This function was mostly used to calculate the configInfo stuff, which now is gone.
   //       Need to see how much of this code is also useful for the merge stuff.
   //       (If after merge puts the correct values inside the accelInfo struct, if we can just call this function to compute the remaining data that needs to be computed).
   //       We can also move some of this computation to the accelInfo struct. Just see how things play out.
   
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,perm);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,out);
   decl->info = val;
-  
-#if 0
-  DynamicArray<String> baseNames = StartArray<String>(perm);
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    *baseNames.PushElem() = inst->name;
-  }
-  Array<String> baseName = EndArray(baseNames);
-#endif
-  
-  decl->nIOs = val.ios;
+ 
+  decl->nIOs = val.nIOs;
   if(val.isMemoryMapped){
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
-  decl->externalMemory = PushArray<ExternalMemoryInterface>(perm,val.externalMemoryInterfaces);
+  decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int externalIndex = 0;
   for(FUInstance* ptr : accel->allocated){
     Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
@@ -230,48 +241,58 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
     
-  decl->configs = PushArray<Wire>(perm,val.configs);
-  decl->states = PushArray<Wire>(perm,val.states);
-  
-  Hashmap<int,int>* staticsSeen = PushHashmap<int,int>(temp,val.sharedUnits);
+  decl->configs = PushArray<Wire>(out,val.configs);
+  decl->states = PushArray<Wire>(out,val.states);
 
   int configIndex = 0;
-  int stateIndex = 0;
+  for(AccelInfoIterator iter = StartIteration(&val); iter.IsValid(); iter = iter.Step()){
+    InstanceInfo* unit = iter.CurrentUnit();
+
+    Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(unit->inst,temp);
+    
+    if(unit->isGloballyStatic){
+      continue;
+    }
+
+    for(int i = 0; i < unit->individualWiresGlobalConfigPos.size; i++){
+      int globalPos = unit->individualWiresGlobalConfigPos[i];
+
+      if(globalPos < 0){
+        continue;
+      }
+      
+      if(!Empty(decl->configs[globalPos].name)){
+        continue;
+      }
+
+      FUDeclaration* d = unit->decl;
+      Wire wire = d->configs[i];
+      decl->configs[configIndex] = wire;
+
+      // TODO: We need to do this for state as well. And we probably want to make this more explicit.
+      decl->configs[configIndex].sizeExpr = ReplaceVariables(wire.sizeExpr,params,out);
+      decl->configs[configIndex++].name = PushString(out,"%.*s_%.*s",UNPACK_SS(unit->name),UNPACK_SS(wire.name));
+    }
+  }
   
   // TODO: This could be done based on the config offsets.
   //       Otherwise we are still basing code around static and shared logic when calculating offsets already does that for us.
+  int stateIndex = 0;
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUDeclaration* d = inst->declaration;
 
-    if(!inst->isStatic){
-      if(inst->sharedEnable){
-        if(staticsSeen->InsertIfNotExist(inst->sharedIndex,0)){
-          for(Wire& wire : d->configs){
-            decl->configs[configIndex] = wire;
-            decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-          }
-        }
-      } else {
-        for(Wire& wire : d->configs){
-          decl->configs[configIndex] = wire;
-
-          decl->configs[configIndex++].name = PushString(perm,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(wire.name));
-        }
-      }
-    }
-
     for(Wire& wire : d->states){
       decl->states[stateIndex] = wire;
 
-      decl->states[stateIndex].name = PushString(perm,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->states[stateIndex].name = PushString(out,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
       stateIndex += 1;
     }
   }
 
   decl->signalLoop = val.signalLoop;
 
-  Array<bool> belongArray = PushArray<bool>(perm,accel->allocated.Size());
+  Array<bool> belongArray = PushArray<bool>(out,accel->allocated.Size());
   Memset(belongArray,true);
 
   decl->numberDelays = val.delays;
@@ -338,17 +359,23 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   res->name = name;
 
   // Default parameters given to all modules. Parameters need a proper revision, but need to handle parameters going up in the hierarchy
-  res->parameters = PushArray<String>(permanent,6);
-  res->parameters[0] = STRING("ADDR_W");
-  res->parameters[1] = STRING("DATA_W");
-  res->parameters[2] = STRING("DELAY_W");
-  res->parameters[3] = STRING("AXI_ADDR_W");
-  res->parameters[4] = STRING("AXI_DATA_W");
-  res->parameters[5] = STRING("LEN_W");
+
+  res->parameters = PushArray<Parameter>(permanent,6);
+  res->parameters[0] = {STRING("ADDR_W"),PushLiteral(permanent,32)};
+  res->parameters[1] = {STRING("DATA_W"),PushLiteral(permanent,32)};
+  res->parameters[2] = {STRING("DELAY_W"),PushLiteral(permanent,7)};
+  res->parameters[3] = {STRING("AXI_ADDR_W"),PushLiteral(permanent,32)};
+  res->parameters[4] = {STRING("AXI_DATA_W"),PushLiteral(permanent,32)};
+  res->parameters[5] = {STRING("LEN_W"),PushLiteral(permanent,20)};
   
-  // TODO: Need to add back the OutputDebugDotGraph calls
-  if(options == SubUnitOptions_BAREBONES){
-    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr); 
+  if(circuit->allocated.Size() == 0){
+    res->baseCircuit = circuit;
+    res->fixedDelayCircuit = circuit;
+
+    return res;
+  } else if(options == SubUnitOptions_BAREBONES){
+    // TODO: Need to add back the OutputDebugDotGraph calls
+    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true); 
 
     CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
@@ -359,7 +386,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     res->fixedDelayCircuit = circuit;
     res->fixedDelayCircuit->name = res->name;
   } else {
-    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true,nullptr);
+    res->baseCircuit = CopyAccelerator(circuit,AcceleratorPurpose_BASE,true);
 
     Pair<Accelerator*,SubMap*> p = Flatten(res->baseCircuit,99);
   
@@ -369,15 +396,13 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     CalculateDelayResult delays = CalculateDelay(circuit,temp);
 
     region(temp){
-      //OutputDebugDotGraph(circuit,STRING("BeforeFixDelay.dot"),temp);
       FixDelays(circuit,delays.edgesDelay);
-      //OutputDebugDotGraph(circuit,STRING("AfterFixDelay.dot"),temp);
     }
 
     res->fixedDelayCircuit = circuit;
   }
 
-  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit);
+  FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit,permanent);
   FillDeclarationWithDelayType(res);
 
 #if 1
@@ -391,10 +416,9 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
 #endif
   
   res->staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
-
+  
   // Start by collecting all the existing static allocated units in subinstances
-  for(FUInstance* ptr : res->fixedDelayCircuit->allocated){
-    FUInstance* inst = ptr;
+  for(FUInstance* inst : res->fixedDelayCircuit->allocated){
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
         StaticData newData = *pair.second;
@@ -407,7 +431,18 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
       id.parent = res;
 
       StaticData data = {};
-      data.configs = inst->declaration->configs;
+      data.decl = inst->declaration;
+      data.configs = PushArray<Wire>(permanent,inst->declaration->configs.size);
+
+      // We need to instantiate the verilog parameters in here.
+      Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
+      for(int i = 0; i <  inst->declaration->configs.size; i++){
+        Wire w  =  inst->declaration->configs[i];
+
+        data.configs[i] = w;
+        data.configs[i].sizeExpr = ReplaceVariables(w.sizeExpr,params,permanent);
+      }
+
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
@@ -519,7 +554,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   declaration.name = PushString(perm,name);
   declaration.type = FUDeclarationType_ITERATIVE;
 
-  FillDeclarationWithAcceleratorValues(&declaration,accel);
+  FillDeclarationWithAcceleratorValues(&declaration,accel,globalPermanent);
 
   // Kinda of a hack, for now
 #if 0
@@ -565,6 +600,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
       id.parent = registeredType;
 
       StaticData data = {};
+      data.decl = inst->declaration;
       data.configs = inst->declaration->configs;
       registeredType->staticUnits->InsertIfNotExist(id,data);
     }
@@ -603,6 +639,116 @@ int GetInputPortNumber(FUInstance* inputInstance){
     Assert(inputInstance->declaration == BasicDeclaration::input);
 
   return ((FUInstance*) inputInstance)->portIndex;
+}
+
+bool IsGlobalParameter(String name){
+  if(CompareString(name,"AXI_ADDR_W") ||
+     CompareString(name,"AXI_DATA_W") ||
+     CompareString(name,"DATA_W")     ||
+     CompareString(name,"LEN_W")      ||
+     CompareString(name,"DELAY_W")){
+    return true;
+  }
+
+  return false;
+}
+
+Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena* out){
+  FUDeclaration* decl = inst->declaration;
+
+  auto map = PushHashmap<String,SymbolicExpression*>(out,decl->parameters.size);
+  
+  for(int i = 0; i < decl->parameters.size; i++){
+    Parameter param = decl->parameters[i];
+    String val = inst->parameterValues[i].val;
+
+    if(IsGlobalParameter(param.name)){
+      map->Insert(param.name,PushVariable(out,param.name));
+    } else {
+      if(Empty(val)){
+        map->Insert(param.name,param.valueExpr);
+      } else {
+        map->Insert(param.name,ParseSymbolicExpression(val,out));
+      }
+    }
+  }
+
+  return map;
+}
+
+Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<StaticId,StaticData>* staticUnits,int addrOffset,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  auto list = PushArenaList<WireInformation>(temp);
+
+  SymbolicExpression* expr = PushLiteral(temp,0);
+  
+  int addr = addrOffset;
+  for(auto n : nodes){
+    for(Wire w : n->declaration->configs){
+      WireInformation info = {};
+      info.wire = w;
+      info.addr = 4 * addr++; // TODO: This 4 is because we are using addresses that are byte aligned in a 32 bit system. We could make this proper instead of hardcoded.
+
+      info.bitExpr = Normalize(expr,out);
+      
+      expr = SymbolicAdd(info.bitExpr,w.sizeExpr,temp);
+      *list->PushElem() = info;
+    }
+  }
+  for(Pair<StaticId,StaticData*> n : staticUnits){
+    FUDeclaration* decl = n.second->decl;
+    Hashmap<String,SymbolicExpression*>* defaultParams = PushHashmap<String,SymbolicExpression*>(temp,decl->parameters.size);
+
+    for(Parameter p : decl->parameters){
+      if(IsGlobalParameter(p.name)){
+        defaultParams->Insert(p.name,PushVariable(out,p.name));
+      } else {
+        defaultParams->Insert(p.name,p.valueExpr);
+      }
+    }
+    
+    for(Wire w : n.data->configs){
+      WireInformation info = {};
+      info.wire = w;
+      info.wire.name = ReprStaticConfig(n.first,&w,out);
+      info.wire.sizeExpr = ReplaceVariables(w.sizeExpr,defaultParams,out);
+
+      info.addr = 4 * addr++;
+      info.isStatic = true;
+
+      info.bitExpr = Normalize(expr,out);
+
+      expr = SymbolicAdd(info.bitExpr,info.wire.sizeExpr,temp);
+
+      *list->PushElem() = info;
+    }
+  }
+
+  int defaultDelaySize = 7;
+  int delaysInserted = 0;
+  for(auto n : nodes){
+    for(int i = 0; i < n->declaration->NumberDelays(); i++){
+      Wire wire = {};
+      wire.bitSize = defaultDelaySize;
+      wire.name = PushString(out,"Delay%d",delaysInserted++);
+      wire.stage = VersatStage_COMPUTE;
+
+      WireInformation info = {};
+      info.wire = wire;
+      info.wire.sizeExpr = PushVariable(out,S8("DELAY_W"));
+      
+      info.addr = 4 * addr++;
+
+      info.bitExpr = Normalize(expr,out);
+
+      expr = SymbolicAdd(info.bitExpr,PushVariable(temp,S8("DELAY_W")),temp);
+
+      *list->PushElem() = info;
+    }
+  }
+  
+  return PushArrayFromList(out,list);
 }
 
 bool CheckValidName(String name){

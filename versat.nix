@@ -12,7 +12,7 @@ let pkgs2 = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/cf8cc
 in
 let
 fs = tweag.lib.fileset;
-sourceFiles = (fs.union ./Makefile (fs.union ./config.mk ./software));
+sourceFiles = (fs.union ./scripts (fs.union ./Makefile (fs.union ./config.mk (fs.union ./hardware ./software))));
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "versat";
@@ -25,17 +25,12 @@ pkgs.stdenv.mkDerivation rec {
 
   buildInputs = [
     pkgs.gnumake
-    pkgs.verilator
-    (pkgs2.python3.withPackages (python-pkgs: with python-pkgs; [
-      # select Python packages here
-      libclang
-    ]))  
   ];
 
   enableParallelBuilding = true;
 
   buildPhase = ''
-    make -j versat
+    make -j 8 versat
   '';
 
   installPhase = ''

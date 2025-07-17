@@ -33,60 +33,67 @@ module AddressGen #(
    output reg done_o
 );
 
-   localparam OFFSET_W = $clog2(DATA_W / 8);
+wire [PERIOD_W-1:0] fullZeroPeriod = 0; // To remove warning about bitsize
+wire [ADDR_W-1:0] fullZeroIter = 0; // To remove warning about bitsize
 
-   reg                                           [   DELAY_W-1:0] delay_counter;
+   SuperAddress #(
+      .ADDR_W(ADDR_W),
+      .PERIOD_W(PERIOD_W),
+      .DELAY_W(DELAY_W),
+      .DATA_W(DATA_W)
+      ) reader (
+      .clk_i(clk_i),
+      .rst_i(rst_i),
+      .run_i(run_i),
+      .done_o(done_o),
 
-   reg                                           [  ADDR_W - 1:0] iter;
-   reg                                           [PERIOD_W - 1:0] per;
+      .ignore_first_i(1'b0),
 
-   wire iterCond = (((iter + 1) == iterations_i) || (iterations_i == 0));
-   wire perCond = (((per + 1) == period_i) || (period_i == 0));
-   reg valid;
+      //configurations 
+      .period_i(period_i),
+      .delay_i (delay_i),
+      .start_i (start_i),
+      .incr_i  (incr_i),
 
-   assign store_o = (per < duty_i);
-   assign valid_o = valid && (per < duty_i);
+      .iterations_i(iterations_i),
+      .duty_i      (duty_i),
+      .shift_i     (shift_i),
 
-   always @(posedge clk_i, posedge rst_i) begin
-      if (rst_i) begin
-         delay_counter <= 0;
-         addr_o        <= 0;
-         iter          <= 0;
-         per           <= 0;
-         valid       <= 0;
-         done_o        <= 1'b1;
-      end else if (run_i) begin
-         delay_counter <= delay_i;
-         addr_o        <= start_i;
-         iter          <= 0;
-         per           <= 0;
-         valid       <= 0;
-         done_o        <= 1'b0;
-         if (delay_i == 0) begin
-            valid <= 1'b1;
-         end
-      end else if (|delay_counter) begin
-         delay_counter <= delay_counter - 1;
-         valid       <= (delay_counter == 1);
-      end else if (valid && ready_i) begin
-         if (perCond && iterCond) begin
-            per     <= 0;
-            iter    <= 0;
-            done_o  <= 1'b1;
-            valid <= 0;
-         end
-         if (perCond && !iterCond) begin
-            addr_o <= addr_o + (shift_i << OFFSET_W);
-            per    <= 0;
-            iter   <= iter + 1;
-         end
-         if (!perCond) begin
-            if (per < duty_i) begin
-               addr_o <= addr_o + (incr_i << OFFSET_W);
-            end
-            per <= per + 1;
-         end
-      end
-   end
+      .period2_i(fullZeroPeriod),
+      .incr2_i(fullZeroIter),
+      .iterations2_i(fullZeroIter),
+      .shift2_i(fullZeroIter),
+
+      .period3_i(fullZeroPeriod),
+      .incr3_i(fullZeroIter),
+      .iterations3_i(fullZeroIter),
+      .shift3_i(fullZeroIter),
+
+      .doneDatabus(),
+      .doneAddress(),
+
+      //outputs 
+      .valid_o(valid_o),
+      .ready_i(ready_i),
+      .addr_o (addr_o),
+      .store_o(store_o),
+
+      .databus_ready(1'b1),
+      .databus_valid(),
+      .databus_addr(),
+      .databus_len(),
+      .databus_last(1'b1),
+
+      // Data interface
+      .data_valid_i(1'b1),
+      .data_ready_i(1'b1),
+      .reading(1'b1),
+      .data_last_o(),
+
+      .count_i(0),
+      .start_address_i(0),
+      .address_shift_i(0),
+      .databus_length(0)
+   );
 
 endmodule  // MyAddressGen

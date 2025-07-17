@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 
 module FixedBuffer #(
-   parameter ADDR_W = 6,
    parameter DATA_W = 32,
    parameter AMOUNT = 0
 ) (

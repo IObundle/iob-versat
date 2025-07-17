@@ -1,7 +1,6 @@
 #pragma once
 
 #include "merge.hpp"
-#include "codeGeneration.hpp"
 
 // TODO: Maybe it would be best if all these functions received function pointers and forward declared everything. Otherwise any small change requires a full recompilation
 

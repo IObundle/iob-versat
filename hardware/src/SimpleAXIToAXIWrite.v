@@ -15,7 +15,26 @@ module SimpleAXItoAXIWrite #(
    input      [           LEN_W-1:0] m_wlen_i,
    output reg                        m_wlast_o,
 
-   `include "axi_m_write_port.vs"
+   output [AXI_ID_W-1:0] axi_awid_o,
+   output [AXI_ADDR_W-1:0] axi_awaddr_o,
+   output [AXI_LEN_W-1:0] axi_awlen_o,
+   output [3-1:0] axi_awsize_o,
+   output [2-1:0] axi_awburst_o,
+   output [2-1:0] axi_awlock_o,
+   output [4-1:0] axi_awcache_o,
+   output [3-1:0] axi_awprot_o,
+   output [4-1:0] axi_awqos_o,
+   output [1-1:0] axi_awvalid_o,
+   input [1-1:0] axi_awready_i,
+   output [AXI_DATA_W-1:0] axi_wdata_o,
+   output [(AXI_DATA_W/8)-1:0] axi_wstrb_o,
+   output [1-1:0] axi_wlast_o,
+   output [1-1:0] axi_wvalid_o,
+   input [1-1:0] axi_wready_i,
+   input [AXI_ID_W-1:0] axi_bid_i,
+   input [2-1:0] axi_bresp_i,
+   input [1-1:0] axi_bvalid_i,
+   output [1-1:0] axi_bready_o,
 
    input clk_i,
    input rst_i
@@ -118,6 +137,10 @@ module SimpleAXItoAXIWrite #(
 
    reg        first_transfer;
 
+   reg [31:0] symbolsRead;
+
+   // This contains both the logic for the AXI transfer and the databus transfer.
+   // We first need to decouple this before progressing.
    reg [AXI_LEN_W-1:0] counter;
    reg [31:0] full_counter;
    always @(posedge clk_i, posedge rst_i) begin
@@ -128,10 +151,15 @@ module SimpleAXItoAXIWrite #(
          full_counter   <= 0;
          write_axi_len  <= 0;
          symbolsToRead  <= 0;
+         symbolsRead    <= 0;
          stored_offset  <= 0;
          first_transfer <= 0;
          wstrb          <= 0;
       end else begin
+         if(m_wvalid_i && m_wready_o) begin
+            symbolsRead <= symbolsRead + 1;
+         end
+
          case (state)
             3'h0: begin  // Wait one cycle for transfer controller to calculate things.
                if (m_wvalid_i) begin
@@ -139,6 +167,7 @@ module SimpleAXItoAXIWrite #(
                   stored_offset  <= m_waddr_i[OFFSET_W-1:0];
                   state          <= 3'h1;
                   first_transfer <= 1'b1;
+                  symbolsRead <= 0;
                end
             end
             3'h1: begin  // Save values that change 
@@ -190,9 +219,11 @@ module SimpleAXItoAXIWrite #(
       end
    end
 
+   // TODO: Works but it is not good. Need to simplify this part as well as the Read equivalent. 
+   assign m_wready_o = (state != 0 && symbolsRead < symbolsToRead && axi_wready_i);
+   assign m_wlast_o = (state != 0 && symbolsRead + 1 >= symbolsToRead);
+
    always @* begin
-      m_wready_o        = 1'b0;
-      m_wlast_o         = 1'b0;
       flush_burst_split = 1'b0;
       m_axi_last        = 1'b0;
       wvalid            = 1'b0;
@@ -202,19 +233,13 @@ module SimpleAXItoAXIWrite #(
       end
 
       if (state == 3'h3) begin
-         m_wready_o = 1'b1;
          wvalid     = 1'b1;
       end
 
       if (state == 3'h4) begin
-         m_wready_o = axi_wready_i;
          wvalid     = m_wvalid_i || flush_burst_split;
 
          if (counter == axi_awlen_o) m_axi_last = 1'b1;
-      end
-
-      if (axi_wvalid_o && axi_wready_i && axi_wlast_o && write_last_transfer) begin
-         m_wlast_o = 1'b1;
       end
    end
 

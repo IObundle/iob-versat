@@ -1,12 +1,7 @@
 #include "verilogParsing.hpp"
 
-#include <cstdio>
-
-#include "memory.hpp"
-
 #include "templateEngine.hpp"
-#include "utils.hpp"
-#include "utilsCore.hpp"
+#include "embeddedData.hpp"
 
 typedef Value (*MathFunction)(Value f,Value g);
 
@@ -51,14 +46,20 @@ Opt<MathFunctionDescription> GetMathFunction(String name){
   return {};
 }
 
-bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
-  auto iter = macros.find(name);
-  if(iter == macros.end()){
+bool PerformDefineSubstitution(StringBuilder* builder,TrieMap<String,MacroDefinition>* macros,String name){
+  MacroDefinition* def = macros->Get(name);
+  
+  if(!def){
     return false;
   }
 
-  String subs = iter->second;
+  String subs = def->content;
 
+  // TODO: Right now, we are not performing substitution for function macros.
+  //       Stuff kinda works because we only care about verilog interfaces and currently we do not have any
+  //       unit that uses function macros inside the interfaces.
+  //       Eventually must fix this.
+  
   Tokenizer inside(subs,"`",{});
   while(!inside.Done()){
     Opt<Token> peek = inside.PeekFindUntil("`");
@@ -67,27 +68,25 @@ bool PerformDefineSubstitution(Arena* output,MacroMap& macros,String name){
       break;
     } else {
       inside.AdvancePeekBad(peek.value());
-      PushString(output,peek.value());
+      builder->PushString(peek.value());
 
       inside.AssertNextToken("`");
 
       Token name = inside.NextToken();
 
-      PerformDefineSubstitution(output,macros,name);
+      PerformDefineSubstitution(builder,macros,name);
     }
   }
 
   Token finish = inside.Finish();
-  PushString(output,finish);
+  builder->PushString(finish);
 
   return true;
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out);
+void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* macros,Array<String> includeFilepaths,StringBuilder* builder);
 
-static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
-  TEMP_REGION(temp,out);
-
+static void DoIfStatement(Tokenizer* tok,TrieMap<String,MacroDefinition>* macros,Array<String> includeFilepaths,StringBuilder* builder){
   Token first = tok->NextToken();
   Token macroName = tok->NextToken();
 
@@ -100,7 +99,7 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     UNHANDLED_ERROR("TODO: Make this a handled error");
   }
 
-  bool exists = (macros.find(macroName) != macros.end());
+  bool exists = macros->Exists(macroName);
   bool doIf = (compareVal == exists);
 
   // Try to find the edges of the if construct (else, endif or, if find another if recurse.)
@@ -118,14 +117,14 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     
     if(CompareString(type,"endif")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,builder);
       }
       break;
     }
 
     if(CompareString(type,"else")){
       if(doIf){
-        PreprocessVerilogFile_(subContent,macros,includeFilepaths,out);
+        PreprocessVerilogFile_(subContent,macros,includeFilepaths,builder);
         doIf = false;
       } else {
         mark = tok->Mark();
@@ -137,25 +136,24 @@ static void DoIfStatement(Tokenizer* tok,MacroMap& macros,Array<String> includeF
     if(doIf) {
       if(CompareString(type,"ifdef") || CompareString(type,"ifndef") || CompareString(type,"elsif")){
         tok->Rollback(subMark); // TODO: Not good.
-        DoIfStatement(tok,macros,includeFilepaths,out);
+        DoIfStatement(tok,macros,includeFilepaths,builder);
       }
     }
     // otherwise must be some other directive, will be handled automatically in the Preprocess call.
   }
 }
 
-void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> includeFilepaths,Arena* out){
-  TEMP_REGION(temp,out);
+void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* macros,Array<String> includeFilepaths,StringBuilder* builder){
   Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
   while(!tok->Done()){
-    PushString(out,tok->PeekWhitespace());
+    builder->PushString(tok->PeekWhitespace());
     Token peek = tok->PeekToken();
 
     if(!CompareString(peek,"`")){
       tok->AdvancePeek();
-      PushString(out,peek);
+      builder->PushString(peek);
       
       continue;
     }
@@ -204,6 +202,8 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       size_t fileSize = GetFileSize(file);
 
+      TEMP_REGION(temp,builder->arena);
+
       Byte* mem = PushBytes(temp,fileSize + 1);
       size_t amountRead = fread(mem,sizeof(char),fileSize,file);
       
@@ -214,18 +214,18 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
       mem[amountRead] = '\0';
 
-      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,out);
+      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,builder);
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek();
-      
-      auto mark = tok->Mark();
+
       Token defineName = tok->NextToken();
-      
       Token emptySpace = tok->PeekWhitespace();
+
       if(emptySpace.size == 0){ // Function macro
-        /* Token arguments = */ tok->PeekFindIncluding(")").value();
-        tok->AdvancePeek();
-        defineName = tok->Point(mark);
+        // TODO: We need proper argument handling.
+        Opt<Token> arguments = tok->PeekFindIncluding(")");
+
+        tok->AdvancePeekBad(arguments.value());
       }
 
       FindFirstResult search = tok->FindFirst({"\n","//","\\"}).value();
@@ -268,16 +268,16 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
         }
       }
 
-      macros[defineName] = body;
+      macros->Insert(defineName,{body,{}});
     } else if(CompareString(identifier,"undef")){
       tok->AdvancePeek();
       Token defineName = tok->NextToken();
 
-      macros.erase(defineName);
+      macros->Remove(defineName);
     } else if(CompareString(identifier,"timescale")){
       tok->AdvanceRemainingLine();
     } else if(CompareString(identifier,"ifdef") || CompareString(identifier,"ifndef")){
-      DoIfStatement(tok,macros,includeFilepaths,out);
+      DoIfStatement(tok,macros,includeFilepaths,builder);
       
     } else if(CompareString(identifier,"else")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
@@ -286,14 +286,14 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
     } else if(CompareString(identifier,"elsif")){
       NOT_POSSIBLE("All else and ends should have already been handled inside DoIf");
     } else if(CompareString(identifier,"resetall")){
-      macros.clear();
+      macros->Clear();
     } else if(CompareString(identifier,"undefineall")){
-      macros.clear();
+      macros->Clear();
     } else {
       tok->AdvancePeek();
 
       // TODO: Better error handling. Report file position.
-      if(!PerformDefineSubstitution(out,macros,identifier)){
+      if(!PerformDefineSubstitution(builder,macros,identifier)){
         printf("Do not recognize directive: %.*s\n",UNPACK_SS(identifier));
         NOT_POSSIBLE("Some better error handling here");
       }
@@ -303,13 +303,14 @@ void PreprocessVerilogFile_(String fileContent,MacroMap& macros,Array<String> in
 
 String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out){
   TEMP_REGION(temp,out);
-  MacroMap macros = {};
 
-  auto mark = StartString(out);
-  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,out);
+  TrieMap<String,MacroDefinition>* macros = PushTrieMap<String,MacroDefinition>(temp);
+
+  auto builder = StartString(temp);
+  PreprocessVerilogFile_(fileContent,macros,includeFilepaths,builder);
 
   PushString(out,STRING("\0"));
-  String res = EndString(mark);
+  String res = EndString(out,builder);
 
   return res;
 }
@@ -383,7 +384,7 @@ static Expression* VerilogParseFactor(Tokenizer* tok,Arena* out){
     *expr = {};
 
     expr->id = mathFunctionName;
-    expr->type = Expression::COMMAND;
+    expr->type = Expression::FUNCTION;
     expr->expressions = PushArray<Expression*>(out,description.amountOfParameters);
 
     tok->AssertNextToken("(");
@@ -402,7 +403,7 @@ static Expression* VerilogParseFactor(Tokenizer* tok,Arena* out){
   }
 }
 
-static Value Eval(Expression* expr,ValueMap& map){
+static Value Eval(Expression* expr,TrieMap<String,Value>* map){
   switch(expr->type){
   case Expression::OPERATION:{
     Value val1 = Eval(expr->expressions[0],map);
@@ -431,12 +432,18 @@ static Value Eval(Expression* expr,ValueMap& map){
     }
   }break;
   case Expression::IDENTIFIER:{
-    return map[expr->id];
+    Value* val = map->Get(expr->id);
+    if(!map){
+      printf("Error, did not find parameter %.*s\n",UNPACK_SS(expr->id));
+      NOT_IMPLEMENTED("Need to also report file position and stuff like that, similar to parser tokenizer error");
+    }
+    
+    return *val;
   }break;
   case Expression::LITERAL:{
     return expr->val;
   }break;
-  case Expression::COMMAND:{ // Called Command but for verilog it is actually a math function call
+  case Expression::FUNCTION:{ // Called Command but for verilog it is actually a math function call
     String functionName = expr->id;
 
     Expression* argument = expr->expressions[0];
@@ -453,8 +460,6 @@ static Value Eval(Expression* expr,ValueMap& map){
     
     return result;
   } break;
-  case Expression::ARRAY_ACCESS:
-  case Expression::MEMBER_ACCESS:
   case Expression::UNDEFINED:
     NOT_POSSIBLE("None of these should appear in parameters");
   }
@@ -463,14 +468,14 @@ static Value Eval(Expression* expr,ValueMap& map){
   return MakeValue();
 }
 
-static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,Arena* out){
+static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,Value>* map,Arena* out){
   //TODO: Add type and range to parsing
   /*
 	Range currentRange;
 	ParameterType type;
    */
 
-  auto params = StartGrowableArray<ParameterExpression>(out);
+  auto params = StartArray<ParameterExpression>(out);
 
   while(1){
     Token peek = tok->PeekToken();
@@ -492,10 +497,27 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,ValueMap& map,A
 
       tok->AssertNextToken("=");
 
+      Token peek = tok->PeekToken();
+      if(CompareString(peek,"\"")){
+        tok->AdvancePeek();
+        while(!tok->Done()){
+          Token token = tok->PeekToken();
+
+          if(CompareString(token,"\"")){
+            break;
+          }
+
+          tok->AdvancePeek();
+        }
+        tok->AssertNextToken("\"");
+        
+        continue;
+      }
+      
       Expression* expr = VerilogParseExpression(tok,out);
       Value val = Eval(expr,map);
 
-      map[paramName] = val;
+      map->Insert(paramName,val);
 
       ParameterExpression* p = params.PushElem();
       p->name = paramName;
@@ -512,7 +534,7 @@ static Expression* VerilogParseExpression(Tokenizer* tok,Arena* out){
   return res;
 }
 
-static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
+static ExpressionRange ParseRange(Tokenizer* tok,Arena* out){
   static Expression zeroExpression = {};
 
   Token peek = tok->PeekToken();
@@ -542,22 +564,12 @@ static ExpressionRange ParseRange(Tokenizer* tok,ValueMap& map,Arena* out){
   return res;
 }
 
-#define VERSAT_LATENCY STRING("versat_latency")
-#define VERSAT_STATIC  STRING("versat_static")
-#define VERSAT_STAGE  STRING("versat_stage")
-
-static String possibleAttributesData[] = {
-  VERSAT_LATENCY,
-  VERSAT_STATIC,
-  VERSAT_STAGE
-};
-static Array<String> possibleAttributes = C_ARRAY_TO_ARRAY(possibleAttributesData);
-
 static Module ParseModule(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
 
   Module module = {};
-  ValueMap values;
+
+  TrieMap<String,Value>* values = PushTrieMap<String,Value>(temp);
 
   tok->AssertNextToken("module");
 
@@ -580,7 +592,6 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
 
       PortDeclaration port;
       ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
-      //Hashmap<String,Value>* attributes = 
     
       if(CompareString(peek,"(*")){
         tok->AdvancePeek();
@@ -642,7 +653,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
         break;
       }
 
-      ExpressionRange res = ParseRange(tok,values,out);
+      ExpressionRange res = ParseRange(tok,out);
       port.range = res;
       port.name = tok->NextToken();
 
@@ -700,8 +711,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       if(CompareString(attribute,"source")){
         isSource = true;
       } else {
-        // Maybe log it as a potential error ?
-        
+        // TODO: Report unused attribute.
         //NOT_IMPLEMENTED("Should not give an error"); // Unknown attribute, error for now
       }
 
@@ -716,7 +726,6 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
       module.isSource = isSource;
       *modules->PushElem() = module;
 
-      //isSource = false; 
       break; // For now, only parse the first module found
     }
 
@@ -733,19 +742,19 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
   info.defaultParameters = module.parameters;
 
-  auto outputLatency = StartGrowableArray<int>(out);
-  auto inputDelay = StartGrowableArray<int>(out);
-  auto configs = StartGrowableArray<WireExpression>(out);
-  auto states = StartGrowableArray<WireExpression>(out);
+  auto outputLatency = StartArray<int>(out);
+  auto inputDelay = StartArray<int>(out);
+  auto configs = StartArray<WireExpression>(out);
+  auto states = StartArray<WireExpression>(out);
   
   info.name = module.name;
   info.isSource = module.isSource;
 
-  Hashmap<ExternalMemoryID,ExternalMemoryInfo>* external = PushHashmap<ExternalMemoryID,ExternalMemoryInfo>(temp,100);
-
+  auto* external = PushTrieMap<ExternalMemoryID,ExternalMemoryInfo>(temp);
+  
   for(PortDeclaration decl : module.ports){
     Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
-
+    
     if(CompareString("signal_loop",decl.name)){
       info.signalLoop = true;
     } else if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
@@ -858,23 +867,14 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
         info.databusAddrSize = decl.range;
       }
 
-#if 0
-      info.addrTop = decl.top;
-      info.addrBottom = decl.bottom;
-
-      if(info.addrTop) {
-        PrintExpression(info.addrTop);
-      }
-#endif
-
       info.nIO = val[1].number;
       info.doesIO = true;
-    } else if(  CheckFormat("rvalid",decl.name)
-				|| CheckFormat("valid",decl.name)
-				|| CheckFormat("addr",decl.name)
-				|| CheckFormat("rdata",decl.name)
-				|| CheckFormat("wdata",decl.name)
-				|| CheckFormat("wstrb",decl.name)){
+    } else if(CheckFormat("rvalid",decl.name)
+		   || CheckFormat("valid",decl.name)
+		   || CheckFormat("addr",decl.name)
+		   || CheckFormat("rdata",decl.name)
+		   || CheckFormat("wdata",decl.name)
+		   || CheckFormat("wstrb",decl.name)){
       info.memoryMapped = true;
 
       if(CheckFormat("addr",decl.name)){
@@ -897,7 +897,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
       VersatStage stage = VersatStage_COMPUTE;
       
-      if(stageValue && stageValue->type == ValueType::STRING){
+      if(stageValue && stageValue->type == ValueType_STRING){
         if(CompareString(stageValue->str,"Write")){
           stage = VersatStage_WRITE;
         } else if(CompareString(stageValue->str,"Read")){
@@ -928,9 +928,9 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
     info.nIO += 1;
   }
 
-  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->nodesUsed);
+  Array<ExternalMemoryInterfaceExpression> interfaces = PushArray<ExternalMemoryInterfaceExpression>(out,external->inserted);
   int index = 0;
-  for(Pair<ExternalMemoryID,ExternalMemoryInfo*> pair : external){
+  for(Pair<ExternalMemoryID,ExternalMemoryInfo> pair : external){
     ExternalMemoryInterfaceExpression& inter = interfaces[index++];
 
     inter.interface = pair.first.interface;
@@ -938,11 +938,11 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
 	switch(inter.type){
 	case ExternalMemoryType::TWO_P:{
-	  inter.tp = pair.second->tp;
+	  inter.tp = pair.second.tp;
 	} break;
 	case ExternalMemoryType::DP:{
-	  inter.dp[0] = pair.second->dp[0];
-	  inter.dp[1] = pair.second->dp[1];
+	  inter.dp[0] = pair.second.dp[0];
+	  inter.dp[1] = pair.second.dp[1];
 	}break;
 	}
   }
@@ -992,9 +992,7 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
       }
     }
   } break;
-  case Expression::COMMAND:; 
-  case Expression::ARRAY_ACCESS:; 
-  case Expression::MEMBER_ACCESS:; 
+  case Expression::FUNCTION:; 
   case Expression::UNDEFINED:; 
   }
 

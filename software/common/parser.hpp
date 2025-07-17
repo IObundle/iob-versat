@@ -1,26 +1,37 @@
 #pragma once
 
-#include <initializer_list>
-#include <vector>
-#include <string>
-
 #include "utils.hpp"
-#include "type.hpp"
 
-struct Command;
 struct Tokenizer;
 
-// TODO: The entire code base reuses "Expression" in a lot of different situations while in reality every single Expression should be unique for the given file/module. 
+enum ValueType{
+  ValueType_NIL,
+  ValueType_NUMBER,
+  ValueType_STRING,
+  ValueType_BOOLEAN
+};
+
+struct Value{
+  ValueType type;
+
+  union{
+    bool boolean;
+    char ch;
+    i64 number;
+    String str;
+  };
+};
+
+// TODO: Expression is now mostly a Verilog type thing. We can remove it from here and make it fully Verilog specific.
 struct Expression{
   const char* op;
   String id;
   Array<Expression*> expressions;
-  Command* command;
   Value val;
   String text;
   int approximateLine;
   
-  enum {UNDEFINED,OPERATION,IDENTIFIER,COMMAND,LITERAL,ARRAY_ACCESS,MEMBER_ACCESS} type;
+  enum {UNDEFINED,OPERATION,IDENTIFIER,FUNCTION,LITERAL} type;
 };
 
 void PrintExpression(Expression* exp);
@@ -34,7 +45,7 @@ struct Cursor{
 
 struct Token : public String{
   Range<Cursor> loc;
-
+  
   Token& operator=(String str){
     this->data = str.data;
     this->size = str.size;
@@ -42,11 +53,34 @@ struct Token : public String{
   }
 };
 
+#if 0
+inline bool operator==(const Token& lhs,const Token& rhs){
+  bool first = CompareString(lhs,rhs);
+  if(!first){
+    return false;
+  }
+  if(lhs.loc.start.column != rhs.loc.start.column ||
+     lhs.loc.start.line != rhs.loc.start.line ||
+     lhs.loc.end.column != rhs.loc.end.column ||
+     lhs.loc.end.line != rhs.loc.end.line){
+    return false;
+  }
+  
+  return true;
+}
+
+inline bool operator!=(const Token& lhs,const Token& rhs){
+  bool res = !(lhs == rhs);
+
+  return res;
+}
+#endif
+
 template<> class std::hash<Token>{
 public:
-   std::size_t operator()(Token const& s) const noexcept{
-     return std::hash<String>()(s);
-   }
+  std::size_t operator()(Token const& s) const noexcept{
+    return std::hash<String>()(s);
+  }
 };
 
 struct FindFirstResult{
@@ -152,15 +186,10 @@ public:
 
 bool IsOnlyWhitespace(String tok);
 bool Contains(String str,const char* toCheck);
+bool StartsWith(String toSearch,String starter);
 
 bool CheckFormat(const char* format,String tok);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
-
-Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
-
-String TrimLeftWhitespaces(String in);
-String TrimRightWhitespaces(String in);
-String TrimWhitespaces(String in);
 
 String PushPointingString(Arena* out,int startPos,int size);
 
@@ -172,6 +201,7 @@ String GetFullLineForGivenToken(String content,Token token);
 String GetRichLocationError(String content,Token got,Arena* out);
 
 Array<Token> DivideContentIntoTokens(Tokenizer* tok,Arena* out);
+Opt<Token> FindLastUntil(Tokenizer* tok,const char* toFind);
 
 // This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
 int ParseInt(String str);
@@ -190,6 +220,8 @@ struct TemplateMarker{
 }; 
 
 #define TOKENIZER_REGION(TOK,TMPL) TemplateMarker _marker(__LINE__)(TOK,TMPL)
+
+// TODO: We probably want to simplify this. Kinda sucks forcing template stuff into what should just be a simple parser. 
 
 /* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
      Array<ExpressionType> expressions;

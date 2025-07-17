@@ -1,9 +1,22 @@
 #include "filesystem.hpp"
 #include "utils.hpp"
-#include "utilsCore.hpp"
 
 static Arena storeFileInfoArena = {};
 static ArenaList<FileInfo>* storeFileInfo;
+
+const char* FilePurpose_Name(FilePurpose p){
+  FULL_SWITCH(p){
+  case FilePurpose_VERILOG_COMMON_CODE: return "VERILOG_COMMON_CODE";
+  case FilePurpose_VERILOG_CODE: return "VERILOG_CODE";
+  case FilePurpose_VERILOG_INCLUDE: return "VERILOG_INCLUDE";
+  case FilePurpose_MAKEFILE: return "MAKEFILE";
+  case FilePurpose_SOFTWARE: return "SOFTWARE";
+  case FilePurpose_SCRIPT: return "SCRIPT";
+  case FilePurpose_MISC: return "MISC";
+  case FilePurpose_DEBUG_INFO: return "DEBUG_INFO";
+  } END_SWITCH()
+  NOT_POSSIBLE();
+}
 
 static void CheckOrInitArena(){
   if(storeFileInfoArena.mem == nullptr){
@@ -22,7 +35,7 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
     return nullptr;
   }
 
-  int size = std::min(filepath.size,4095);
+  int size = MIN(filepath.size,4095);
   strncpy(pathBuffer,filepath.data,size);
   pathBuffer[size] = '\0';
 
@@ -35,7 +48,8 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
     fileMode = FileOpenMode_READ;
   } else if((mode[0] == 'w' && mode[1]  == 'r' && mode[2]  == '\0')||
             (mode[0] == 'r' && mode[1]  == 'w' && mode[2]  == '\0')){
-    fileMode = FileOpenMode_READ_WRITE;
+    Assert(false);
+    //fileMode = FileOpenMode_READ_WRITE;
   }
  
   FILE* file = fopen(pathBuffer,mode);

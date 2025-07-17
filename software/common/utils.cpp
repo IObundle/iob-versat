@@ -1,5 +1,9 @@
 #include "utils.hpp"
+#include "memory.hpp"
+#include "utilsCore.hpp"
 
+//#include "parser.hpp"
+#include "signal.h"
 #include <dirent.h>
 
 #include <filesystem>
@@ -31,6 +35,92 @@ FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose pu
   }
   
   return file;
+}
+
+String TrimLeftWhitespaces(String in){
+  const char* start = in.data;
+  const char* end = &in.data[in.size-1];
+
+  while(std::isspace(*start) && start < end) ++start;
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+
+  return res;
+}
+
+String TrimRightWhitespaces(String in){
+  const char* start = in.data;
+  const char* end = &in.data[in.size-1];
+
+  while(std::isspace(*end) && end > start) --end;
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+
+  return res;
+}
+
+String TrimWhitespaces(String in){
+  const char* start = in.data;
+  const char* end = &in.data[in.size-1];
+
+  while(std::isspace(*start) && start < end) ++start;
+  while(std::isspace(*end) && end > start) --end;
+
+  String res = {};
+  res.data = start;
+  res.size = end - start + 1;
+
+  return res;
+}
+
+static Array<String> SplitPath(String path,Arena* out){
+  Array<String> res = Split(path,'/',out);
+  for(String& s : res){
+    s = TrimWhitespaces(s);
+  }
+  return res;
+}
+
+String GetCommonPath(String path1,String path2,Arena* out){
+  TEMP_REGION(temp,out);
+
+  // TODO: This function is currently kinda hardcoded to expect both inputs to start in the same folder.
+  //       This is also important for the return path, because I want the result of this function to start in the same folder.
+  //       If paths differ on their beginning we could fix this function by first finding the absolute path of each and start from there, but at that point I would need to see what would we do about the format of the result for that case
+  
+  Array<String> split1 = SplitPath(path1,temp);
+  Array<String> split2 = SplitPath(path2,temp);
+
+  auto builder = StartString(temp);
+  for(int i = 0; i < MIN(split1.size,split2.size); i++){
+    if(i != 0){
+      builder->PushString("/");
+    }
+    if(CompareString(split1[i],split2[i])){
+      builder->PushString(split1[i]);
+    }
+  }
+
+  return EndString(out,builder);
+}
+
+String OS_NormalizePath(String in,Arena* out){
+  fs::path path(CS(in));
+
+  path = fs::absolute(path);
+  path = path.lexically_normal();
+
+  String res = PushString(out,"%s",path.c_str());
+
+  if(res.data[res.size - 1] == '/'){
+    res.size -= 1;
+  }
+
+  return res;
 }
 
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
@@ -86,24 +176,26 @@ Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
 }
 
 String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
-  auto mark = StartString(out);
+  TEMP_REGION(temp,out);
+
+  auto builder = StartString(out);
 
   for(int i = 0; i < toEscape.size; i++){
     switch(toEscape[i]){
-    case '\a': PushString(out,STRING("\\a")); break;
-    case '\b': PushString(out,STRING("\\b")); break;
-    case '\r': PushString(out,STRING("\\r")); break;
-    case '\f': PushString(out,STRING("\\f")); break;
-    case '\t': PushString(out,STRING("\\t")); break;
-    case '\n': PushString(out,STRING("\\n")); break;
-    case '\0': PushString(out,STRING("\\0")); break;
-    case '\v': PushString(out,STRING("\\v")); break;
-    case ' ': *PushBytes(out,1) = spaceSubstitute; break;
-    default:  *PushBytes(out,1) = toEscape[i]; break;
+    case '\a': builder->PushString(STRING("\\a")); break;
+    case '\b': builder->PushString(STRING("\\b")); break;
+    case '\r': builder->PushString(STRING("\\r")); break;
+    case '\f': builder->PushString(STRING("\\f")); break;
+    case '\t': builder->PushString(STRING("\\t")); break;
+    case '\n': builder->PushString(STRING("\\n")); break;
+    case '\0': builder->PushString(STRING("\\0")); break;
+    case '\v': builder->PushString(STRING("\\v")); break;
+    case ' ': builder->PushChar(spaceSubstitute); break;
+    default:  builder->PushChar(toEscape[i]); break;
     }
   }
 
-  String res = EndString(mark);
+  String res = EndString(out,builder);
   return res;
 }
 
@@ -124,14 +216,16 @@ void PrintEscapedString(String toEscape,char spaceSubstitute){
   }
 }
 
-String GetAbsolutePath(const char* path,Arena* out){
-  fs::path canonical = fs::weakly_canonical(path);
-  String res = PushString(out,"%s",canonical.c_str());
+String GetAbsolutePath(String path,Arena* out){
+  char buffer[PATH_MAX+1];
+  char* ptr = realpath(StaticFormat("%.*s",UNPACK_SS(path)),buffer);
+
+  String res = PushString(out,"%s",ptr);
   return res;
 }
 
 Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  auto array = StartGrowableArray<int>(out);
+  auto array = StartArray<int>(out);
   for(int i = 0; i < arr.size; i++){
     if(arr[i])
       *array.PushElem() = i;
@@ -140,22 +234,90 @@ Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
   return EndArray(array);
 }
 
+String ReprMemorySize(size_t val,Arena* out){
+  if(val < 1024){
+    return PushString(out,"%d bytes",(int) val);
+  } else if(val < Megabyte(1)){
+    int leftover = val % 1024;
+    return PushString(out,"%d.%.3d kilobytes",(int) (val / 1024),leftover);
+  } else if(val < Gigabyte(1)){
+    int leftover = val % (1024 * 1024);
+    return PushString(out,"%d.%.3d megabytes",(int) (val / (1024 * 1024)),leftover);
+  } else {
+    int leftover = val % (1024 * 1024 * 1024);
+    return PushString(out,"%d.%.3d gigabytes",(int) (val / (1024 * 1024 * 1024)),leftover);
+  }
+  NOT_IMPLEMENTED("");
+  return {};
+}
+
 String JoinStrings(Array<String> strings,String separator,Arena* out){
+  TEMP_REGION(temp,out);
   if(strings.size == 1){
     return PushString(out,strings[0]);
   }
 
   bool first = true;
-  auto builder = StartString(out);
+  auto builder = StartString(temp);
   for(String str : strings){
     if(first){
       first = false;
     } else {
-      PushString(out,separator);
+      builder->PushString(separator);
     }
 
-    PushString(out,str);
+    builder->PushString(str);
   }
 
-  return EndString(builder);
+  return EndString(out,builder);
+}
+
+GenericArenaListIterator IterateArenaList(void* list,int sizeOfType,int alignmentOfType){
+  GenericArenaListIterator res = {};
+
+  SingleLink<int>* head = *(SingleLink<int>**) list;
+
+  res.ptr = head;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericArenaListIterator iter){
+  return (iter.ptr != nullptr);
+}
+
+void* Next(GenericArenaListIterator& iter){
+  char* view = (char*) iter.ptr;
+  view += sizeof(void*);
+  
+  iter.ptr = iter.ptr->next;
+  
+  return view;
+}
+
+GenericArenaDoubleListIterator IterateArenaDoubleList(void* list,int sizeOfType,int alignmentOfType){
+  GenericArenaDoubleListIterator res = {};
+
+  DoubleLink<int>* head = *(DoubleLink<int>**) list;
+
+  res.ptr = head;
+  res.sizeOfType = sizeOfType;
+  res.alignmentOfType = alignmentOfType;
+
+  return res;
+}
+
+bool HasNext(GenericArenaDoubleListIterator iter){
+  return (iter.ptr != nullptr);
+}
+
+void* Next(GenericArenaDoubleListIterator& iter){
+  char* view = (char*) iter.ptr;
+  view += sizeof(void*) * 2;
+  
+  iter.ptr = iter.ptr->next;
+  
+  return view;
 }

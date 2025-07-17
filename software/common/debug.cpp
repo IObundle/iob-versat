@@ -164,7 +164,7 @@ static Addr2LineConnection StartAddr2Line(){
   return (Addr2LineConnection){};
 }
 
-// Note: We cannot use Assert here otherwise we might enter a infinite loop. Only the C assert
+// Note: We cannot use Assert here otherwise we might enter a infinite loop. Only the C assert (and we should make it debug only, all this code must be signal safe.)
 static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   BLOCK_REGION(temp);
 
@@ -294,7 +294,7 @@ void PrintStacktrace(){
   
   Array<String> canonical = PushArray<String>(temp,size);
   for(int i = 0; i < size; i++){
-    canonical[i] = GetAbsolutePath(StaticFormat("%.*s",UNPACK_SS(traces[i].fileName)),temp);
+    canonical[i] = GetAbsolutePath(traces[i].fileName,temp);
   }
 
 #if 1
@@ -327,6 +327,9 @@ void PrintStacktrace(){
   }
 }
 
+// TODO: We shouldn't call fprintf, since stdio is not signal safe.
+//       Do not know exactly how much of this is a problem, but nevertheless it is the right thing to do.
+//       We can still call write to handle output this way.
 static void SignalPrintStacktrace(int sign){
   // Need to Install old handlers first so that any bug afterwards does not cause an infinite loop
   switch(sign){

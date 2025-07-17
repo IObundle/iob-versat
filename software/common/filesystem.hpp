@@ -4,16 +4,22 @@
 
 #include <cstdio>
 
+struct Arena;
+
 // The main goal of this file is to provide a one place for which every file creation goes through. That way it is easier to keep track of how many files are operated on, the reason, and the ability to put debug code and see which portions of the code are opening files and so on. Furthermore it is helpful when implementing certain features knowing all the files our program created.
 
 enum FilePurpose{
+  FilePurpose_VERILOG_COMMON_CODE,
   FilePurpose_VERILOG_CODE,
   FilePurpose_VERILOG_INCLUDE,
   FilePurpose_MAKEFILE,
   FilePurpose_SOFTWARE,
+  FilePurpose_SCRIPT,
   FilePurpose_MISC,
   FilePurpose_DEBUG_INFO
 };
+
+const char* FilePurpose_Name(FilePurpose p);
 
 enum FileOpenMode{
   FileOpenMode_READ,

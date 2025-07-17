@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-(* source *) module DelayCalc #(
+module DelayCalc #(
    parameter DELAY_W = 7
 ) (
    //control

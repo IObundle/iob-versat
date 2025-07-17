@@ -6,6 +6,7 @@ module LookupTableRead #(
    parameter ADDR_W     = 16,
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
+   parameter DELAY_W    = 20,
    parameter LEN_W      = 8
 ) (
    //databus interface
@@ -51,7 +52,7 @@ module LookupTableRead #(
 
    input disabled,
 
-   input [31:0] delay0,
+   input [DELAY_W-1:0] delay0,
 
    input running,
    input clk,
@@ -159,6 +160,7 @@ module LookupTableRead #(
    AddressGen #(
       .ADDR_W  (ADDR_W),
       .DATA_W  (AXI_DATA_W),
+      .DELAY_W(DELAY_W),
       .PERIOD_W(ADDR_W)
    ) addrgenA (
       .clk_i(clk),
@@ -216,6 +218,8 @@ module LookupTableRead #(
       .result_ready_i(1'b1),
       .result_first_data_o(write_addr),
       .result_second_data_o(write_data),
+
+      .forceReset(!running),
 
       .clk_i(clk),
       .rst_i(rst)

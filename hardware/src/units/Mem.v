@@ -51,7 +51,6 @@
    input [ADDR_W-1:0] startA,
    input [ADDR_W-1:0] shiftA,
    input [ADDR_W-1:0] incrA,
-   input [DELAY_W-1:0] delay0,
    input              reverseA,
    input              extA,
    input              in0_wr,
@@ -66,14 +65,16 @@
    input [ADDR_W-1:0] startB,
    input [ADDR_W-1:0] shiftB,
    input [ADDR_W-1:0] incrB,
-   input [DELAY_W-1:0] delay1,
    input              reverseB,
    input              extB,
    input              in1_wr,
    input [ADDR_W-1:0] iter2B,
    input [       9:0] per2B,
    input [ADDR_W-1:0] shift2B,
-   input [ADDR_W-1:0] incr2B
+   input [ADDR_W-1:0] incr2B,
+
+   input [DELAY_W-1:0] delay0,
+   input [DELAY_W-1:0] delay1
 );
 
    wire we = |wstrb;
@@ -165,7 +166,8 @@
 
    AddressGen #(
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W)
+      .DATA_W(SIZE_W),
+      .DELAY_W(DELAY_W)
    ) addrgenA (
       .clk_i(clk),
       .rst_i(rst),
@@ -194,7 +196,8 @@
 
    AddressGen #(
       .ADDR_W(ADDR_W),
-      .DATA_W(SIZE_W)
+      .DATA_W(SIZE_W),
+      .DELAY_W(DELAY_W)
    ) addrgenB (
       .clk_i(clk),
       .rst_i(rst),

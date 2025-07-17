@@ -2,7 +2,6 @@
 
 (* source *) module Reg #(
    parameter DELAY_W = 7,
-   parameter ADDR_W  = 2,
    parameter DATA_W  = 32
 ) (
    //control
@@ -14,7 +13,7 @@
    output done,
 
    // native interface 
-   input      [  ADDR_W-1:0] addr,
+   input               [1:0] addr,
    input      [DATA_W/8-1:0] wstrb,
    input      [  DATA_W-1:0] wdata,
    input                     valid,
@@ -33,7 +32,7 @@
 
    wire lastCycle;
 
-   DelayCalc delay(
+   DelayCalc #(.DELAY_W(DELAY_W)) delay(
    .clk(clk),
    .rst(rst),
 
@@ -48,8 +47,6 @@
 
    assign rdata        = (rvalid ? out0 : 0);
    assign currentValue = out0;
-
-   //wire [DATA_W-1:0] toWrite = (running ? in0 : wdata);
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin

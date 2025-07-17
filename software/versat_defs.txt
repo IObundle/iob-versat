@@ -1,0 +1,121 @@
+// This file is used as a repository of data.
+// A tool runs at compile time to extract all these data and to generate code files.
+// Stuff like enums, tables of data and the like are easier to define here.
+// Especially because we use certain structures that make it difficult to quickly define literal expressions
+// (Ex: hard in C to define a literal expression of Array<String>)
+// We can also use this data to generate other helpful code.
+// Unless specified otherwise, this file is the source of truth for large amounts of configurable Versat data.
+// It should be easy to change the way versat interprets different types of wires and such by changing stuff here.
+
+// Note: Currently everything is a string. Whether the output is the string or the name depends on the types given.
+//       Using "" to allow escaping values is currently not supported.
+
+// Note: I do not want to spend much time trying to beef up the parser of these files. Most errors are just gonna 
+//       be asserts, segfaults and the likes so be careful changing stuff in here.
+
+// Note: Some of these generate code that uses some predefined naming conventions.
+//       Ex: Tables generate an array of structs whose name is the name defined here with the first letter uppercase. 
+//           The name of the variable is the same except the first letter is downcase. 
+//           (Basically "table Test(...)" produces the code "Array<Test> test = ...")
+
+// Note: The data encoded here should be agnostic to the actual containers. I do not want to see an "Array<String>" even though it is basically what we produce in the final code
+//       Part of this approach is to abstract the actual containers used. String is fine, but Array,Hashmap and so on is not.
+//       At the same time, stuff like Set is also fine since we are not actually describing the container used but the fact that we are dealing with a list of unique values. (Where order does not matter for the matter of equality, for example)
+
+// TODO: Map should be able to map multiple data into multiple data. Something like map M(A a,B b : C c,D d,E e) to describe a 2 to 3 map.
+
+enum AddressGenType{
+   AddressGenType_MEM          = 0x01,
+   AddressGenType_READ         = 0x02,
+   AddressGenType_GEN          = 0x04
+};
+
+map addressGenType(AddressGenType t,String name){
+   AddressGenType_MEM : Mem,
+   AddressGenType_READ : Read,
+   AddressGenType_GEN : Gen,
+};
+
+struct AddressVParameters{
+   String ext_addr;
+   String length;
+   String amount_minus_one;
+   String addr_shift;
+   String enabled;
+   String pingPong;
+   String start;
+   String duty;
+   String per;
+   String incr;
+   String iter;
+   String shift;
+   String per2;
+   String incr2;
+   String iter2;
+   String shift2;
+   String per3;
+   String incr3;
+   String iter3;
+   String shift3;
+};
+
+struct AddressGenParameters{
+   String start;
+   String duty;
+   String period;
+   String incr;
+   String iterations;
+   String shift;
+   String period2;
+   String incr2;
+   String iterations2;
+   String shift2;
+   String period3;
+   String incr3;
+   String iterations3;
+   String shift3;
+};
+
+// Maybe change to map, although not sure how to do the reverse map from String[] to enum.
+table AddressGenWireNames(AddressGenType type,String[] names){
+   AddressGenType_MEM  : {iterA,perA,dutyA,startA,shiftA,incrA,reverseA,extA,in0_wr,iter2A,per2A,shift2A,incr2A,
+                          iterB,perB,dutyB,startB,shiftB,incrB,reverseB,extB,in1_wr,iter2B,per2B,shift2B,incr2B},
+
+   AddressGenType_READ : @Members(AddressVParameters),
+   AddressGenType_GEN :  @Members(AddressGenParameters),
+};
+
+enum MergeModifier{
+   MergeModifier_NONE           = 0x0,
+   MergeModifier_NO_UNIT_MERGED = 0x1
+};
+
+map mergeModifiers(MergeModifier m,String name){
+   MergeModifier_NO_UNIT_MERGED : NoUnitMerged
+};
+
+enum ConstructType{
+  ConstructType_MODULE,
+  ConstructType_MERGE,
+  ConstructType_ITERATIVE,
+  ConstructType_ADDRESSGEN
+};
+
+define_map possibleAttributes{
+   VERSAT_LATENCY : versat_latency,
+   VERSAT_STATIC  : versat_static,
+   VERSAT_STAGE   : versat_stage
+};
+
+file ExtractVerilatedSignals = ./scripts/ExtractVerilatedSignals.py;
+file GetVerilatorRoot = ./scripts/GetVerilatorRoot.sh;
+
+file HeaderTemplate      = ./software/templates/versat_header.tpl;
+file MakefileTemplate    = ./software/templates/versat_makefile.tpl;
+file TopInstanceTemplate = ./software/templates/versat_top_instance.tpl;
+file WrapperTemplate     = ./software/templates/versat_wrapper.tpl;
+file VersatTemplate      = ./software/templates/iob_versat_template.tpl;
+
+fileGroup defaultVerilogUnits = ./hardware/src/units;
+fileGroup defaultVerilogFiles = ./hardware/src | ./hardware/src/units;
+fileGroup defaultSoftwareFiles = ./software/src;

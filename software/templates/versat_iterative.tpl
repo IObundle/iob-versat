@@ -1,12 +1,5 @@
 `timescale 1ns / 1ps
 
-#{include "versat_common.tpl"}
-
-#{set nDones #{call CountDones instances}}
-#{set nOperations #{call CountOperations instances}}
-#{set nCombOperations #{call CountCombOperations instances}}
-#{set nSeqOperations  #{call CountSeqOperations instances}}
-
 module @{accel.name} #(
       parameter DELAY_W = 32,
       parameter DATA_W = 32,
