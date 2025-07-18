@@ -18,6 +18,7 @@ enum CASTType{
   CASTType_VAR_DECL_STMT, // Ends in a ';'
   CASTType_VAR_BLOCK,
   CASTType_VAR_DECL_BLOCK,
+  CASTType_FOREACH_BLOCK,
   CASTType_RAW_STATEMENT,
   CASTType_ENUM_DEF,
   CASTType_SWITCH_BLOCK,
@@ -56,18 +57,23 @@ struct CAST{
       ArenaList<CAST*>* elseStatements; // If nullptr then no else clause
     } ifDecl;
 
-    // Struct Def
     struct{
       String name;
       ArenaList<CAST*>* declarations;
     } structDef; // Also unions
 
     struct{
+      String type;
+      String iterName;
+      String data;
+      ArenaList<CAST*>* statements;
+    } foreachDecl;
+    
+    struct{
       String name;
       ArenaList<Pair<String,String>>* nameAndValue;
     } enumDef;
     
-    // Function decl
     struct{
       String returnType;
       String functionName;
@@ -114,6 +120,31 @@ struct CAST{
   };
 };
 
+enum CExprType{
+  CExprType_VAR,
+  CExprType_LITERAL,
+  CExprType_OP
+};
+
+enum CExprOp{
+  CExprOp_AND,
+  CExprOp_EQUALITY
+};
+
+struct CExpr{
+  CExprType type;
+  
+  union{
+    int lit;
+    String var;
+
+    struct{
+      CExprOp op;
+      Array<CExpr*> children; // Only set at the very end. We do not build the expression tree until the very end.
+    };
+  };
+};
+
 CAST* PushCAST(CASTType type,Arena* out);
 
 struct CEmitter{
@@ -121,13 +152,15 @@ struct CEmitter{
   CAST* topLevel;
   Array<CAST*> buffer;
   int top;  
+  ArenaList<CExpr>* expressionList;
   
   // Helper functions, not intended for outside usage
   void PushLevel(CAST* level);
   void PopLevel();
   CAST* FindFirstCASTType(CASTType type,bool errorIfNotFound = true);
   void InsertStatement(CAST* statementCAST);
-
+  String EndExpressionAsString(Arena* out);
+  
   void Once(); // Insert preprocessor directive so that file is only processed once
   void Include(const char* filename);
   void RawLine(String content);
@@ -165,15 +198,34 @@ struct CEmitter{
   void Elem(String value);
   void StringElem(String value);
 
+  void ForEachBlock(String type,String iterName,String data);
+
   void If(String expression);
   void ElseIf(String expression);
   void Else();
   void EndIf();
-
+  
+  // To help build an if/else if chain, call this function only. This outputs an 'if' if no if is immediatly found or an 'else if' if the previous block is an if. Care when using this function to make an if else chain inside another if.
+  // TODO: We could add a new type where we can have a bunch of conditions and statements associated to the conditions but when printing we would print an if/elseif chain.
+  
+  void IfOrElseIf(String expression);
+  
+  void IfFromExpression();
+  void IfOrElseIfFromExpression();
+  
   void SwitchBlock(String switchExpr);
   void CaseBlock(String caseExpr);
   
   void EndBlock(); // Any expression that starts a block is terminated by this function, (Function, If, Else, ...)
+
+  // Kinda hacky way of building expressions. Give the expression as if writing it directly and end it by calling any function that ends with FromExpression;
+  void StartExpression();
+  void Var(String name);
+  void Literal(int val);
+
+  // Binary operations for expressions.
+  void IsEqual();
+  void And();
   
   void Comment(String expression);
   void Statement(String statement); // Generic statement, mostly to bypass any other logic and insert stuff directly.

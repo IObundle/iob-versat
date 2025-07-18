@@ -70,7 +70,7 @@ void CEmitter::InsertStatement(CAST* statementCAST){
     CAST* cast = buffer[i];
     CASTType type = cast->type;
     
-    switch(type){
+    FULL_SWITCH(type){
     case CASTType_TOP_LEVEL: Assert(false); // Cannot find top level inside this 
 
     // Non block types
@@ -109,6 +109,11 @@ void CEmitter::InsertStatement(CAST* statementCAST){
       *cast->structDef.declarations->PushElem() = statementCAST;
       return;
     } break;
+
+    case CASTType_FOREACH_BLOCK: {
+      *cast->foreachDecl.statements->PushElem() = statementCAST;
+      return;
+    } break;
       
     // All the "block" types
     case CASTType_IF: {
@@ -124,8 +129,86 @@ void CEmitter::InsertStatement(CAST* statementCAST){
       *cast->funcDecl.statements->PushElem() = statementCAST;
       return;
     } break;
+    } END_SWITCH();
+  }
+}
+
+CExpr* FixTerm(Array<CExpr> expressions,int& index){
+  CExpr* expr = &expressions[index];
+
+  Assert(expr->type == CExprType_VAR || expr->type == CExprType_LITERAL);
+
+  index += 1;
+  return expr;
+}
+
+CExpr* FixBinaryOp(Array<CExpr> expressions,int& index,Arena* out){
+  CExpr* current = FixTerm(expressions,index);
+
+  CExpr* op = &expressions[index];
+  index += 1;
+  while(op->type == CExprType_OP){
+    CExpr* right = FixTerm(expressions,index);
+
+    op->children = PushArray<CExpr*>(out,2);
+    op->children[0] = current;
+    op->children[1] = right;
+    
+    current = op;
+
+    if(index < expressions.size){
+      op = &expressions[index];
+      index += 1;
+      continue;
+    } else {
+      break;
     }
   }
+
+  return current;
+}
+
+String CEmitter::EndExpressionAsString(Arena* out){
+  TEMP_REGION(temp,arena);
+  
+  Array<CExpr> expressions = PushArrayFromList(temp,expressionList);
+
+  int index = 0;
+  CExpr* top = FixBinaryOp(expressions,index,temp);
+
+  auto builder = StartString(temp);
+  
+  auto Recurse = [builder](auto Recurse,CExpr* top) -> void{
+    FULL_SWITCH(top->type){
+    case CExprType_VAR:{
+      builder->PushString("%.*s",UN(top->var));
+    } break;
+    case CExprType_LITERAL:{
+      builder->PushString("%d",top->lit);
+    } break;
+    case CExprType_OP:{
+      Recurse(Recurse,top->children[0]);
+
+      FULL_SWITCH(top->op){
+      case CExprOp_AND:{
+        builder->PushString(" && ");
+      } break;
+      case CExprOp_EQUALITY:{
+        builder->PushString(" == ");
+      } break;
+      } END_SWITCH();
+
+      // NOTE: Assuming we only care about binary operators, 
+      Recurse(Recurse,top->children[1]);
+    } break;
+    } END_SWITCH();
+  };
+
+  Recurse(Recurse,top);
+
+  String result = EndString(out,builder);
+  this->expressionList = nullptr;
+  return result;
 }
 
 void CEmitter::Struct(String structName){
@@ -275,6 +358,18 @@ void CEmitter::StringElem(String value){
   InsertStatement(elem);
 }
 
+void CEmitter::ForEachBlock(String type,String iterName,String data){
+  CAST* forBlock = PushCAST(CASTType_FOREACH_BLOCK,arena);
+
+  forBlock->foreachDecl.type = PushString(arena,type);
+  forBlock->foreachDecl.iterName = PushString(arena,iterName);
+  forBlock->foreachDecl.data = PushString(arena,data);
+  forBlock->foreachDecl.statements = PushArenaList<CAST*>(arena);
+  
+  InsertStatement(forBlock);
+  PushLevel(forBlock);
+}
+
 void CEmitter::VarBlock(){
   CAST* varBlock = PushCAST(CASTType_VAR_BLOCK,arena);
 
@@ -351,6 +446,56 @@ void CEmitter::EndIf(){
   }
   
   EndBlock();
+}
+
+void CEmitter::IfOrElseIf(String expression){
+  if(buffer[top-1]->type == CASTType_IF){
+    ElseIf(expression);
+  } else {
+    If(expression);
+  }
+}
+
+void CEmitter::IfFromExpression(){
+  TEMP_REGION(temp,arena);
+  String content = EndExpressionAsString(temp);
+  If(content);
+}
+
+void CEmitter::IfOrElseIfFromExpression(){
+  TEMP_REGION(temp,arena);
+  String content = EndExpressionAsString(temp);
+  IfOrElseIf(content);
+}
+
+void CEmitter::StartExpression(){
+  Assert2(expressionList == nullptr,"Already inside an expression, likely an error");
+  
+  expressionList = PushArenaList<CExpr>(arena);
+}
+
+void CEmitter::Var(String name){
+  CExpr* expr = expressionList->PushElem();
+  expr->type = CExprType_VAR;
+  expr->var = name;
+}
+
+void CEmitter::Literal(int val){
+  CExpr* expr = expressionList->PushElem();
+  expr->type = CExprType_LITERAL;
+  expr->lit = val;
+}
+
+void CEmitter::IsEqual(){
+  CExpr* expr = expressionList->PushElem();
+  expr->type = CExprType_OP;
+  expr->op = CExprOp_EQUALITY;
+}
+
+void CEmitter::And(){
+  CExpr* expr = expressionList->PushElem();
+  expr->type = CExprType_OP;
+  expr->op = CExprOp_AND;
 }
 
 void CEmitter::SwitchBlock(String switchExpr){
@@ -632,6 +777,19 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
       b->PushSpaces(level * 2);
       b->PushString("*/");
     }
+  } break;
+  case CASTType_FOREACH_BLOCK: {
+    b->PushSpaces(level * 2);
+
+    b->PushString("for(%.*s %.*s : %.*s){\n",UN(top->foreachDecl.type),UN(top->foreachDecl.iterName),UN(top->foreachDecl.data));
+    for(SingleLink<CAST*>* subIter = top->foreachDecl.statements->head; subIter; subIter = subIter->next){
+      CAST* ast = subIter->elem;
+
+      Repr(ast,b,cppStyle,level + 1);
+      b->PushString("\n");
+    }
+    b->PushSpaces(level * 2);
+    b->PushString("}");
   } break;
   case CASTType_IF: {
     SingleLink<CASTIf>* iter = top->ifDecl.ifExpressions->head;

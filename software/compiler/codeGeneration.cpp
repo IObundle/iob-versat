@@ -3,6 +3,7 @@
 #include "CEmitter.hpp"
 #include "VerilogEmitter.hpp"
 #include "accelerator.hpp"
+#include "configurations.hpp"
 #include "declaration.hpp"
 #include "embeddedData.hpp"
 #include "filesystem.hpp"
@@ -50,6 +51,51 @@ Array<String> ExtractMemoryMasks(AccelInfo info,Arena* out){
   }
 
   return EndArray(builder);
+}
+
+Array<Array<MuxInfo>> CalculateMuxInformation(AccelInfoIterator* iter,Arena* out){
+  auto ExtractMuxInfo = [](AccelInfoIterator iter,Arena* out) -> Array<MuxInfo>{
+    TEMP_REGION(temp,out);
+
+    auto alreadySet = StartArray<bool>(temp);
+    
+    auto builder = StartArray<MuxInfo>(out);
+    for(; iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* info = iter.CurrentUnit();
+      if(info->isMergeMultiplexer){
+        int muxGroup = info->muxGroup;
+        if(!alreadySet[muxGroup]){
+          builder[muxGroup].configIndex = info->globalConfigPos.value();
+          builder[muxGroup].val = info->mergePort;
+          builder[muxGroup].name = info->baseName;
+          builder[muxGroup].fullName = info->fullName;
+          alreadySet[muxGroup] = true;
+        }
+      }
+    }
+
+    return EndArray(builder);
+  };
+
+  Array<Array<MuxInfo>> muxInfo = PushArray<Array<MuxInfo>>(out,iter->MergeSize());
+  for(int i = 0; i < iter->MergeSize(); i++){
+    AccelInfoIterator it = *iter;
+    it.SetMergeIndex(i);
+    muxInfo[i] = ExtractMuxInfo(it,out);
+  }
+
+  bool allEmpty = true;
+  for(Array<MuxInfo> muxes : muxInfo){
+    if(muxes.size > 0){
+      allEmpty = false;
+    }
+  }
+
+  if(allEmpty){
+    return {};
+  }
+  
+  return muxInfo;
 }
 
 String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
@@ -1994,7 +2040,8 @@ String GenerateAddressGenCompilationFunction(AddressAccess* initial,Arena* out){
     // Last member must generate an 'else' instead of a 'else if'
     if(leftOverSize > 1){
       auto other = StartString(temp);
-            
+
+      // TODO: Replace this with the expression builder functions added to CEmitter
       bool first = true;
       for(int i = loopIndex + 1; i < totalSize; i++){
         if(first){
@@ -2772,33 +2819,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   TemplateSetBool("outputChangeDelay",false);
 
   Array<String> names = Extract(info.infos,temp,&MergePartition::name);
-    
-  auto ExtractMuxInfo = [](AccelInfoIterator iter,Arena* out){
-    TEMP_REGION(temp,out);
-
-    auto builder = StartArray<MuxInfo>(out);
-    for(; iter.IsValid(); iter = iter.Step()){
-      InstanceInfo* info = iter.CurrentUnit();
-      if(info->isMergeMultiplexer){
-        int muxGroup = info->muxGroup;
-        if(!builder[muxGroup].info){
-          builder[muxGroup].configIndex = info->globalConfigPos.value();
-          builder[muxGroup].val = info->mergePort;
-          builder[muxGroup].name = info->baseName;
-          builder[muxGroup].info = info;
-        }
-      }
-    }
-
-    return EndArray(builder);
-  };
-    
-  Array<Array<MuxInfo>> muxInfo = PushArray<Array<MuxInfo>>(temp,iter.MergeSize());
-  for(int i = 0; i < iter.MergeSize(); i++){
-    AccelInfoIterator it = iter;
-    it.SetMergeIndex(i);
-    muxInfo[i] = ExtractMuxInfo(it,temp);
-  }
+  Array<Array<MuxInfo>> muxInfo = CalculateMuxInformation(&iter,temp);
 
   // Combines address gen with the struct names that use them. Mostly done this way because we generate C code which does not support method overloading meaning that we have to do it manually.
   TrieSet<Pair<String,AddressAccess*>>* structNameAndAddressGen = PushTrieSet<Pair<String,AddressAccess*>>(temp);
@@ -3283,7 +3304,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   {
     CEmitter* c = StartCCode(temp);
-      
+
     if(names.size > 1){
       for(int i = 0; i <  allDelays.size; i++){
         auto delayArray  =  allDelays[i];
@@ -3304,32 +3325,34 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         
       c->EndBlock();
 
-      c->Enum(S8("MergeType"));
-      for(int i = 0; i <  names.size; i++){
-        auto name  =  names[i];
-        c->EnumMember(PushString(temp,"MergeType_%.*s",UN(name)),PushString(temp,"%d",i));
-      }
-      c->EndEnum();
+      if(muxInfo.size > 0){
+        c->Enum(S8("MergeType"));
+        for(int i = 0; i <  names.size; i++){
+          auto name  =  names[i];
+          c->EnumMember(PushString(temp,"MergeType_%.*s",UN(name)),PushString(temp,"%d",i));
+        }
+        c->EndEnum();
 
-      c->FunctionBlock(S8("static inline void"),S8("ActivateMergedAccelerator"));
-      c->Argument(S8("MergeType"),S8("type"));
+        c->FunctionBlock(S8("static inline void"),S8("ActivateMergedAccelerator"));
+        c->Argument(S8("MergeType"),S8("type"));
 
-      c->Assignment(S8("int asInt"),S8("(int) type"));
+        c->Assignment(S8("int asInt"),S8("(int) type"));
 
-      c->SwitchBlock(S8("type"));
-      for(int i = 0 ; i < names.size; i++){
-        c->CaseBlock(PushString(temp,"MergeType_%.*s",UN(names[i])));
+        c->SwitchBlock(S8("type"));
+        for(int i = 0 ; i < names.size; i++){
+          c->CaseBlock(PushString(temp,"MergeType_%.*s",UN(names[i])));
 
-        for(auto info : muxInfo[i]){
-          c->Assignment(PushString(temp,"accelConfig->%.*s.sel",UN(info.name)),PushString(temp,"%d",info.val));
+          for(auto info : muxInfo[i]){
+            c->Assignment(PushString(temp,"accelConfig->%.*s.sel",UN(info.name)),PushString(temp,"%d",info.val));
+          }
+          c->EndBlock();
         }
         c->EndBlock();
-      }
-      c->EndBlock();
-
-      c->RawLine(S8("VersatLoadDelay(delayBuffers[asInt]);"));
+        
+        c->RawLine(S8("VersatLoadDelay(delayBuffers[asInt]);"));
       
-      c->EndBlock();
+        c->EndBlock();
+      }
     }
       
     String content = PushASTRepr(c,temp);
@@ -3863,7 +3886,180 @@ if(SimulateDatabus){
   String wrapperPath = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(globalOptions.softwareOutputFilepath));
   FILE* output = OpenFileAndCreateDirectories(wrapperPath,"w",FilePurpose_SOFTWARE);
   DEFER_CLOSE_FILE(output);
+
+  // MARK - 
+  if(1){
+    AccelInfoIterator iter = StartIteration(&info);
+    Array<Array<MuxInfo>> muxInfo = CalculateMuxInformation(&iter,temp);
+
+    // From accel config, obtain the merge index.
+    CEmitter* c = StartCCode(temp);
     
+    if(iter.MergeSize() > 1 && muxInfo.size > 0){
+      c->FunctionBlock(S8("MergeType"),S8("MergeTypeFromConfig"));
+      c->Argument(S8("AcceleratorConfig*"),S8("config"));
+
+      for(int i = 0; i <  muxInfo.size; i++){
+        Array<MuxInfo> info = muxInfo[i];
+
+        c->StartExpression();
+        for(int j = 0; j <  info.size; j++){
+          MuxInfo mux  =  info[j];
+
+          if(j != 0){
+            c->And();
+          }
+        
+          c->Var(PushString(temp,"config->%.*s_sel",UN(mux.fullName)));
+          c->IsEqual();
+          c->Literal(mux.val);
+        }
+
+        c->IfOrElseIfFromExpression();
+
+        String content = PushString(temp,"(MergeType) %d",i);
+        c->Return(content);
+      }
+
+      c->Else();
+      c->Statement(S8("Assert(false && \"Error recovering MergeType from current configuration\")"));
+      c->EndIf();
+      c->EndBlock();
+    }
+
+    struct VUnitInfo{
+      FUDeclaration* decl;
+      String fullName;
+    };
+
+    auto IsVUnit = [](FUDeclaration* decl){
+      // TODO: We need to do this properly if we want to push more runtime stuff related to VUnits.
+      return ((int) decl->supportedAddressGenType) != 0;
+    };
+
+    Array<Array<InstanceInfo*>> unitInfoPerMerge = PushArray<Array<InstanceInfo*>>(temp,iter.MergeSize());
+    for(int i = 0; i < iter.MergeSize(); i++){
+      AccelInfoIterator it = iter;
+      it.SetMergeIndex(i);
+
+      auto list = PushArenaList<InstanceInfo*>(temp);
+      for(; it.IsValid(); it = it.Step()){
+        InstanceInfo* info = it.CurrentUnit();
+        if(info->doesNotBelong){
+          continue;
+        }
+
+        if(!IsVUnit(info->decl)){
+          continue;
+        }
+        
+        if(info->addressGenUsed.size < 1){
+          continue;
+        }
+        
+        *list->PushElem() = info;
+      }
+
+      unitInfoPerMerge[i] = PushArrayFromList(temp,list);
+    }
+
+    bool containsMerge = (iter.MergeSize() > 1 && muxInfo.size > 0);
+
+    c->FunctionBlock(S8("Array<VUnitInfo>"),S8("ExtractVArguments"));
+    c->Argument(S8("AcceleratorConfig*"),S8("config"));
+    c->Argument(S8("int"),S8("mergeIndex"));
+    c->VarDeclare(S8("int"),S8("index"),S8("0"));
+
+    int maxMergeInfo = 0;
+    for(Array<InstanceInfo*> units : unitInfoPerMerge){
+      maxMergeInfo = MAX(maxMergeInfo,units.size);
+    }
+
+    c->VarDeclare(S8("static VUnitInfo"),PushString(temp,"data[%d]",maxMergeInfo));
+    
+    if(containsMerge){
+      for(int i = 0; i <  unitInfoPerMerge.size; i++){
+        Array<InstanceInfo*> units  =  unitInfoPerMerge[i];
+        c->IfOrElseIf(PushString(temp,"mergeIndex == %d",i));
+
+        for(InstanceInfo* unit : units){
+          FUDeclaration* decl = unit->decl;
+          String fullName = unit->fullName;
+          String unitName = unit->baseName;
+
+          c->Assignment(S8("data[index].unitName"),PushString(temp,"\"%.*s\"",UN(unitName)));
+          c->Assignment(S8("data[index].mergeIndex"),PushString(temp,"%d",i));
+        
+          for(Wire w : decl->configs){
+            String left = PushString(temp,"data[index].%.*s",UN(w.name));
+            String right = PushString(temp,"config->%.*s_%.*s",UN(fullName),UN(w.name));
+
+            c->Assignment(left,right);
+          }
+
+          c->Statement(S8("index += 1"));
+        }
+        DEBUG_BREAK();
+      }
+      c->EndIf();
+    } else {
+      Array<InstanceInfo*> units  =  unitInfoPerMerge[0];
+
+      for(InstanceInfo* unit : units){
+        FUDeclaration* decl = unit->decl;
+        String fullName = unit->fullName;
+        String unitName = unit->baseName;
+
+        c->Assignment(S8("data[0].unitName"),PushString(temp,"\"%.*s\"",UN(unitName)));
+        c->Assignment(S8("data[0].mergeIndex"),S8("0"));
+        
+        for(Wire w : decl->configs){
+          String left = PushString(temp,"data[0].%.*s",UN(w.name));
+          String right = PushString(temp,"config->%.*s_%.*s",UN(fullName),UN(w.name));
+
+          c->Assignment(left,right);
+        }
+      }
+      c->Statement(S8("index += 1"));
+    }
+
+    c->Return(S8("(Array<VUnitInfo>){data,index}"));
+
+    c->EndBlock();
+
+    c->FunctionBlock(S8("void"),S8("SimulateVUnits"));
+    c->Statement(S8("AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer"));
+
+    if(containsMerge){
+      c->VarDeclare(S8("int"),S8("mergeIndex"),S8("MergeTypeFromConfig(config)"));
+    } else {
+      c->VarDeclare(S8("int"),S8("mergeIndex"),S8("0"));
+    }
+
+    c->VarDeclare(S8("Array<VUnitInfo>"),S8("data"),S8("ExtractVArguments(config,mergeIndex)"));
+
+    c->ForEachBlock(S8("VUnitInfo"),S8("info"),S8("data"));
+    c->VarDeclare(S8("AddressVArguments"),S8("args"),S8("{}"));
+
+    for(String str : META_AddressVParameters_Members){
+      String left = PushString(temp,"args.%.*s",UN(str));
+      String right = PushString(temp,"info.%.*s",UN(str));
+      c->Assignment(left,right);
+    }
+
+    c->Statement(S8("PRINT(\"Simulating addresses for unit '%s' in merge config: %d\\n\",info.unitName,info.mergeIndex)"));
+    c->Statement(S8("SimulateAndPrintAddressGen(args)"));
+    
+    c->EndBlock();
+    
+    c->EndBlock();
+    
+    DEBUG_BREAK();
+    
+    String content = PushASTRepr(c,temp);
+    TemplateSetString("simulationStuff",content);
+  }
+
   ProcessTemplateSimple(output,META_WrapperTemplate_Content);
 }
 

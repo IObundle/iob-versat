@@ -5,8 +5,6 @@
 #include "utils.hpp"
 #include "accelerator.hpp"
 
-static const int DELAY_SIZE = 7;
-
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
@@ -50,7 +48,7 @@ struct MuxInfo{
   int configIndex;
   int val;
   String name;
-  InstanceInfo* info;
+  String fullName;
 };
 
 struct SameMuxEntities{
@@ -155,6 +153,10 @@ struct VerilogInterfaceSpec{
   bool isInput;
   bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
 };
+
+// TODO: Maybe move this to a better place. Probably merge.hpp
+struct AccelInfoIterator;
+Array<Array<MuxInfo>> CalculateMuxInformation(AccelInfoIterator* iter,Arena* out);
 
 String GlobalStaticWireName(StaticId id,Wire w,Arena* out);
 

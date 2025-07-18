@@ -3,8 +3,6 @@
 #include "declaration.hpp"
 #include "versat.hpp"
 
-// TODO: We only need this because of DELAY_SIZE.
-#include "codeGeneration.hpp"
 #include "symbolic.hpp"
 
 #define TAG_TEMPORARY_MARK 1
@@ -632,6 +630,8 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
   SymbolicExpression* configExpr = PushLiteral(temp,0);
   
   auto builder = StartArray<ExternalMemoryInterface>(temp);
+
+  int defaultDelaySize = 7;
   
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
@@ -658,7 +658,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
     }
 
     res.nDelays += unit->delaySize;
-    delayBits += unit->delaySize * DELAY_SIZE;
+    delayBits += unit->delaySize * defaultDelaySize;
 
     res.externalMemoryInterfaces += decl->externalMemory.size;
 

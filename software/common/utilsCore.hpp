@@ -133,7 +133,6 @@ const char* GetFilename(const char* fullpath);
 // Use when debugging, easier to search due to the 'd' at the beginning, less confusion with non-debugging printfs
 int dprintf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 
-//#if defined(VERSAT_DEBUG)
 #define Assert(EXPR) \
   do { \
     bool _ = !(EXPR);   \
@@ -142,6 +141,25 @@ if(_){ \
       NEWLINE(); \
       NEWLINE(); \
       fprintf(stderr,"Assertion failed: %s\n",#EXPR); \
+      fprintf(stderr,"At: "); LOCATION(); \
+      fflush(stderr); \
+      NEWLINE(); \
+      NEWLINE(); \
+      NEWLINE(); \
+      __builtin_trap(); \
+    } \
+  } while(0)
+
+//#if defined(VERSAT_DEBUG)
+#define Assert2(EXPR,...) \
+  do { \
+    bool _ = !(EXPR);   \
+if(_){ \
+      NEWLINE(); \
+      NEWLINE(); \
+      NEWLINE(); \
+      fprintf(stderr,"Assertion failed: %s\n",#EXPR); \
+      fprintf(stderr,"%s\n",__VA_ARGS__); \
       fprintf(stderr,"At: "); LOCATION(); \
       fflush(stderr); \
       NEWLINE(); \

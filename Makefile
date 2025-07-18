@@ -38,6 +38,7 @@ CPP_OBJ += $(VERSAT_COMPILER_OBJS)
 CPP_OBJ += $(BUILD_DIR)/embeddedData.o
 
 COMPILE_TOOL = g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -MMD -MP -DVERSAT_DEBUG -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" $(VERSAT_COMMON_INCLUDE) $(VERSAT_COMMON_OBJS)
+COMPILE_TOOL_NO_D = g++ -DPC -std=c++17 $(VERSAT_COMMON_FLAGS) -DVERSAT_DEBUG -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" $(VERSAT_COMMON_INCLUDE) $(VERSAT_COMMON_OBJS)
 
 # NOTE: Removed -MP flag. Any problem with makefiles in the future might be because of this
 COMPILE_OBJ  = g++ -DPC -rdynamic -std=c++17 $(VERSAT_COMMON_FLAGS) -MMD -DVERSAT_DEBUG -c -o $@ $< -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -g $(VERSAT_COMMON_INCLUDE) $(VERSAT_INCLUDE)
@@ -56,7 +57,7 @@ $(BUILD_DIR)/calculateHash: $(VERSAT_TOOLS_DIR)/calculateHash.cpp $(VERSAT_COMMO
 	$(COMPILE_TOOL)
 
 $(BUILD_DIR)/embedData: $(VERSAT_TOOLS_DIR)/embedData.cpp $(VERSAT_COMMON_OBJS) $(VERSAT_COMMON_HEADERS)
-	$(COMPILE_TOOL)
+	$(COMPILE_TOOL_NO_D)
 
 # Generate meta code
 $(BUILD_DIR)/embeddedData.hpp $(BUILD_DIR)/embeddedData.cpp: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embedData
@@ -74,6 +75,8 @@ $(BUILD_DIR)/embeddedData.d: $(VERSAT_SW_DIR)/versat_defs.txt $(BUILD_DIR)/embed
 $(VERSAT_DIR)/versat: $(CPP_OBJ) $(VERSAT_ALL_HEADERS)
 	g++ -MMD -std=c++17 $(VERSAT_COMMON_FLAGS) -DVERSAT_DEBUG -DVERSAT_DIR="$(VERSAT_DIR)" -rdynamic -DROOT_PATH=\"$(abspath $(VERSAT_DIR))\" -o $@ $(CPP_OBJ) $(VERSAT_INCLUDE) -lstdc++ -lm -lgcc -lc -pthread -ldl 
 
+# TODO: This approach is stupid. There is no point in making the embedData rule file end with a .d format and juggling stuff around so that we do not overwrite our own .d file.
+#       Just make it a different ending. Something like .ded and be done with it. Just make sure that the generated .d file from gcc and the .ded file work, because both of them will put different rules for the same file and we might have problems. 
 -include $(BUILD_DIR)/embeddedData.d
 -include $(BUILD_DIR)/*.d
 
