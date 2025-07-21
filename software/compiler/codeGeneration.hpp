@@ -165,4 +165,4 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file);
 
 // Versat_instance, all external memory files, makefile for pc-emul, basically everything that is only generated once.
 // For the top instance and support files.
-void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);

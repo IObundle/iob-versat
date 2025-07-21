@@ -18,6 +18,7 @@
 // Needed to obtain the wire size of the unit from the verilated code.
 // Since the verilated code is an "instantiation" of the unit, we do not have to bother with the possibility of wire not being concrete (because they depend on parameters). We can just use the values directly.
 #include "VUnitWireInfo.h"
+#include "pcEmulDefs.h"
 
 @{defines}
 
@@ -314,7 +315,6 @@ extern "C" int VersatAcceleratorCyclesElapsed(){
   return cyclesDone;
 }
 
-bool debugging = false; // TODO: Move to a better place
 void SimulateVUnits();
 
 extern "C" void VersatAcceleratorSimulate(){

@@ -2,7 +2,7 @@ TYPE_NAME := @{typeName}
 
 VSIM_HEADER := @{simLoopHeader}
 HARDWARE_FOLDER := @{hardwareFolder}
-VHEADER := V$(TYPE_NAME).h
+VHEADER := V$(TYPE_NAME).h pcEmulDefs.h
 SOFTWARE_FOLDER := .
 HARDWARE_SRC := @{hardwareUnits}
 HARDWARE_SRC += @{moduleUnits}

@@ -98,6 +98,44 @@ Array<Array<MuxInfo>> CalculateMuxInformation(AccelInfoIterator* iter,Arena* out
   return muxInfo;
 }
 
+Array<Array<InstanceInfo*>> VUnitInfoPerMerge(AccelInfo info,Arena* out){
+  TEMP_REGION(temp,out);
+
+  auto IsVUnit = [](FUDeclaration* decl){
+    // TODO: We need to do this properly if we want to push more runtime stuff related to VUnits.
+    return ((int) decl->supportedAddressGenType) != 0;
+  };
+
+  AccelInfoIterator iter = StartIteration(&info);
+  Array<Array<InstanceInfo*>> unitInfoPerMerge = PushArray<Array<InstanceInfo*>>(out,iter.MergeSize());
+  for(int i = 0; i < iter.MergeSize(); i++){
+    AccelInfoIterator it = iter;
+    it.SetMergeIndex(i);
+
+    auto list = PushArenaList<InstanceInfo*>(temp);
+    for(; it.IsValid(); it = it.Step()){
+      InstanceInfo* info = it.CurrentUnit();
+      if(info->doesNotBelong){
+        continue;
+      }
+
+      if(!IsVUnit(info->decl)){
+        continue;
+      }
+        
+      if(info->addressGenUsed.size < 1){
+        continue;
+      }
+        
+      *list->PushElem() = info;
+    }
+
+    unitInfoPerMerge[i] = PushArrayFromList(temp,list);
+  }
+
+  return unitInfoPerMerge;
+}
+
 String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
   TEMP_REGION(temp,out);
   FUDeclaration* decl = inst->declaration;
@@ -2183,11 +2221,10 @@ void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,
   }
 }
 
-static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl){
+static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl,String softwarePath){
   TEMP_REGION(temp,nullptr);
   
-  String outputPath = globalOptions.softwareOutputFilepath;
-  String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UNPACK_SS(outputPath));
+  String verilatorMakePath = PushString(temp,"%.*s/VerilatorMake.mk",UN(softwarePath));
   FILE* output = OpenFileAndCreateDirectories(verilatorMakePath,"w",FilePurpose_MAKEFILE);
   DEFER_CLOSE_FILE(output);
 
@@ -2254,16 +2291,16 @@ static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl){
   }
 }
 
-void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,AccelInfo info,FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> structuredConfigs,const char* hardwarePath,VersatComputedValues val,Array<ExternalMemoryInterface> external,Array<WireInformation> wireInfo){
+void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,AccelInfo info,FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> structuredConfigs,String hardwarePath,VersatComputedValues val,Array<ExternalMemoryInterface> external,Array<WireInformation> wireInfo){
   TEMP_REGION(temp,nullptr);
   // Top accelerator
-  FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_instance.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
+  FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_instance.v",UN(hardwarePath)),"w",FilePurpose_VERILOG_CODE);
   DEFER_CLOSE_FILE(s);
 
   Pool<FUInstance> instances = accel->allocated;
   
   if(!s){
-    printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
+    printf("Error creating file, check if filepath is correct: %.*s\n",UN(hardwarePath));
     return;
   }
 
@@ -2640,7 +2677,7 @@ assign data_wstrb = csr_wstrb;
   ProcessTemplateSimple(s,META_TopInstanceTemplate_Content);
 }
   
-void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,bool isSimple,Accelerator* accel,const char* softwarePath,Array<Wire> allStaticsVerilatorSide,VersatComputedValues val){
+void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,bool isSimple,Accelerator* accel,String softwarePath,Array<Wire> allStaticsVerilatorSide,VersatComputedValues val){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
@@ -3056,7 +3093,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   TemplateSetString("allAddrGen",EndString(temp,b));
     
-  FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_accel.h",softwarePath),"w",FilePurpose_SOFTWARE);
+  FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_accel.h",UN(softwarePath)),"w",FilePurpose_SOFTWARE);
   DEFER_CLOSE_FILE(f);
 
   {
@@ -3373,7 +3410,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   ProcessTemplateSimple(f,META_HeaderTemplate_Content);
 }
 
-void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,AccelInfo info,FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> structuredConfigs){
+void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,AccelInfo info,FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> structuredConfigs,String softwarePath){
   TEMP_REGION(temp,nullptr);
   Pool<FUInstance> nodes = accel->allocated;
 
@@ -3883,11 +3920,10 @@ if(SimulateDatabus){
 
   TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
 
-  String wrapperPath = PushString(temp,"%.*s/wrapper.cpp",UNPACK_SS(globalOptions.softwareOutputFilepath));
+  String wrapperPath = PushString(temp,"%.*s/wrapper.cpp",UN(softwarePath));
   FILE* output = OpenFileAndCreateDirectories(wrapperPath,"w",FilePurpose_SOFTWARE);
   DEFER_CLOSE_FILE(output);
 
-  // MARK - 
   if(1){
     AccelInfoIterator iter = StartIteration(&info);
     Array<Array<MuxInfo>> muxInfo = CalculateMuxInformation(&iter,temp);
@@ -3927,42 +3963,8 @@ if(SimulateDatabus){
       c->EndBlock();
     }
 
-    struct VUnitInfo{
-      FUDeclaration* decl;
-      String fullName;
-    };
-
-    auto IsVUnit = [](FUDeclaration* decl){
-      // TODO: We need to do this properly if we want to push more runtime stuff related to VUnits.
-      return ((int) decl->supportedAddressGenType) != 0;
-    };
-
-    Array<Array<InstanceInfo*>> unitInfoPerMerge = PushArray<Array<InstanceInfo*>>(temp,iter.MergeSize());
-    for(int i = 0; i < iter.MergeSize(); i++){
-      AccelInfoIterator it = iter;
-      it.SetMergeIndex(i);
-
-      auto list = PushArenaList<InstanceInfo*>(temp);
-      for(; it.IsValid(); it = it.Step()){
-        InstanceInfo* info = it.CurrentUnit();
-        if(info->doesNotBelong){
-          continue;
-        }
-
-        if(!IsVUnit(info->decl)){
-          continue;
-        }
-        
-        if(info->addressGenUsed.size < 1){
-          continue;
-        }
-        
-        *list->PushElem() = info;
-      }
-
-      unitInfoPerMerge[i] = PushArrayFromList(temp,list);
-    }
-
+    Array<Array<InstanceInfo*>> unitInfoPerMerge = VUnitInfoPerMerge(info,temp);
+    
     bool containsMerge = (iter.MergeSize() > 1 && muxInfo.size > 0);
 
     c->FunctionBlock(S8("Array<VUnitInfo>"),S8("ExtractVArguments"));
@@ -4036,25 +4038,61 @@ if(SimulateDatabus){
       c->VarDeclare(S8("int"),S8("mergeIndex"),S8("0"));
     }
 
-    c->VarDeclare(S8("Array<VUnitInfo>"),S8("data"),S8("ExtractVArguments(config,mergeIndex)"));
+    for(int i = 0; i <  unitInfoPerMerge.size; i++){
+      Array<InstanceInfo*> merge = unitInfoPerMerge[i];
+      c->If(PushString(temp,"mergeIndex == %d",i));
+      c->VarDeclare(S8("Array<VUnitInfo>"),S8("data"),S8("ExtractVArguments(config,mergeIndex)"));
 
-    c->ForEachBlock(S8("VUnitInfo"),S8("info"),S8("data"));
-    c->VarDeclare(S8("AddressVArguments"),S8("args"),S8("{}"));
+      for(int k = 0; k <  merge.size; k++){
+        {
+          InstanceInfo* inst  =  merge[k];
+          String sim = PushString(temp,"SIMULATE_%.*s",UN(inst->fullName));
 
-    for(String str : META_AddressVParameters_Members){
-      String left = PushString(temp,"args.%.*s",UN(str));
-      String right = PushString(temp,"info.%.*s",UN(str));
-      c->Assignment(left,right);
+          c->If(sim);
+
+          c->VarDeclare(S8("VUnitInfo"),S8("info"),PushString(temp,"data.data[%d]",k));
+          c->VarDeclare(S8("AddressVArguments"),S8("args"),S8("{}"));
+
+          for(String str : META_AddressVParameters_Members){
+            String left = PushString(temp,"args.%.*s",UN(str));
+            String right = PushString(temp,"info.%.*s",UN(str));
+            c->Assignment(left,right);
+          }
+
+          c->Statement(S8("PRINT(\"Simulating addresses for unit '%s' in merge config: %d\\n\",info.unitName,info.mergeIndex)"));
+          c->Statement(S8("SimulateAndPrintAddressGen(args)"));
+
+          c->EndIf();
+        }
+        {
+          InstanceInfo* inst  =  merge[k];
+          String sim = PushString(temp,"EFFICIENCY_%.*s",UN(inst->fullName));
+
+          c->If(sim);
+
+          c->VarDeclare(S8("VUnitInfo"),S8("info"),PushString(temp,"data.data[%d]",k));
+          c->VarDeclare(S8("AddressVArguments"),S8("args"),S8("{}"));
+
+          for(String str : META_AddressVParameters_Members){
+            String left = PushString(temp,"args.%.*s",UN(str));
+            String right = PushString(temp,"info.%.*s",UN(str));
+            c->Assignment(left,right);
+          }
+
+          c->Statement(S8("SimulateVReadResult sim = SimulateVRead(args)"));
+          c->Statement(S8("float percent = ((float) sim.amountOfInternalValuesUsed) / ((float) sim.amountOfExternalValuesRead)"));
+          c->Statement(S8("PRINT(\"Efficiency: %2f (%d/%d)\\n\",percent,sim.amountOfInternalValuesUsed,sim.amountOfExternalValuesRead)"));
+          
+          c->EndIf();
+        }
+      }
+      
+      c->EndIf();
     }
-
-    c->Statement(S8("PRINT(\"Simulating addresses for unit '%s' in merge config: %d\\n\",info.unitName,info.mergeIndex)"));
-    c->Statement(S8("SimulateAndPrintAddressGen(args)"));
     
     c->EndBlock();
     
     c->EndBlock();
-    
-    DEBUG_BREAK();
     
     String content = PushASTRepr(c,temp);
     TemplateSetString("simulationStuff",content);
@@ -4063,7 +4101,35 @@ if(SimulateDatabus){
   ProcessTemplateSimple(output,META_WrapperTemplate_Content);
 }
 
-void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external){
+void OutputPCEmulControl(AccelInfo info,String softwarePath){
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+  
+  CEmitter* c = StartCCode(temp);
+
+  Array<Array<InstanceInfo*>> unitInfoPerMerge = VUnitInfoPerMerge(info,temp);
+  
+  c->VarDeclare(S8("bool"),S8("debugging"),S8("false"));
+
+  for(int i = 0; i <  unitInfoPerMerge.size; i++){
+    Array<InstanceInfo*> merge  =  unitInfoPerMerge[i];
+    c->Comment(PushString(temp,"Merge %d",i)); 
+    for(InstanceInfo* unit: merge){
+      String sim = PushString(temp,"SIMULATE_%.*s",UN(unit->fullName));
+      c->VarDeclare(S8("bool"),sim,S8("false"));
+      String eff = PushString(temp,"EFFICIENCY_%.*s",UN(unit->fullName));
+      c->VarDeclare(S8("bool"),eff,S8("false"));
+    }
+  }
+  
+  FILE* file = OpenFileAndCreateDirectories(PushString(temp,"%.*s/pcEmulDefs.h",UN(softwarePath)),"w",FilePurpose_SOFTWARE);
+  DEFER_CLOSE_FILE(file);
+  
+  String content = PushASTRepr(c,temp,true);
+  fprintf(file,"%.*s",UN(content));
+}
+
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
@@ -4084,13 +4150,13 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   // Verilog includes for parameters and such
   {
     // No need for templating, small file
-    FILE* c = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_defs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
-    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_undefs.vh",hardwarePath),"w",FilePurpose_VERILOG_INCLUDE);
+    FILE* c = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_defs.vh",UN(hardwarePath)),"w",FilePurpose_VERILOG_INCLUDE);
+    FILE* f = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_undefs.vh",UN(hardwarePath)),"w",FilePurpose_VERILOG_INCLUDE);
     DEFER_CLOSE_FILE(c);
     DEFER_CLOSE_FILE(f);
   
     if(!c || !f){
-      printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
+      printf("Error creating file, check if filepath is correct: %.*s\n",UN(hardwarePath));
       return;
     }
 
@@ -4134,10 +4200,10 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
       fprintf(f,"`undef  VERSAT_EXPORT_EXTERNAL_MEMORY\n");
     }
   }
-
-  // All memory external instantiation and 
+  
+  // All memory external instantiation and port mapping
   {
-    String path = PushString(temp,"%s/versat_external_memory_inst.vh",hardwarePath);
+    String path = PushString(temp,"%.*s/versat_external_memory_inst.vh",UN(hardwarePath));
     FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
     if(!f){
       // TODO
@@ -4148,7 +4214,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
 
   {
-    String path = PushString(temp,"%s/versat_internal_memory_wires.vh",hardwarePath);
+    String path = PushString(temp,"%.*s/versat_internal_memory_wires.vh",UN(hardwarePath));
     FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
     if(!f){
       // TODO
@@ -4159,7 +4225,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
 
   {
-    String path = PushString(temp,"%s/versat_external_memory_port.vh",hardwarePath);
+    String path = PushString(temp,"%.*s/versat_external_memory_port.vh",UN(hardwarePath));
     FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
     if(!f){
       // TODO
@@ -4170,7 +4236,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   }
 
   {
-    String path = PushString(temp,"%s/versat_external_memory_internal_portmap.vh",hardwarePath);
+    String path = PushString(temp,"%.*s/versat_external_memory_internal_portmap.vh",UN(hardwarePath));
     FILE* f = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_INCLUDE);
     if(!f){
       // TODO
@@ -4183,11 +4249,11 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   // Top configurations
   // NOTE: Versat instance does not instantiate configurations if not config bits and therefore we do not emit it (simplifies logic has otherwise we would have to worry about emitting something passable. This way we can just skip stuff).
   if(val.configurationBits){
-    FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%s/versat_configurations.v",hardwarePath),"w",FilePurpose_VERILOG_CODE);
+    FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_configurations.v",UN(hardwarePath)),"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(s);
 
     if(!s){
-      printf("Error creating file, check if filepath is correct: %s\n",hardwarePath);
+      printf("Error creating file, check if filepath is correct: %.*s\n",UN(hardwarePath));
       return;
     }
 
@@ -4200,9 +4266,10 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const ch
   OutputTopLevel(accel,allStaticsVerilatorSide,info,topLevelDecl,structuredConfigs,hardwarePath,val,external,wireInfo);
   OutputHeader(structuredConfigs,info,isSimple,accel,softwarePath,allStaticsVerilatorSide,val);
   
-  OutputVerilatorWrapper(accel,allStaticsVerilatorSide,info,topLevelDecl,structuredConfigs);
-  OutputMakefile(accel->name,topLevelDecl);
-  
+  OutputVerilatorWrapper(accel,allStaticsVerilatorSide,info,topLevelDecl,structuredConfigs,softwarePath);
+  OutputMakefile(accel->name,topLevelDecl,softwarePath);
+  OutputPCEmulControl(info,softwarePath);
+
   {
     // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
     String versatPath = PushString(temp,"%.*s/iob_versat.v",UNPACK_SS(globalOptions.hardwareOutputFilepath));
