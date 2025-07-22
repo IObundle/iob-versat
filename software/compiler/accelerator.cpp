@@ -546,7 +546,7 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
 
 // Checks wether the external memory conforms to the expected interface or not (has valid values)
 bool VerifyExternalMemory(ExternalMemoryInterface* inter){
-  bool res;
+  bool res = false;
 
   switch(inter->type){
   case ExternalMemoryType::TWO_P:{

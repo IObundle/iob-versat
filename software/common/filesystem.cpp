@@ -39,7 +39,7 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
   strncpy(pathBuffer,filepath.data,size);
   pathBuffer[size] = '\0';
 
-  FileOpenMode fileMode;
+  FileOpenMode fileMode = FileOpenMode_NULL;
   if(mode[0] == '\0'){
     Assert("[OpenFile] Mode is empty: %s");
   } else if(mode[0] == 'w' && mode[1]  == '\0'){
@@ -48,14 +48,16 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
     fileMode = FileOpenMode_READ;
   } else if((mode[0] == 'w' && mode[1]  == 'r' && mode[2]  == '\0')||
             (mode[0] == 'r' && mode[1]  == 'w' && mode[2]  == '\0')){
-    Assert(false);
+    Assert(false); // NOTE: No code uses this and for now we are stopping it. 
     //fileMode = FileOpenMode_READ_WRITE;
   }
- 
+
+  Assert(fileMode);
+  
   FILE* file = fopen(pathBuffer,mode);
 
   FileInfo* info = storeFileInfo->PushElem();
-  info->filepath = PushString(&storeFileInfoArena,"%s",pathBuffer); // Use pathBuffer instead of filepath to make sure that we got the actual path using for the call
+  info->filepath = PushString(&storeFileInfoArena,"%s",pathBuffer); // Use pathBuffer instead of filepath to make sure that we got the actual path used for the call
   info->mode = fileMode;
   info->purpose = purpose;
   info->wasOpenSucessful = (file != nullptr);
