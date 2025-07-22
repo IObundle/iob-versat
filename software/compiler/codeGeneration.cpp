@@ -4046,7 +4046,7 @@ if(SimulateDatabus){
       for(int k = 0; k <  merge.size; k++){
         {
           InstanceInfo* inst = merge[k];
-          String sim = PushString(temp,"SIMULATE_MERGE_%d_%.*s",k,UN(inst->name));
+          String sim = PushString(temp,"SIMULATE_MERGE_%d_%.*s",i,UN(inst->baseName));
 
           c->If(sim);
 
@@ -4066,7 +4066,7 @@ if(SimulateDatabus){
         }
         {
           InstanceInfo* inst  =  merge[k];
-          String sim = PushString(temp,"EFFICIENCY_MERGE_%d_%.*s",k,UN(inst->name));
+          String sim = PushString(temp,"EFFICIENCY_MERGE_%d_%.*s",i,UN(inst->baseName));
 
           c->If(sim);
 
@@ -4116,9 +4116,9 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
     c->Comment(PushString(temp,"Merge %d",i)); 
     for(int k = 0; k <  merge.size; k++){
       InstanceInfo* unit =  merge[k];
-      String sim = PushString(temp,"SIMULATE_MERGE_%d_%.*s",k,UN(unit->name));
+      String sim = PushString(temp,"SIMULATE_MERGE_%d_%.*s",i,UN(unit->baseName));
       c->VarDeclare(S8("bool"),sim,S8("false"));
-      String eff = PushString(temp,"EFFICIENCY_MERGE_%d_%.*s",k,UN(unit->name));
+      String eff = PushString(temp,"EFFICIENCY_MERGE_%d_%.*s",i,UN(unit->baseName));
       c->VarDeclare(S8("bool"),eff,S8("false"));
     }
   }
