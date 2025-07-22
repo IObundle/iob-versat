@@ -2799,15 +2799,6 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
     }
 
     m->EndBlock();
-
-    if(true){
-      m->FunctionBlock(S8("static void"),S8("PrintArguments"));
-      m->Argument(S8("AddressVArguments"),S8("args"));
-
-      for(String str : META_AddressVParameters_Members){
-        m->Statement(PushString(temp,"printf(\"%.*s: %%ld\\n\",args.%.*s)",UN(str),UN(str)));
-      }
-    }
       
     CAST* ast = EndCCode(m);
     auto b = StartString(temp);
