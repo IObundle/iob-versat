@@ -5,8 +5,6 @@
 #include "utils.hpp"
 #include "accelerator.hpp"
 
-static const int DELAY_SIZE = 7;
-
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
@@ -50,7 +48,7 @@ struct MuxInfo{
   int configIndex;
   int val;
   String name;
-  InstanceInfo* info;
+  String fullName;
 };
 
 struct SameMuxEntities{
@@ -156,6 +154,10 @@ struct VerilogInterfaceSpec{
   bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
 };
 
+// TODO: Maybe move this to a better place. Probably merge.hpp
+struct AccelInfoIterator;
+Array<Array<MuxInfo>> CalculateMuxInformation(AccelInfoIterator* iter,Arena* out);
+
 String GlobalStaticWireName(StaticId id,Wire w,Arena* out);
 
 void OutputCircuitSource(FUDeclaration* decl,FILE* file);
@@ -163,4 +165,4 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file);
 
 // Versat_instance, all external memory files, makefile for pc-emul, basically everything that is only generated once.
 // For the top instance and support files.
-void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,const char* hardwarePath,const char* softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);

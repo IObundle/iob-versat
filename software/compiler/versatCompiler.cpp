@@ -734,8 +734,8 @@ int main(int argc,char* argv[]){
   external.size = externalIndex;
   
   OutputTopLevelFiles(accel,type,
-                     globalOptions.hardwareOutputFilepath.data,
-                     globalOptions.softwareOutputFilepath.data,
+                     globalOptions.hardwareOutputFilepath,
+                     globalOptions.softwareOutputFilepath,
                       isSimple,info,val,external);
 
   // NOTE: This data is printed so it can be captured by the IOB python setup.

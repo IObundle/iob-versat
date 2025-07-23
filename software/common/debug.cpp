@@ -94,6 +94,7 @@ void SetDebugSignalHandler(SignalHandler func){
 }
 
 // TODO: There is zero error checking in these functions. User might not have the addr2line program
+// NOTE: If any error occurs, we just want to prevent stacktraces from being displayed. We do not want to close the program just because it is failing to launch addr2line
 static Addr2LineConnection StartAddr2Line(){
   // Perspective of the parent
   int pipeWrite[2]; // Parent -> child. 0 is read (child), 1 is write (parent)
@@ -117,6 +118,7 @@ static Addr2LineConnection StartAddr2Line(){
 
   if(size < 0){
     fprintf(stderr,"Error using readlink\n");
+    exit(0);
   } else {
     exePathBuffer[size] = '\0';
   }

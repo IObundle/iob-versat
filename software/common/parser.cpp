@@ -827,10 +827,6 @@ bool Tokenizer::AdvanceDelimiterExpression(BracketList<const char*> open,Bracket
   return true;
 }
 
-String PushString(Arena* out,Token token){
-  return PushString(out,token);
-}
-
 bool IsOnlyWhitespace(String tok){
   for(int i = 0; i < tok.size; i++){
     char ch = tok[i];

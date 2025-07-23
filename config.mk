@@ -1,4 +1,4 @@
-VERSAT_COMMON_FLAGS := -Wall -Wswitch-enum -Wunused-variable #-fsanitize=address -static-libasan
+VERSAT_COMMON_FLAGS := -Wall -Wunused-variable -Wno-char-subscripts -Wno-switch-enum -Wno-switch -Wno-unused-function #-fsanitize=address -static-libasan
 
 #VERSAT_COMMON_FLAGS += -ggdb3 # Outputs more debug info but only when debuggin with gdb
 

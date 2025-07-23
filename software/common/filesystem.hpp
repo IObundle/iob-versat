@@ -22,6 +22,7 @@ enum FilePurpose{
 const char* FilePurpose_Name(FilePurpose p);
 
 enum FileOpenMode{
+  FileOpenMode_NULL = 0,
   FileOpenMode_READ,
   FileOpenMode_WRITE,
   FileOpenMode_READ_WRITE // Add more as necessary

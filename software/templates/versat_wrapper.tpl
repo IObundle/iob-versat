@@ -18,6 +18,7 @@
 // Needed to obtain the wire size of the unit from the verilated code.
 // Since the verilated code is an "instantiation" of the unit, we do not have to bother with the possibility of wire not being concrete (because they depend on parameters). We can just use the values directly.
 #include "VUnitWireInfo.h"
+#include "pcEmulDefs.h"
 
 @{defines}
 
@@ -83,6 +84,26 @@ extern bool SimulateDatabus;
    unit->clk = 1; \
    unit->eval();
 #endif
+
+template<typename T>
+class ArrayIterator{
+public:
+   T* ptr;
+
+   inline bool operator!=(const ArrayIterator<T>& iter){return ptr != iter.ptr;};
+   inline ArrayIterator<T>& operator++(){++ptr; return *this;};
+   inline T& operator*(){return *ptr;};
+};
+
+template<typename T>
+struct Array{
+  T* data;
+  int size;
+
+  inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
+  ArrayIterator<T> begin() const{return ArrayIterator<T>{data};};
+  ArrayIterator<T> end() const{return ArrayIterator<T>{data + size};};
+};
 
 static char* Bin(unsigned int value){
    static char buffer[33];
@@ -294,8 +315,14 @@ extern "C" int VersatAcceleratorCyclesElapsed(){
   return cyclesDone;
 }
 
+void SimulateVUnits();
+
 extern "C" void VersatAcceleratorSimulate(){
   InternalStartAccelerator();
+
+  if(debugging){
+    SimulateVUnits();
+  }
 
   for(int i = 0; !IsDone() ; i++){
     InternalUpdateAccelerator();
@@ -394,12 +421,11 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   iptr lengthAsTransfers = length / 4; // size of AXI_DATA_W;
   int current = index;
 
-  PRINT("A: %p %ld %ld %ld %d\n",start_address,amount_minus_one,length,addr_shift,index);
+  //PRINT("A: %p %ld %ld %ld %d\n",start_address,amount_minus_one,length,addr_shift,index);
 
   for(int i = 0; i < amount_minus_one + 1; i++){
      if(current < lengthAsTransfers){
        iptr actualAddress = (address + 4 * current);
-       //PRINT("Return %p\n",actualAddress);
        return actualAddress;
      } else {
        address += addr_shift;
@@ -770,6 +796,33 @@ end:
    tfp->close();
 }
 
-
 #undef UPDATE
 
+struct VUnitInfo{
+  const char* unitName;
+  int mergeIndex;
+  iptr ext_addr;
+  iptr pingPong;
+  iptr amount_minus_one;
+  iptr length;
+  iptr addr_shift;
+  iptr enabled;
+  iptr iter;
+  iptr per;
+  iptr duty;
+  iptr start;
+  iptr shift;
+  iptr incr;
+  iptr iter2;
+  iptr per2;
+  iptr shift2;
+  iptr incr2;
+  iptr iter3;
+  iptr per3;
+  iptr shift3;
+  iptr incr3;
+  iptr extra_delay;
+  iptr ignore_first;
+};
+
+@{simulationStuff}
