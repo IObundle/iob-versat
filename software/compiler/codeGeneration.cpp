@@ -3896,7 +3896,6 @@ if(SimulateDatabus){
 
           c->Statement(S8("index += 1"));
         }
-        DEBUG_BREAK();
       }
       c->EndIf();
     } else {
