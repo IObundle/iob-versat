@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "utilsCore.hpp"
@@ -153,6 +154,28 @@ struct VerilogInterfaceSpec{
   bool isInput;
   bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
 };
+
+struct AddressAccess;
+
+struct AccessAndType{
+  AddressAccess* access;
+  AddressGenType type;
+};
+
+template<> struct std::hash<AccessAndType>{
+   std::size_t operator()(AccessAndType const& s) const noexcept{
+     std::size_t res = std::hash<void*>()(s.access) * (int) s.type;
+     return res;
+   }
+};
+
+static bool operator==(const AccessAndType& l,const AccessAndType& r){
+  if(l.access == r.access && l.type == r.type){
+    return true;
+  }
+  
+  return false;
+}
 
 // TODO: Maybe move this to a better place. Probably merge.hpp
 struct AccelInfoIterator;

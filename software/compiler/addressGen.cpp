@@ -1,5 +1,6 @@
 #include "addressGen.hpp"
 
+#include "embeddedData.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "symbolic.hpp"
@@ -375,8 +376,10 @@ static Array<InternalMemoryAccess> CompileInternalAccess(LoopLinearSum* access,A
   return res;
 }
 
-AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out){
+AddressVParameters InstantiateAccess(AddressAccess* access,AddressGenType type,int highestExternalLoop,bool doubleLoop,Arena* out){
   TEMP_REGION(temp,out);
+  Assert(type == AddressGenType_READ);
+  
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
   Array<InternalMemoryAccess> internal = CompileInternalAccess(access->internal,temp);
   
@@ -456,6 +459,152 @@ AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLo
   }
   
   return res;
+}
+
+Array<Pair<String,String>> InstantiateAccess2(AddressAccess* access,AddressGenType type,int highestExternalLoop,bool doubleLoop,Arena* out){
+  TEMP_REGION(temp,out);
+
+  ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
+  Array<InternalMemoryAccess> internal = CompileInternalAccess(access->internal,temp);
+  
+  SymbolicExpression* freeTerm = access->external->freeTerm;
+    
+  if(IsZero(freeTerm)){
+    freeTerm = access->internal->freeTerm;
+  } else {
+    Assert(IsZero(access->internal->freeTerm)); // NOTE: I do not think it is possible for both external and internal to have free terms.
+  }
+  
+  // NOTE: We push the start term to the ext pointer in order to save memory inside the unit. This is being done in a  kinda hacky way, but nothing major.
+  String ext_addr = STRING("ext"); // TODO: Should be a parameter or something, not randomly hardcoded here
+  if(!IsZero(freeTerm)){
+    String repr = PushRepresentation(freeTerm,temp);
+
+    ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UNPACK_SS(repr));
+  }
+
+  // TODO: No need for a list, we already know all the memory that we are gonna need
+  ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
+
+  FULL_SWITCH(type){
+  case AddressGenType_READ:{
+    *list->PushElem() = {S8("start"),S8("0")};
+    *list->PushElem() = {S8("ext_addr"),ext_addr};
+    *list->PushElem() = {S8("length"),PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length))};
+
+    // NOTE: The reason we need to align is because the increase in AXI_DATA_W forces data to be aligned inside the VUnits memories. The single loop does not care because we only need to access values individually, but the double loop cannot function because it assumes that the data is read and stored in a linear matter while in reality the data is stored in multiples of (AXI_DATA_W/DATA_W). 
+
+    *list->PushElem() = {S8("amount_minus_one"),PushString(out,external.amountMinusOne)};
+    *list->PushElem() = {S8("addr_shift"),PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift))};
+
+    *list->PushElem() = {S8("enabled"),S8("1")};
+    *list->PushElem() = {S8("pingPong"),S8("1")};
+
+    {
+      InternalMemoryAccess l = internal[0]; 
+
+      *list->PushElem() = {S8("per"),PushString(out,l.periodExpression)};
+      *list->PushElem() = {S8("incr"),PushString(out,l.incrementExpression)};
+      *list->PushElem() = {S8("iter"),PushString(out,l.iterationExpression)};
+      *list->PushElem() = {S8("shift"),PushString(out,l.shiftExpression)};
+      *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
+    }
+    
+    if(internal.size > 1){
+      InternalMemoryAccess l = internal[1]; 
+      *list->PushElem() = {S8("per2"),PushString(out,l.periodExpression)};
+      *list->PushElem() = {S8("incr2"),PushString(out,l.incrementExpression)};
+      *list->PushElem() = {S8("iter2"),PushString(out,l.iterationExpression)};
+      *list->PushElem() = {S8("shift2"),PushString(out,l.shiftExpression)};
+    } else {
+      *list->PushElem() = {S8("per2"),S8("0")};
+      *list->PushElem() = {S8("incr2"),S8("0")};
+      *list->PushElem() = {S8("iter2"),S8("0")};
+      *list->PushElem() = {S8("shift2"),S8("0")};
+    }
+
+    // TODO: This is stupid. We can just put some loop logic in here. Do this when tests are stable and quick changes are easy to do.
+    if(internal.size > 2){
+      InternalMemoryAccess l = internal[2]; 
+      *list->PushElem() = {S8("per3"),PushString(out,l.periodExpression)};
+      *list->PushElem() = {S8("incr3"),PushString(out,l.incrementExpression)};
+      *list->PushElem() = {S8("iter3"),PushString(out,l.iterationExpression)};
+      *list->PushElem() = {S8("shift3"),PushString(out,l.shiftExpression)};
+    } else {
+      *list->PushElem() = {S8("per3"),S8("0")};
+      *list->PushElem() = {S8("incr3"),S8("0")};
+      *list->PushElem() = {S8("iter3"),S8("0")};
+      *list->PushElem() = {S8("shift3"),S8("0")};
+    }
+
+    if(internal.size > 3){
+      // TODO: Proper error reporting requires us to lift the data up.
+      printf("[ERROR] Address gen contains more loops than the unit is capable of handling\n");
+      exit(-1);
+    }
+  
+    return PushArrayFromList(out,list);
+  } break;
+  case AddressGenType_GEN:{
+    String start = PushRepresentation(freeTerm,temp);
+
+    *list->PushElem() = {S8("start"),start};
+
+    // NOTE: The reason we need to align is because the increase in AXI_DATA_W forces data to be aligned inside the VUnits memories. The single loop does not care because we only need to access values individually, but the double loop cannot function because it assumes that the data is read and stored in a linear matter while in reality the data is stored in multiples of (AXI_DATA_W/DATA_W). 
+
+
+    // TODO: We probably want to normalize the names with the ones used by VUnits and stuff. No point having 'per' vs 'period'
+    {
+      InternalMemoryAccess l = internal[0]; 
+
+      *list->PushElem() = {S8("period"),PushString(out,l.periodExpression)};
+      *list->PushElem() = {S8("incr"),PushString(out,l.incrementExpression)};
+      *list->PushElem() = {S8("iterations"),PushString(out,l.iterationExpression)};
+      *list->PushElem() = {S8("shift"),PushString(out,l.shiftExpression)};
+      *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
+    }
+    
+    if(internal.size > 1){
+      InternalMemoryAccess l = internal[1]; 
+      *list->PushElem() = {S8("period2"),PushString(out,l.periodExpression)};
+      *list->PushElem() = {S8("incr2"),PushString(out,l.incrementExpression)};
+      *list->PushElem() = {S8("iterations2"),PushString(out,l.iterationExpression)};
+      *list->PushElem() = {S8("shift2"),PushString(out,l.shiftExpression)};
+    } else {
+      *list->PushElem() = {S8("period2"),S8("0")};
+      *list->PushElem() = {S8("incr2"),S8("0")};
+      *list->PushElem() = {S8("iterations2"),S8("0")};
+      *list->PushElem() = {S8("shift2"),S8("0")};
+    }
+
+    // TODO: This is stupid. We can just put some loop logic in here. Do this when tests are stable and quick changes are easy to do.
+    if(internal.size > 2){
+      InternalMemoryAccess l = internal[2]; 
+      *list->PushElem() = {S8("period3"),PushString(out,l.periodExpression)};
+      *list->PushElem() = {S8("incr3"),PushString(out,l.incrementExpression)};
+      *list->PushElem() = {S8("iterations3"),PushString(out,l.iterationExpression)};
+      *list->PushElem() = {S8("shift3"),PushString(out,l.shiftExpression)};
+    } else {
+      *list->PushElem() = {S8("period3"),S8("0")};
+      *list->PushElem() = {S8("incr3"),S8("0")};
+      *list->PushElem() = {S8("iterations3"),S8("0")};
+      *list->PushElem() = {S8("shift3"),S8("0")};
+    }
+
+    if(internal.size > 3){
+      // TODO: Proper error reporting requires us to lift the data up.
+      printf("[ERROR] Address gen contains more loops than the unit is capable of handling\n");
+      exit(-1);
+    }
+  
+    return PushArrayFromList(out,list);
+  } break;
+  case AddressGenType_MEM:{
+    WARN_CODE();
+  } break;
+  }
+
+  return {};
 }
 
 AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
@@ -576,7 +725,6 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
       
   AddressAccess* result = globalAddressGen.Alloc();
   result->name = PushString(out,def->name);
-  result->type = def->type;
   result->inputVariableNames = CopyArray<String>(def->inputs,out);
   result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);

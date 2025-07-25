@@ -17,7 +17,6 @@ struct AddressGenDef;
 // NOTE: Majority of the approach taken in relation to memory allocations and how much we mutate data is not final, we do not care about things like that currently. More important is to start making the code correct and producing the correct data and later we can rewrite the code to be better in this aspect if needed.
 
 struct AddressAccess{
-  AddressGenType type;
   String name;
   LoopLinearSum* internal;
   LoopLinearSum* external;
@@ -56,4 +55,6 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 
-AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out);
+AddressVParameters InstantiateAccess(AddressAccess* access,AddressGenType type,int highestExternalLoop,bool doubleLoop,Arena* out);
+
+Array<Pair<String,String>> InstantiateAccess2(AddressAccess* access,AddressGenType type,int highestExternalLoop,bool doubleLoop,Arena* out);

@@ -1818,15 +1818,6 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
 
   EXPECT(tok,"addressGen");
-
-  Token typeStr = tok->NextToken();
-
-  Opt<AddressGenType> addressGenOpt = META_addressGenType_ReverseMap(typeStr);
-  if(!addressGenOpt.has_value()){
-    printf("Error, %.*s is not a valid Address gen configuration\n",UNPACK_SS(typeStr));
-    return {};
-  }
-  AddressGenType type = addressGenOpt.value();
   
   Token name = tok->NextToken();
   CHECK_IDENTIFIER(name);
@@ -1891,7 +1882,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   
   AddressGenDef def = {};
   def.name = name;
-  def.type = type;
+  //def.type = type;
   def.inputs = inputsArr;
   def.loops = PushArrayFromList(out,loops);
   def.symbolic = symbolic;

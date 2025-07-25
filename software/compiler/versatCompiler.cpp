@@ -862,6 +862,12 @@ Need to take a look at State and Mem struct interfaces. State is not taking into
 
 /*
 
+Versat Spec:
+
+- The using stuff is kinda weird syntax. What we probably want is to think about types as parameterizable.
+-- Insteand of "using(Addr) VRead ...", we probably want "VRead(Addr) ...", where Addr is a parameter for the VRead type.
+-- We then end up with two types of parameters, Versat parameters and Verilog parameters, which we probably want to collapse into a single type from the perspective of the user and let Versat handle how to route the parameter itself.
+
 Usability:
 x
 - Need to check parameters and sizes and report stuff at Versat compile time.

@@ -204,6 +204,12 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     }
 
     if(isType){
+      if(((int) decl.supportedAddressGenType) != 0){
+        // TODO: We probably want something better for this case. We could have the user define the unit type inside the verilog using attributes and we then could use this info to do proper checks and error reporting, instead of just collection every wire and checking if it follows the convention we used.
+        printf("Error, we do not support units that contain various different address gen wire types\n");
+        exit(-1);
+      }
+      
       decl.supportedAddressGenType = (AddressGenType) (decl.supportedAddressGenType | gen.type);
     }
   }
