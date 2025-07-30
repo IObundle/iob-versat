@@ -43,6 +43,11 @@ struct InternalMemoryAccess{
   String shiftWithoutRemovingIncrement; // Shift as if period did not change addr. Useful for current implementation of VRead/VWrites
 };
 
+struct CompiledAccess{
+  Array<InternalMemoryAccess> internalAccess;
+  String dutyDivExpression;
+};
+
 void Repr(StringBuilder* builder,AddressAccess* access);
 void Print(AddressAccess* access);
 

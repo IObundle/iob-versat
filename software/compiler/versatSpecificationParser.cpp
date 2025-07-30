@@ -9,11 +9,6 @@
 //       A simple form of synchronization after detecting an error would vastly improve error reporting
 //       Change iterative and merge to follow module def.
 //       Need to detect multiple inputs to the same port and report error.
-//       Transform is not correctly implemented.
-//         We are thinking in ports when we should think in connection sources and sinks.
-//         It's probably better to implement a specific syntax for transforms in order to prevent confusion.
-//         It's probably better to swap the Iterator approach with a function that generates an array.
-//           Then we can implement transformations as functions that take arrays and output arrays.
 //       Error reporting is very generic. Implement more specific forms.
 //       This parser is still not production ready. At the very least all the Asserts should be removed and replaced
 //         by actual error reporting. Not a single Assert is programmer error detector, all the current ones are
@@ -332,86 +327,6 @@ SpecExpression* ParseSpecExpression(Tokenizer* tok,Arena* out){
   SpecExpression* expr = ParseOperationType<SpecExpression>(tok,{{"+","-"},{"&","|","^"},{">><",">>","><<","<<"}},ParseTerm,out);
 
   return expr;
-}
-
-// TODO: This is bad. Remove this
-int NumberOfConnections(ConnectionExtra e){
-  int connections = e.port.end - e.port.start + 1;
-
-  return connections;
-}
-  
-int NumberOfConnections(Array<PortExpression> arr){
-  int connections = 0;
-  for(PortExpression& e : arr){
-    connections += NumberOfConnections(e.extra);
-  }
-  return connections;
-}
-
-// TODO: After cleaning up iterative and merge, remove these
-void ConnectUnit(PortExpression out,PortExpression in){
-  FUInstance* inst1 = out.inst;
-  FUInstance* inst2 = in.inst;
-  ConnectionExtra outE = out.extra;
-  ConnectionExtra inE = in.extra;
-
-  int outRange = outE.port.end - outE.port.start + 1;
-  int delayRange = outE.delay.end - outE.delay.start + 1;
-  int inRange = inE.port.end - inE.port.start + 1;
-
-  bool matches = (delayRange == inRange || delayRange == 1) &&
-                 (outRange == inRange   || outRange == 1);
-
-  Assert(matches);
-
-  int delayDelta = (delayRange == 1 ? 0 : 1);
-  if(outRange == 1){
-    for(int i = 0; i < inRange; i++){
-      ConnectUnits(inst1,outE.port.start,inst2,inE.port.start + i,outE.delay.start + delayDelta * i);
-    }
-  } else {
-    for(int i = 0; i < inRange; i++){
-      ConnectUnits(inst1,outE.port.start + i,inst2,inE.port.start + i,outE.delay.start + delayDelta * i);
-    }
-  }
-}
-
-// TODO: After cleaning up iterative and merge, remove these
-void ConnectUnit(Array<PortExpression> outs, PortExpression in){
-  if(outs.size == 1){
-    // TODO: The 1-to-1 connection implements more connection logic than this function currently implements
-    //       Still not have a good ideia how to handle more complex cases, implement them as they appear.
-    //       Specially how to match everything together: groups + port ranges + delays.
-    ConnectUnit(outs[0],in);
-    return;
-  }
-
-  ConnectionExtra inE = in.extra;
-
-  int outRange = NumberOfConnections(outs);
-  int inRange = NumberOfConnections(in.extra);
-
-  Assert(outRange == inRange);
-
-  FUInstance* instIn = in.inst;
-  int portIndex = 0;
-  int unitIndex = 0;
-  for(int i = 0; i < inRange; i++){
-    PortExpression& expr = outs[unitIndex];
-
-    FUInstance* inst = expr.inst;
-    int portStart = expr.extra.port.start + portIndex;
-    
-    ConnectUnits(inst,portStart,instIn,inE.port.start + i); // TODO: For now we are assuming no delay
-
-    portIndex += 1;
-
-    if(portIndex >= NumberOfConnections(expr.extra)){
-      unitIndex += 1;
-      portIndex = 0;
-    }
-  }
 }
 
 String GetUniqueName(String name,Arena* out,InstanceName* names){
@@ -1527,7 +1442,8 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
       if(nOutConnections != nInConnections){
         const char* text = StaticFormat("Number of connections missmatch %d to %d\n",nOutConnections,nInConnections);
         ReportError(content,decl.output.fullText,text);
-        Assert(false);
+        error = true;
+        break;
       }
 
       GroupIterator out = IterateGroup(decl.output);
@@ -1588,7 +1504,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         int inPort  = inVar.extra.port.low;
         ConnectUnits(outInstance,outPort,inInstance,inPort,outVar.extra.delay.low);
       }
-      
+
       Assert(HasNext(out) == HasNext(in));
     }
   }
@@ -1601,12 +1517,6 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   // Care to never put 'out' inside the table
   FUInstance** outInTable = table->Get(STRING("out"));
   Assert(!outInTable);
-
-  // TODO: We have the parsing working correctly. I think the best way of approaching this is to first rewrite the config code to use the array everywhere (remove the configPos variable and replace it with an array for each configuration inside a unit).
-  //       When we have everything working and the normal tests also passing after the change, only then can we try to add the partial share test and start working towards that.
-  //       Two things that I probably will have to do: augment the debugger to display arrays using a newline (occupy more vertical space still inside the same column row).
-  //       Change most of the code that used configPos and configSize to use values directly.
-  //       After the change, each config should have it's own config position. The config code cannot assume that everything works continuous (although normal units will probably not change). 
   
   FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
@@ -1882,7 +1792,6 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   
   AddressGenDef def = {};
   def.name = name;
-  //def.type = type;
   def.inputs = inputsArr;
   def.loops = PushArrayFromList(out,loops);
   def.symbolic = symbolic;

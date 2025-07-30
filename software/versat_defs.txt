@@ -57,6 +57,7 @@ struct AddressVParameters{
    String ext_addr;
    String length;
    String amount_minus_one;
+   String extra_delay;
    String addr_shift;
    String enabled;
    String pingPong;

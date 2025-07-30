@@ -264,24 +264,21 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
     result.amountMinusOne = STRING("0");
     result.addrShift = STRING("0");
   } else {
-    // TODO: A bit repetitive, could use some cleanup
-    SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
-    
-    result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
-
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
-
     result.addrShift = PushRepresentation(derived,out);
     
+    SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
     SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
 
     result.totalTransferSize = PushRepresentation(all,out);
+    result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
+
   }
   
   return result;
 }
 
-static Array<InternalMemoryAccess> CompileAccess(LoopLinearSum* access,Arena* out){
+static CompiledAccess CompileAccess(LoopLinearSum* access,Arena* out){
   TEMP_REGION(temp,out);
   
   auto GetLoopSize = [](LoopLinearSumTerm def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
@@ -303,7 +300,7 @@ static Array<InternalMemoryAccess> CompileAccess(LoopLinearSum* access,Arena* ou
   };
   
   auto GenerateLoopExpressionPairSymbolic = [GetLoopSizeRepr](Array<LoopLinearSumTerm> loops,
-                                                              SymbolicExpression* expr,bool ext,Arena* out) -> Array<InternalMemoryAccess>{
+                                                              SymbolicExpression* expr,Arena* out) -> CompiledAccess{
     TEMP_REGION(temp,out);
 
     // TODO: Because we are adding an extra loop, there is a possibility of failure since the unit might not support enough loops to implement this. For the SingleLoop VS DoubleLoop the problem does not occur because we know that Singleloop is possible and DoubleLoop is easier on the address gen of the internal loop which is the limitting factor.
@@ -326,6 +323,8 @@ static Array<InternalMemoryAccess> CompileAccess(LoopLinearSum* access,Arena* ou
       newLoops[0].loopStart = PushLiteral(temp,0);
       newLoops[0].loopEnd = duty;
 
+      newLoops[1].loopEnd = SymbolicDiv(newLoops[1].loopEnd,duty,temp);
+      
       loops = newLoops;
     }
     
@@ -376,29 +375,32 @@ static Array<InternalMemoryAccess> CompileAccess(LoopLinearSum* access,Arena* ou
         
         res.shiftExpression = PushRepresentation(replaced,out);
       } else {
-        if(ext){
-          res.iterationExpression = STRING("1");
-        } else {
-          res.iterationExpression = STRING("0");
-        }
+        res.iterationExpression = STRING("0");
         res.shiftExpression = STRING("0");
       }
     }
 
-    return result;
+    CompiledAccess com = {};
+    com.internalAccess = result;
+
+    if(duty){
+      com.dutyDivExpression = PushRepresentation(duty,out);
+    }
+    
+    return com;
   };
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
   fullExpression = Normalize(fullExpression,temp);
   
-  Array<InternalMemoryAccess> res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,false,out);
+  CompiledAccess res = GenerateLoopExpressionPairSymbolic(access->terms,fullExpression,out);
   
   return res;
 }
 
 static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* out){
   TEMP_REGION(temp,out);
-  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,temp);
+  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
@@ -456,7 +458,9 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   TEMP_REGION(temp,out);
   
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
-  Array<InternalMemoryAccess> internal = CompileAccess(access->internal,temp);
+  CompiledAccess compiled = CompileAccess(access->internal,temp);
+
+  auto internal = compiled.internalAccess;
   
   SymbolicExpression* freeTerm = access->external->freeTerm;
     
@@ -473,10 +477,14 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
 
     ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UNPACK_SS(repr));
   }
-
+  
   // TODO: No need for a list, we already know all the memory that we are gonna need
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
 
+  if(!Empty(compiled.dutyDivExpression)){
+    *list->PushElem() = {S8("extra_delay"),PushString(out,"(%.*s) - 1",UN(compiled.dutyDivExpression))};
+  }
+  
   *list->PushElem() = {S8("start"),S8("0")};
   *list->PushElem() = {S8("ext_addr"),ext_addr};
   *list->PushElem() = {S8("length"),PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length))};
@@ -537,7 +545,7 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
 
 static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,bool input,Arena* out){
   TEMP_REGION(temp,out);
-  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,temp);
+  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
@@ -843,18 +851,18 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
       if(loopIndex == 0){
         c->IfFromExpression();
       } else {
-        // The other 'ifs' are 'elseifs' of the first 'if'.
+        // The other 'ifs' are 'elseifs' of the (loopIndex == 0) 'if'.
         c->ElseIfFromExpression();
       }
 
-      c->Comment(PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var)));
+      c->Comment(PushString(temp,"Loop var %.*s is the largest",UN(external->terms[loopIndex].var)));
       EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
       
       Recurse(Recurse,loopIndex + 1,c,out);
     } else {
       c->Else();
 
-      c->Comment(PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var)));
+      c->Comment(PushString(temp,"Loop var %.*s is the largest",UN(external->terms[loopIndex].var)));
       EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
 
       c->EndIf();
