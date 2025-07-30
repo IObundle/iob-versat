@@ -116,13 +116,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perA),
+      .per_i(perA),
       .start_i (startA),
       .incr_i  (incrA),
       .delay_i (delay0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
+      .iter_i(iterA),
       .duty_i      (dutyA),
       .shift_i     (shiftA),
 `endif
@@ -146,13 +146,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perB),
+      .per_i(perB),
       .start_i (startB),
       .incr_i  (incrB),
       .delay_i (0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterB),
+      .iter_i(iterB),
       .duty_i      (dutyB),
       .shift_i     (shiftB),
 `endif

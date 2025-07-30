@@ -80,13 +80,13 @@ module OnlyOutputMem #(
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perA),
+      .per_i(perA),
       .start_i (startA),
       .incr_i  (incrA),
       .delay_i (delay0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
+      .iter_i(iterA),
       .duty_i      (dutyA),
       .shift_i     (shiftA),
 `endif

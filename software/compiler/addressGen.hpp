@@ -55,6 +55,7 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 
-AddressVParameters InstantiateAccess(AddressAccess* access,AddressGenType type,int highestExternalLoop,bool doubleLoop,Arena* out);
-
-Array<Pair<String,String>> InstantiateAccess2(AddressAccess* access,AddressGenType type,int highestExternalLoop,bool doubleLoop,Arena* out);
+// Code generation functions
+String GenerateAddressGenCompilationFunction(AddressAccess* initial,AddressGenType type,Arena* out);
+String GenerateAddressLoadingFunction(String structName,AddressGenType type,Arena* out);
+String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenType type,Arena* out);

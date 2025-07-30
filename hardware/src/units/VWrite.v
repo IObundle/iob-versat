@@ -155,23 +155,23 @@ module VWrite #(
       .ignore_first_i(1'b0),
 
       //configurations 
-      .period_i({PERIOD_W{1'b0}}),
+      .per_i({PERIOD_W{1'b0}}),
       .delay_i (1'b0),
       //.start_i (0),
       .start_i (0),
       .incr_i  ({ADDR_W{1'b0}}),
-      .iterations_i({ADDR_W{1'b0}}),
+      .iter_i({ADDR_W{1'b0}}),
       .duty_i      ({PERIOD_W{1'b0}}),
       .shift_i     ({ADDR_W{1'b0}}),
 
-      .period2_i({PERIOD_W{1'b0}}),
+      .per2_i({PERIOD_W{1'b0}}),
       .incr2_i({ADDR_W{1'b0}}),
-      .iterations2_i({ADDR_W{1'b0}}),
+      .iter2_i({ADDR_W{1'b0}}),
       .shift2_i({ADDR_W{1'b0}}),
 
-      .period3_i({PERIOD_W{1'b0}}),
+      .per3_i({PERIOD_W{1'b0}}),
       .incr3_i({ADDR_W{1'b0}}),
-      .iterations3_i({ADDR_W{1'b0}}),
+      .iter3_i({ADDR_W{1'b0}}),
       .shift3_i({ADDR_W{1'b0}}),
 
       .doneDatabus(),
@@ -219,24 +219,24 @@ module VWrite #(
       .ignore_first_i(ignore_first),
 
       //configurations 
-      .period_i(per),
+      .per_i(per),
       .delay_i (delay0 + extra_delay),
       .start_i ({1'b0,start[ADDR_W-2:0]}),
       //.start_i (start_inst),
       .incr_i  (incr),
 
-      .iterations_i(iter),
+      .iter_i(iter),
       .duty_i      (duty),
       .shift_i     (shift),
 
-      .period2_i(per2),
+      .per2_i(per2),
       .incr2_i(incr2),
-      .iterations2_i(iter2),
+      .iter2_i(iter2),
       .shift2_i(shift2),
 
-      .period3_i(per3),
+      .per3_i(per3),
       .incr3_i(incr3),
-      .iterations3_i(iter3),
+      .iter3_i(iter3),
       .shift3_i(shift3),
 
       //outputs 

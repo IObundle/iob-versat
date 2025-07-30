@@ -36,6 +36,23 @@ map addressGenType(AddressGenType t,String name){
    AddressGenType_GEN : Gen,
 };
 
+struct AddressGenParameters{
+   String start;
+   String duty;
+   String per;
+   String incr;
+   String iter;
+   String shift;
+   String per2;
+   String incr2;
+   String iter2;
+   String shift2;
+   String per3;
+   String incr3;
+   String iter3;
+   String shift3;
+};
+
 struct AddressVParameters{
    String ext_addr;
    String length;
@@ -59,30 +76,67 @@ struct AddressVParameters{
    String shift3;
 };
 
-struct AddressGenParameters{
-   String start;
-   String duty;
-   String period;
-   String incr;
-   String iterations;
-   String shift;
-   String period2;
-   String incr2;
-   String iterations2;
-   String shift2;
-   String period3;
-   String incr3;
-   String iterations3;
-   String shift3;
+struct AddressMemParameters{
+   String iterA;
+   String perA;
+   String dutyA;
+   String startA;
+   String shiftA;
+   String incrA;
+   String reverseA;
+   String extA;
+   String in0_wr;
+   String iter2A;
+   String per2A;
+   String shift2A;
+   String incr2A;
+   String iterB;
+   String perB;
+   String dutyB;
+   String startB;
+   String shiftB;
+   String incrB;
+   String reverseB;
+   String extB;
+   String in1_wr;
+   String iter2B;
+   String per2B;
+   String shift2B;
+   String incr2B;
 };
 
-// Maybe change to map, although not sure how to do the reverse map from String[] to enum.
-table AddressGenWireNames(AddressGenType type,String[] names){
-   AddressGenType_MEM  : {iterA,perA,dutyA,startA,shiftA,incrA,reverseA,extA,in0_wr,iter2A,per2A,shift2A,incr2A,
-                          iterB,perB,dutyB,startB,shiftB,incrB,reverseB,extB,in1_wr,iter2B,per2B,shift2B,incr2B},
+struct AddressMem0{
+   String iterA;
+   String perA;
+   String dutyA;
+   String startA;
+   String shiftA;
+   String incrA;
+   String in0_wr;
+   String iter2A;
+   String per2A;
+   String shift2A;
+   String incr2A;
+};
 
+struct AddressMem1{
+   String iterB;
+   String perB;
+   String dutyB;
+   String startB;
+   String shiftB;
+   String incrB;
+   String in1_wr;
+   String iter2B;
+   String per2B;
+   String shift2B;
+   String incr2B;
+};
+
+table AddressGenWireNames(AddressGenType type,String[] names){
+   AddressGenType_MEM  : @Members(AddressMemParameters),
+   AddressGenType_GEN  : @Members(AddressGenParameters),
    AddressGenType_READ : @Members(AddressVParameters),
-   AddressGenType_GEN :  @Members(AddressGenParameters),
 };
 
 enum MergeModifier{

@@ -145,9 +145,13 @@ CExpr* FixTerm(Array<CExpr> expressions,int& index){
 CExpr* FixBinaryOp(Array<CExpr> expressions,int& index,Arena* out){
   CExpr* current = FixTerm(expressions,index);
 
+  if(index >= expressions.size){
+    return current;
+  }
+
   CExpr* op = &expressions[index];
   index += 1;
-  while(op->type == CExprType_OP){
+  while(op->type == CExprType_OP && op->op == CExprOp_GREATER){
     CExpr* right = FixTerm(expressions,index);
 
     op->children = PushArray<CExpr*>(out,2);
@@ -168,13 +172,44 @@ CExpr* FixBinaryOp(Array<CExpr> expressions,int& index,Arena* out){
   return current;
 }
 
+CExpr* FixAnd(Array<CExpr> expressions,int& index,Arena* out){
+  CExpr* current = FixBinaryOp(expressions,index,out);
+
+  if(index >= expressions.size){
+    return current;
+  }
+  
+  CExpr* op = &expressions[index];
+  index += 1;
+  while(op->type == CExprType_OP && op->op == CExprOp_AND){
+    CExpr* right = FixBinaryOp(expressions,index,out);
+
+    op->children = PushArray<CExpr*>(out,2);
+    op->children[0] = current;
+    op->children[1] = right;
+    
+    current = op;
+
+    if(index < expressions.size){
+      op = &expressions[index];
+      index += 1;
+      continue;
+    } else {
+      break;
+    }
+  }
+
+  return current;
+}
+
+
 String CEmitter::EndExpressionAsString(Arena* out){
   TEMP_REGION(temp,arena);
   
   Array<CExpr> expressions = PushArrayFromList(temp,expressionList);
 
   int index = 0;
-  CExpr* top = FixBinaryOp(expressions,index,temp);
+  CExpr* top = FixAnd(expressions,index,temp);
 
   auto builder = StartString(temp);
   
@@ -192,6 +227,9 @@ String CEmitter::EndExpressionAsString(Arena* out){
       FULL_SWITCH(top->op){
       case CExprOp_AND:{
         builder->PushString(" && ");
+      } break;
+      case CExprOp_GREATER:{
+        builder->PushString(" > ");
       } break;
       case CExprOp_EQUALITY:{
         builder->PushString(" == ");
@@ -462,6 +500,12 @@ void CEmitter::IfFromExpression(){
   If(content);
 }
 
+void CEmitter::ElseIfFromExpression(){
+  TEMP_REGION(temp,arena);
+  String content = EndExpressionAsString(temp);
+  ElseIf(content);
+}
+
 void CEmitter::IfOrElseIfFromExpression(){
   TEMP_REGION(temp,arena);
   String content = EndExpressionAsString(temp);
@@ -496,6 +540,12 @@ void CEmitter::And(){
   CExpr* expr = expressionList->PushElem();
   expr->type = CExprType_OP;
   expr->op = CExprOp_AND;
+}
+
+void CEmitter::GreaterThan(){
+  CExpr* expr = expressionList->PushElem();
+  expr->type = CExprType_OP;
+  expr->op = CExprOp_GREATER;
 }
 
 void CEmitter::SwitchBlock(String switchExpr){

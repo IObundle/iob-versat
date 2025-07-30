@@ -186,32 +186,39 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
 
-  // TODO: Is this something generic that we could move into meta code?
-  for(AddressGenWireNames_GenType gen : AddressGenWireNames){
-    bool isType = true;
-    for(String str : gen.names){
-      bool foundOne = false;
-      for(Wire wire : configs){
-        if(CompareString(str,wire.name)){
-          foundOne = true;
+  auto FollowsInterface = [](Array<Wire> configs,Array<String> interfaceWireNames) -> bool{
+    // No point in even checking
+    if(configs.size < interfaceWireNames.size){
+      return false;
+    }
+    
+    for(String str : interfaceWireNames){
+      bool found = false;
+      for(Wire w : configs){
+        if(CompareString(w.name,str)){
+          found = true;
           break;
         }
       }
-      if(!foundOne){
-        isType = false;
-        break;
+
+      if(!found){
+        return false;
       }
     }
 
-    if(isType){
-      if(((int) decl.supportedAddressGenType) != 0){
-        // TODO: We probably want something better for this case. We could have the user define the unit type inside the verilog using attributes and we then could use this info to do proper checks and error reporting, instead of just collection every wire and checking if it follows the convention we used.
-        printf("Error, we do not support units that contain various different address gen wire types\n");
-        exit(-1);
-      }
-      
-      decl.supportedAddressGenType = (AddressGenType) (decl.supportedAddressGenType | gen.type);
-    }
+    return true;
+  };
+  
+  bool isGenLike = FollowsInterface(configs,META_AddressGenParameters_Members);
+  bool isExternLike = FollowsInterface(configs,META_AddressVParameters_Members);
+  bool isMemLike = FollowsInterface(configs,META_AddressMemParameters_Members);
+
+  if(isExternLike){
+    decl.supportedAddressGenType = AddressGenType_READ;
+  } else if(isGenLike){
+    decl.supportedAddressGenType = AddressGenType_GEN;
+  } else if(isMemLike){
+    decl.supportedAddressGenType = AddressGenType_MEM;
   }
   
   FUDeclaration* res = RegisterFU(decl);

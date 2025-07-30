@@ -61,7 +61,7 @@ int GetAcceleratorCyclesElapsed();
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
-void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size);
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int byteSize);
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val);
 int VersatUnitRead(volatile const void* baseaddr,int index);
 float VersatUnitReadFloat(volatile const void* baseaddr,int index);

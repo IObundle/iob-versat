@@ -108,6 +108,7 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* CollectTerms(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out);
+SymbolicExpression* MoveDivToTop(SymbolicExpression* base,Arena* out);
 
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
 

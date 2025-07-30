@@ -103,7 +103,7 @@ Array<Array<InstanceInfo*>> VUnitInfoPerMerge(AccelInfo info,Arena* out){
 
   auto IsVUnit = [](FUDeclaration* decl){
     // TODO: We need to do this properly if we want to push more runtime stuff related to VUnits.
-    return ((int) decl->supportedAddressGenType) != 0;
+    return decl->supportedAddressGenType == AddressGenType_READ;
   };
 
   AccelInfoIterator iter = StartIteration(&info);
@@ -1976,240 +1976,6 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   }
 }
 
-
-void EmitDebugAddressGenInfo(AddressAccess* access,CEmitter* c){
-  TEMP_REGION(temp,c->arena);
-
-  auto builder = StartString(temp);
-  Repr(builder,access->internal);
-  String internalStr = EndString(temp,builder);
-
-  builder = StartString(temp);
-  Repr(builder,access->external);
-  String externalStr = EndString(temp,builder);
-
-  c->Comment(S8("[DEBUG] Internal address"));
-  c->Comment(internalStr);
-  c->Comment(S8("[DEBUG] External address"));
-  c->Comment(externalStr);
-}
-
-String GenerateAddressGenCompilationFunction(AddressAccess* initial,AddressGenType type,Arena* out){
-  TEMP_REGION(temp,out);
-
-  String addressGenName = initial->name;
-  
-  Array<String> inputVars = initial->inputVariableNames;
-  String varName = STRING("args");
-  
-  auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,AddressVParameters params) -> void{
-    TEMP_REGION(temp,emitter->arena);
-          
-    String* view = (String*) &params;
-    for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
-      String str = META_AddressVParameters_Members[i];
-      
-      String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
-      String v = view[i];
-
-      // TODO: Kinda hacky
-      if(CompareString(str,STRING("ext_addr"))){
-        v = PushString(temp,"(iptr) %.*s",UNPACK_SS(v));
-      }
-
-      emitter->Assignment(t,v);
-    }
-  };
-  auto EmitStoreAddressGenIntoConfig2 = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
-    TEMP_REGION(temp,emitter->arena);
-          
-    for(int i = 0; i < params.size; i++){
-      String str = params[i].first;
-      
-      String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
-      String v = params[i].second;
-
-      // TODO: Kinda hacky
-      if(CompareString(str,STRING("ext_addr"))){
-        v = PushString(temp,"(iptr) %.*s",UNPACK_SS(v));
-      }
-
-      emitter->Assignment(t,v);
-    }
-  };
-
-  auto EmitDoubleOrSingleLoopCode = [EmitStoreAddressGenIntoConfig,EmitStoreAddressGenIntoConfig2](CEmitter* c,int loopIndex,AddressAccess* access,AddressGenType type){
-    TEMP_REGION(temp,c->arena);
-    
-    // TODO: The way we handle the free term is kinda sketchy.
-    AddressAccess* doubleLoop = ConvertAccessTo2External(access,loopIndex,temp);
-    AddressAccess* singleLoop = ConvertAccessTo1External(access,temp);
-    
-    region(temp){
-      String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
-      c->VarDeclare(STRING("int"),STRING("doubleLoop"),repr);
-    }
-
-    region(temp){
-      String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,temp),temp);
-      c->VarDeclare(STRING("int"),STRING("singleLoop"),repr2);
-    }
-
-    c->If(STRING("doubleLoop < singleLoop"));
-    c->Comment(STRING("Double is smaller (better)"));
-    region(temp){
-      StringBuilder* b = StartString(temp);
-      EmitDebugAddressGenInfo(doubleLoop,c);
-      Repr(b,doubleLoop);
-      //String repr = EndString(temp,b);
-      //c->Comment(repr);
-
-#if 1
-      Array<Pair<String,String>> params = InstantiateAccess2(doubleLoop,type,loopIndex,true,temp);
-      EmitStoreAddressGenIntoConfig2(c,params);
-#else
-      AddressVParameters parameters = InstantiateAccess(doubleLoop,type,loopIndex,true,temp);
-      EmitStoreAddressGenIntoConfig(c,parameters);
-#endif
-    }
-
-    c->Else();
-    c->Comment(STRING("Single is smaller (better)"));
-    region(temp){
-      StringBuilder* b = StartString(temp);
-      EmitDebugAddressGenInfo(singleLoop,c);
-      Repr(b,singleLoop);
-      //String repr = EndString(temp,b);
-      //c->Comment(repr);
-
-#if 1
-      Array<Pair<String,String>> params = InstantiateAccess2(singleLoop,type,-1,false,temp);
-      EmitStoreAddressGenIntoConfig2(c,params);
-#else
-      AddressVParameters parameters = InstantiateAccess(singleLoop,type,-1,false,temp);
-      EmitStoreAddressGenIntoConfig(c,parameters);
-#endif
-    }
-
-    c->EndIf();
-  };
-  
-  auto Recurse = [EmitDoubleOrSingleLoopCode,EmitStoreAddressGenIntoConfig,&initial](auto Recurse,int loopIndex,CEmitter* c,Arena* out,AddressGenType type) -> void{
-    TEMP_REGION(temp,out);
-
-    LoopLinearSum* external = initial->external;
-          
-    int totalSize = external->terms.size;
-    int leftOverSize = totalSize - loopIndex;
-
-    // Last member must generate an 'else' instead of a 'else if'
-    if(leftOverSize > 1){
-      auto other = StartString(temp);
-
-      // TODO: Replace this with the expression builder functions added to CEmitter
-      bool first = true;
-      for(int i = loopIndex + 1; i < totalSize; i++){
-        if(first){
-          first = false;
-        } else {
-          other->PushString(" && ");
-        }
-
-        other->PushString("(a%d > a%d)",loopIndex,i);
-      }
-
-      String expr = EndString(temp,other);
-
-      if(loopIndex == 0){
-        c->If(expr);
-      } else {
-        // The other ifs are elseifs of the first if done.
-        c->ElseIf(expr);
-      }
-
-      c->Comment(PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var)));
-      EmitDoubleOrSingleLoopCode(c,loopIndex,initial,type);
-      
-      Recurse(Recurse,loopIndex + 1,c,out,type);
-    } else {
-      c->Else();
-
-      c->Comment(PushString(temp,"Loop var %.*s is the largest",UNPACK_SS(external->terms[loopIndex].var)));
-      EmitDoubleOrSingleLoopCode(c,loopIndex,initial,type);
-
-      c->EndIf();
-    }
-  };
-  
-  CEmitter* m = StartCCode(temp);
-
-  EmitDebugAddressGenInfo(initial,m);
-  
-  String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
-  FULL_SWITCH(type){
-  case AddressGenType_READ: {
-    m->FunctionBlock(STRING("static AddressVArguments"),functionName);
-  } break;
-  case AddressGenType_GEN: {
-    m->FunctionBlock(STRING("static AddressGenArguments"),functionName);
-  } break;
-  case AddressGenType_MEM:{
-    WARN_CODE();
-  } break;
-  }
-
-  FULL_SWITCH(type){
-  case AddressGenType_READ: {
-  m->Argument(STRING("void*"),STRING("ext"));
-  } break;
-  case AddressGenType_GEN: {
-  } break;
-  case AddressGenType_MEM:{
-  } break;
-  }
-  
-  for(String input : inputVars){
-    m->Argument(STRING("int"),input);
-  }
-
-  FULL_SWITCH(type){
-  case AddressGenType_READ: {
-    m->VarDeclare(STRING("AddressVArguments"),varName,STRING("{}"));
-  } break;
-  case AddressGenType_GEN: {
-    m->VarDeclare(STRING("AddressGenArguments"),varName,STRING("{}"));
-  } break;
-  case AddressGenType_MEM:{
-    WARN_CODE();
-  } break;
-  }
-  
-  if(initial->external->terms.size > 1){
-    for(int i = 0; i <  initial->external->terms.size; i++){
-      LoopLinearSumTerm term  =  initial->external->terms[i];
-      String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
-      String name = PushString(temp,"a%d",i);
-      String comment = PushString(temp,"Loop var: %.*s",UNPACK_SS(term.var));
-      m->Comment(comment);
-      m->VarDeclare(STRING("int"),name,repr);
-    }
-  
-    Recurse(Recurse,0,m,temp,type);
-  } else {
-    EmitDoubleOrSingleLoopCode(m,0,initial,type);
-  }
-  
-  m->Return(varName);
-  m->EndBlock();
-  CAST* ast = EndCCode(m);
-
-  StringBuilder* b = StartString(temp);
-  Repr(ast,b,false);
-  String data = EndString(out,b);
-
-  return data;
-}
-
 void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,String unpackBase,String packedBase){
   if(arraySize == 0){
     return;
@@ -2859,6 +2625,12 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
       m->Member(STRING("iptr"),str);
     }
     m->EndBlock();
+
+    m->Struct(STRING("AddressMemArguments"));
+    for(String str : META_AddressMemParameters_Members){
+      m->Member(STRING("iptr"),str);
+    }
+    m->EndBlock();
     
     CAST* ast = EndCCode(m);
     auto b = StartString(temp);
@@ -2950,150 +2722,28 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   GrowableArray<String> builder = StartArray<String>(temp2);
     
-  // Generates a function for each address gen (if it depends on struct (ex: due to sharing) then it does not belong here)
   for(AccessAndType p : addressGenUsed){
     AddressAccess* initial = p.access;
     AddressGenType type = p.type;
     String data = GenerateAddressGenCompilationFunction(initial,type,temp);
     *builder.PushElem() = data;
   }
-    
-  // Generates a function for each struct
+
   for(Pair<String,AddressGenType> p : structsUsed){
     String structName = p.first;
-    
-    String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
-    String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
-    String varName = STRING("config");
+    AddressGenType type = p.second;
 
-    {
-      CEmitter* m = StartCCode(temp);
-      
-      m->FunctionBlock(STRING("static void"),loadFunctionName);
-      m->Argument(argName,varName);
-
-      FULL_SWITCH(p.second){
-      case AddressGenType_GEN:{
-        m->Argument(STRING("AddressGenArguments"),STRING("args"));
-        for(int i = 0; i <  META_AddressGenParameters_Members.size; i++){
-          String str = META_AddressGenParameters_Members[i];
-
-          String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
-          String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
-          m->Assignment(lhs,rhs);
-        }
-      } break;
-      case AddressGenType_READ:{
-        m->Argument(STRING("AddressVArguments"),STRING("args"));
-
-        for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
-          String str = META_AddressVParameters_Members[i];
-
-          String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
-          String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
-          m->Assignment(lhs,rhs);
-        }
-      } break;
-      case AddressGenType_MEM:{
-        WARN_CODE();
-      } break;
-      }
-
-      CAST* ast = EndCCode(m);
-
-      StringBuilder* strBuilder = StartString(temp);
-      Repr(ast,strBuilder);
-      String data = EndString(temp,strBuilder);
-
-      *builder.PushElem() = data;
-    }
+    String content = GenerateAddressLoadingFunction(structName,type,temp);
+    *builder.PushElem() = content;
   }
 
-  // Generates a function for each struct + address gen pair (if it does not depend on struct, it does not belong here)
   for(Pair<String,AccessAndType> p : structNameAndAddressGen){
     String structName = p.first;
     AddressAccess* initial = p.second.access;
     AddressGenType type = p.second.type;
-    String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
-    String varName = STRING("config");
 
-    String functionName = PushString(temp,"%.*s_%.*s",UNPACK_SS(initial->name),UNPACK_SS(structName));
-    String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
-
-    Array<String> inputVars = initial->inputVariableNames;
-
-    {
-      CEmitter* m = StartCCode(temp);
-      
-      m->FunctionBlock(STRING("static void"),functionName);
-
-      m->Argument(argName,varName);
-
-      FULL_SWITCH(type){
-      case AddressGenType_READ: {
-        m->Argument(STRING("void*"),STRING("ext"));
-      } break;
-      case AddressGenType_GEN: {
-      } break;
-      case AddressGenType_MEM:{
-      } break;
-      }
-
-      for(String input : inputVars){
-        m->Argument(STRING("int"),input);
-      }
-
-      auto strBuilder = StartString(temp);
-
-      bool addComma = true;
-      FULL_SWITCH(type){
-      case AddressGenType_READ: {
-        strBuilder->PushString("CompileVUnit_%.*s(ext",UNPACK_SS(initial->name));
-      } break;
-      case AddressGenType_GEN: {
-        strBuilder->PushString("CompileVUnit_%.*s(",UNPACK_SS(initial->name));
-        addComma = false;
-      } break;
-      case AddressGenType_MEM:{
-        WARN_CODE();
-      } break;
-      }
-
-      for(String input : inputVars){
-        if(addComma){
-          strBuilder->PushString(",");
-        }
-        addComma = true;
-        strBuilder->PushString(input);
-      }
-      strBuilder->PushString(")");
-      String functionCall = EndString(temp,strBuilder);
-
-      String load = PushString(temp,"%.*s(%.*s,args)",UNPACK_SS(loadFunctionName),UNPACK_SS(varName));
-
-      FULL_SWITCH(type){
-      case AddressGenType_READ: {
-        m->Assignment(STRING("AddressVArguments args"),functionCall);
-      } break;
-      case AddressGenType_GEN: {
-        m->Assignment(STRING("AddressGenArguments args"),functionCall);
-      } break;
-      case AddressGenType_MEM:{
-        WARN_CODE();
-      } break;
-      }
-      
-      m->Statement(load);
-      CAST* ast = EndCCode(m);
-
-      {
-        StringBuilder* strBuilder = StartString(temp);
-        Repr(ast,strBuilder);
-        String data = EndString(temp,strBuilder);
-
-        *builder.PushElem() = data;
-      }
-    }
+    String content = GenerateAddressCompileAndLoadFunction(structName,initial,type,temp);
+    *builder.PushElem() = content;
   }
 
   Array<String> content = EndArray(builder);
@@ -3843,7 +3493,7 @@ if(SimulateDatabus){
   {
     CEmitter* c = StartCCode(temp);
 
-    if(structuredConfigs.size){
+    if(allConfigsVerilatorSide.size){
       c->RawLine(S8(R"FOO(
   AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
   AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;

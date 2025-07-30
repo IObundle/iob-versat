@@ -239,6 +239,7 @@ int main(int argc,char* argv[]){
 
 #if 0
   TestSymbolic();
+  return 0;
 #endif
   
   argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
@@ -541,7 +542,7 @@ int main(int argc,char* argv[]){
       ConstructDef def = GetConstructOrFail(name);
 
       AddressAccess* access = ConvertAddressGenDef(&def.addressGen,content);
-
+      
       if(!access){
         anyError = true;
       }
@@ -857,6 +858,20 @@ BUG: Partial share is missing in the spec parser for multiple units with differe
 There is probably a lot of cleanup left (overall and inside Merge).
 
 Need to take a look at State and Mem struct interfaces. State is not taking into account merge types and neither is Mem. Also need to see if we can generate the Mem as an actual structure where the programmer must use pointer arithmetic directly.
+
+BUG:
+
+module Test(){
+Mem m0;
+Mem m1;
+#
+m0 -> m1;
+m1 -> m0;
+}
+
+produces a design that cannot work directly. Both units are given a delay of 0 but each unit takes 3 cycles to produce data which means that the design is fundamentally broken.
+
+Fixing this bug would also give me an opportunity to booster up the delay and graph side of the code. It is probably more complex than if I would write it today.
 
 */
 

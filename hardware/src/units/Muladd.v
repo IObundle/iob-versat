@@ -24,7 +24,7 @@ module Muladd #(
 
    // config interface
    input       opcode,
-   input [9:0] iterations,
+   input [9:0] iter,
    input [9:0] period,
    input [5:0] shift,
 
@@ -46,7 +46,7 @@ module Muladd #(
          done <= 1'b0;
       end else if (|delay) begin
          delay <= delay - 1;
-         if (iterations == 0) begin
+         if (iter == 0) begin
             done <= 1'b1;
          end
          currentIteration <= 0;
@@ -58,7 +58,7 @@ module Muladd #(
             currentPeriod    <= 0;
 
             currentIteration <= currentIteration + 1;
-            if (currentIteration + 1 >= iterations) begin
+            if (currentIteration + 1 >= iter) begin
                done <= 1'b1;
             end
          end

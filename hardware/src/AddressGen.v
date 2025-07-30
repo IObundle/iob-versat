@@ -15,10 +15,10 @@ module AddressGen #(
    input        [  ADDR_W - 1:0] start_i,
    input        [PERIOD_W - 1:0] duty_i,
 
-   input        [PERIOD_W - 1:0] period_i,
+   input        [PERIOD_W - 1:0] per_i,
    input signed [  ADDR_W - 1:0] incr_i,
 
-   input        [  ADDR_W - 1:0] iterations_i,
+   input        [  ADDR_W - 1:0] iter_i,
    input signed [  ADDR_W - 1:0] shift_i,
 
 
@@ -50,23 +50,23 @@ wire [ADDR_W-1:0] fullZeroIter = 0; // To remove warning about bitsize
       .ignore_first_i(1'b0),
 
       //configurations 
-      .period_i(period_i),
+      .per_i(per_i),
       .delay_i (delay_i),
       .start_i (start_i),
       .incr_i  (incr_i),
 
-      .iterations_i(iterations_i),
+      .iter_i(iter_i),
       .duty_i      (duty_i),
       .shift_i     (shift_i),
 
-      .period2_i(fullZeroPeriod),
+      .per2_i(fullZeroPeriod),
       .incr2_i(fullZeroIter),
-      .iterations2_i(fullZeroIter),
+      .iter2_i(fullZeroIter),
       .shift2_i(fullZeroIter),
 
-      .period3_i(fullZeroPeriod),
+      .per3_i(fullZeroPeriod),
       .incr3_i(fullZeroIter),
-      .iterations3_i(fullZeroIter),
+      .iter3_i(fullZeroIter),
       .shift3_i(fullZeroIter),
 
       .doneDatabus(),
