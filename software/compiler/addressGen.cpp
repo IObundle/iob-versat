@@ -176,6 +176,7 @@ AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out){
 
   result->external = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),maxLoopValue,out);
   result->external->freeTerm = SymbolicDeepCopy(freeTerm,out);
+  result->dutyDivExpr = SymbolicDeepCopy(access->dutyDivExpr,out);
   
   return result;
 }
@@ -215,6 +216,7 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
   
   result->external = AddLoopLinearSum(innermostExternal,outerMostExternal,out);
   result->external->freeTerm = SymbolicDeepCopy(freeTerm,out);
+  result->dutyDivExpr = SymbolicDeepCopy(access->dutyDivExpr,out);
   
   return result;
 }
@@ -278,7 +280,7 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
   return result;
 }
 
-static CompiledAccess CompileAccess(LoopLinearSum* access,Arena* out){
+static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* dutyDiv,Arena* out){
   TEMP_REGION(temp,out);
   
   auto GetLoopSize = [](LoopLinearSumTerm def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
@@ -299,19 +301,17 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,Arena* out){
     return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
   };
   
-  auto GenerateLoopExpressionPairSymbolic = [GetLoopSizeRepr](Array<LoopLinearSumTerm> loops,
+  auto GenerateLoopExpressionPairSymbolic = [GetLoopSizeRepr,dutyDiv](Array<LoopLinearSumTerm> loops,
                                                               SymbolicExpression* expr,Arena* out) -> CompiledAccess{
     TEMP_REGION(temp,out);
 
     // TODO: Because we are adding an extra loop, there is a possibility of failure since the unit might not support enough loops to implement this. For the SingleLoop VS DoubleLoop the problem does not occur because we know that Singleloop is possible and DoubleLoop is easier on the address gen of the internal loop which is the limitting factor.
     //       Overall, we need to push this stuff upwards, so that we can simplify the code. It is easier to check and handle address gens that are to big before starting to emit stuff and writing to files.
-    SymbolicExpression* duty = nullptr;
-    if(expr->type == SymbolicExpressionType_DIV){
+    // NOTE: The only thing that we need to do is to add +1 to the amount of loops if a unit contains a duty expression. The failure is exactly the same, "address gen contains more loops than the unit is capable of handling"
+    SymbolicExpression* duty = dutyDiv;
+    if(duty){
       // In order to solve duty, we want to use two loops for the innermost loop. The first loop will have a period equal to the duty division expression and a duty of 1.
       // The second loop will have the expression of the original loop.
-      duty = expr->bottom;
-      expr = expr->top;
-
       Array<LoopLinearSumTerm> newLoops = PushArray<LoopLinearSumTerm>(temp,loops.size + 1);
 
       for(int i = 0; i < loops.size; i++){
@@ -400,7 +400,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,Arena* out){
 
 static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* out){
   TEMP_REGION(temp,out);
-  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,temp).internalAccess;
+  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,access->dutyDivExpr,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
@@ -458,8 +458,10 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   TEMP_REGION(temp,out);
   
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
-  CompiledAccess compiled = CompileAccess(access->internal,temp);
+  CompiledAccess compiled = CompileAccess(access->internal,access->dutyDivExpr,temp);
 
+  DEBUG_BREAK();
+  
   auto internal = compiled.internalAccess;
   
   SymbolicExpression* freeTerm = access->external->freeTerm;
@@ -545,7 +547,7 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
 
 static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,bool input,Arena* out){
   TEMP_REGION(temp,out);
-  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,temp).internalAccess;
+  Array<InternalMemoryAccess> compiled = CompileAccess(access->external,access->dutyDivExpr,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
@@ -707,8 +709,20 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
 
   // Building expression for the external address
   SymbolicExpression* normalized = Normalize(def->symbolic,temp);
+
+  DEBUG_BREAK();
+  SymbolicExpression* fullExpr = normalized;
+  SymbolicExpression* dutyDiv = nullptr;
+  if(normalized->type == SymbolicExpressionType_DIV){
+      fullExpr = normalized->top;
+      dutyDiv = normalized->bottom;
+  }
+
+  // NOTE: If this hits, we probaby need to improve the normalization of divs. It should always be possible to normalize a symbolic expression into a (A/B) format, I think.
+  Assert(fullExpr->type != SymbolicExpressionType_DIV);
+  
   for(String str : loopVars){
-    normalized = Group(normalized,str,temp);
+    fullExpr = Group(fullExpr,str,temp);
   }
         
   LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
@@ -716,7 +730,7 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
     String var = loopVars[i];
 
     // TODO: This function is kinda too heavy for what is being implemented.
-    Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(normalized,var,temp); 
+    Opt<SymbolicExpression*> termOpt = GetMultExpressionAssociatedTo(fullExpr,var,temp); 
 
     SymbolicExpression* term = termOpt.value_or(nullptr);
     if(!term){
@@ -729,7 +743,7 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
   }
 
   // Extracts the constant term
-  SymbolicExpression* toCalcConst = normalized;
+  SymbolicExpression* toCalcConst = fullExpr;
 
   // TODO: Currently we are not dealing with loops that do not start at zero
   SymbolicExpression* zero = PushLiteral(temp,0);
@@ -745,7 +759,8 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
   result->inputVariableNames = CopyArray<String>(def->inputs,out);
   result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
-
+  result->dutyDivExpr = SymbolicDeepCopy(dutyDiv,out);
+  
   return result;
 };
 
@@ -793,9 +808,12 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     TEMP_REGION(temp,c->arena);
     
     // TODO: The way we handle the free term is kinda sketchy.
+    // NOTE: The problem is that the convert access functions do not know how to handle duty.
     AddressAccess* doubleLoop = ConvertAccessTo2External(access,loopIndex,temp);
     AddressAccess* singleLoop = ConvertAccessTo1External(access,temp);
     
+    DEBUG_BREAK();
+
     region(temp){
       String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
       c->VarDeclare(STRING("int"),STRING("doubleLoop"),repr);
@@ -806,7 +824,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
       c->VarDeclare(STRING("int"),STRING("singleLoop"),repr2);
     }
 
-    c->If(STRING("doubleLoop < singleLoop"));
+    c->If(STRING("(!forceSingleLoop && forceDoubleLoop) || doubleLoop < singleLoop"));
     c->Comment(STRING("Double is smaller (better)"));
     region(temp){
       StringBuilder* b = StartString(temp);

@@ -20,6 +20,8 @@ struct AddressAccess{
   String name;
   LoopLinearSum* internal;
   LoopLinearSum* external;
+
+  SymbolicExpression* dutyDivExpr; // Any expression of the form (A/B) is broken up, this var saves B and the internal/external LoopLinearSum take the A part (otherwise this is nullptr). This simplifies a lot of things, since we only care about B at the very end. 
   
   Array<String> inputVariableNames;
 };

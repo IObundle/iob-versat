@@ -805,6 +805,10 @@ static SymbolicExpression* CopyExpression(SymbolicExpression* in,Arena* out){
 
 // By default just copy the things. Since we are using arenas, allocations and deallocations are basically free anyway. We only care about the final expression, so we can just allocate a bunch of nodes that are immediatly deallocated. The extra copy is the worst part, but since we only care about simple expressions for now, probably nothing that needs attention for now. Can always add a better implementation later.
 SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out){
+  if(expr == nullptr){
+    return nullptr;
+  }
+  
   switch(expr->type){
   case SymbolicExpressionType_LITERAL: // fallthrough
   case SymbolicExpressionType_VARIABLE: {

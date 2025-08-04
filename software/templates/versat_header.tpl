@@ -143,6 +143,9 @@ extern volatile AcceleratorStatic* accelStatic;
 
 @{mergeStuff}
 
+static bool forceDoubleLoop = false;
+static bool forceSingleLoop = false;
+
 @{allAddrGen}
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
