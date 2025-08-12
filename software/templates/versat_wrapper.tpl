@@ -163,6 +163,12 @@ static void CloseWaveform(){
 #endif
 }
 
+static void FillMemoryWithGarbage(){
+  // Need to select a value that is not likely to appear and that the user can quickly identify as a "garbage" value.
+  int unlikelyValue = 0xBA;
+  memset(externalMemory,unlikelyValue,totalExternalMemory);
+}
+
 extern "C" void VersatAcceleratorCreate(){
 #ifdef TRACE
    if(CreateVCD){
@@ -179,6 +185,9 @@ extern "C" void VersatAcceleratorCreate(){
       PRINT("Initialize function is being called multiple times\n");
       exit(-1);
    }
+
+   // In order to properly test memories, we fill them with a value different than zero. 
+   FillMemoryWithGarbage();
 
    dut = self;
 
@@ -285,7 +294,8 @@ Once operator+(_OnceTag t,F&& f){
 @{declareExtraConfigs}
 
 extern "C" void VersatReset(){
-@{resetExtraConfigs}
+  FillMemoryWithGarbage();
+  @{resetExtraConfigs}
 }
 
 static void InternalStartAccelerator(){

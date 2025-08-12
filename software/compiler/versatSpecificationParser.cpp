@@ -1756,6 +1756,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
     }
   }
 
+  EXPECT(tok,"{");
+
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
   SymbolicExpression* symbolic = nullptr;
   while(!tok->Done()){
@@ -1786,6 +1788,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
     }
   }
 
+  EXPECT(tok,"}");
+  
   if(!symbolic){
     return {};
   }

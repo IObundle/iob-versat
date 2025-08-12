@@ -541,7 +541,7 @@ int main(int argc,char* argv[]){
     for(String name : allAddressGens){
       ConstructDef def = GetConstructOrFail(name);
 
-      AddressAccess* access = ConvertAddressGenDef(&def.addressGen,content);
+      AddressAccess* access = CompileAddressGen(&def.addressGen,content);
       
       if(!access){
         anyError = true;
@@ -876,6 +876,23 @@ Fixing this bug would also give me an opportunity to booster up the delay and gr
 */
 
 /*
+
+Hardware
+
+- Memories are not being properly registered. Also tired of keeping the iob_ stuff around. We probably want to spend one day just cleaning up all this stuff and maybe find a way of checking for places where registering could improve performance. Maybe yosis could be used for this, need to check.
+
+Address Gen:
+
+- Currently stride is kinda "faked". We basically just look at the expression and if it is a division, we pick the divisor and make the duty logic from there.
+-- Before we could think about the addresses generated and figure out how the unit would work based on the address used, but with this approach to stride it is no different to having a separate input to the address gen construct where we could put the duty stuff.
+
+-- In fact, if we continue down this road, we might as well make it something like:
+
+address Test(a,b){
+  for x 0..a
+  addr = a;
+  stride = stride;
+  }
 
 Versat Spec:
 

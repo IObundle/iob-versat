@@ -230,14 +230,30 @@ SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term){
   return term->term;
 }
 
+static SymbolicExpression* GetLoopSize(LoopLinearSumTerm def,Arena* out,bool removeOne = false){
+  TEMP_REGION(temp,out);
+
+  SymbolicExpression* diff = SymbolicSub(def.loopEnd,def.loopStart,temp);
+    
+  if(removeOne){
+    diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
+  }
+    
+  SymbolicExpression* final = Normalize(diff,out);
+  return final;
+};
+
+String GetLoopSizeRepr(LoopLinearSumTerm def,Arena* out,bool removeOne = false){
+  TEMP_REGION(temp,out);
+  return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
+};
+
 static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,SymbolicExpression* dutyExpr,Arena* out){
   TEMP_REGION(temp,out);
 
   int size = access->terms.size;
 
   Assert(size <= 2);
-  // Maybe add some assert to check if the innermost loop contains a constant of 1.
-  //Assert(Constant(access) == 1);
 
   ExternalMemoryAccess result = {};
 
@@ -246,32 +262,7 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Sy
 
   SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
   
-  auto GetLoopSize = [](LoopLinearSumTerm def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
-    TEMP_REGION(temp,out);
-
-    SymbolicExpression* diff = SymbolicSub(def.loopEnd,def.loopStart,temp);
-    
-    if(removeOne){
-      diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
-    }
-    
-    SymbolicExpression* final = Normalize(diff,out);
-    return final;
-  };
-  
-  auto GetLoopSizeRepr = [GetLoopSize](LoopLinearSumTerm def,Arena* out,bool removeOne = false){
-    TEMP_REGION(temp,out);
-    return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
-  };
-
   result.length = GetLoopSizeRepr(inner,out);
-
-#if 0
-  if(dutyExpr){
-    String expr = PushRepresentation(dutyExpr,temp);
-    result.length = PushString(out,"((%.*s) / (%.*s))",UN(result.length),UN(expr));
-  }
-#endif
   
   if(size == 1){
     result.totalTransferSize = result.length;
@@ -280,13 +271,6 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Sy
   } else {
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
     result.addrShift = PushRepresentation(derived,out);
-
-#if 0
-    if(dutyExpr){
-      String expr = PushRepresentation(dutyExpr,temp);
-      result.addrShift = PushString(out,"((%.*s) / (%.*s))",UN(result.addrShift),UN(expr));
-    }
-#endif
     
     SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
     SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
@@ -301,26 +285,8 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Sy
 static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* dutyDiv,Arena* out){
   TEMP_REGION(temp,out);
   
-  auto GetLoopSize = [](LoopLinearSumTerm def,Arena* out,bool removeOne = false) -> SymbolicExpression*{
-    TEMP_REGION(temp,out);
-
-    SymbolicExpression* diff = SymbolicSub(def.loopEnd,def.loopStart,temp);
-    
-    if(removeOne){
-      diff = SymbolicSub(diff,PushLiteral(temp,1),temp);
-    }
-
-    SymbolicExpression* final = Normalize(diff,temp);
-    return final;
-  };
-  
-  auto GetLoopSizeRepr = [GetLoopSize](LoopLinearSumTerm def,Arena* out,bool removeOne = false){
-    TEMP_REGION(temp,out);
-    return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
-  };
-  
-  auto GenerateLoopExpressionPairSymbolic = [GetLoopSizeRepr,dutyDiv](Array<LoopLinearSumTerm> loops,
-                                                              SymbolicExpression* expr,Arena* out) -> CompiledAccess{
+  auto GenerateLoopExpressionPairSymbolic = [dutyDiv](Array<LoopLinearSumTerm> loops,
+                                                      SymbolicExpression* expr,Arena* out) -> CompiledAccess{
     TEMP_REGION(temp,out);
 
     // TODO: Because we are adding an extra loop, there is a possibility of failure since the unit might not support enough loops to implement this. For the SingleLoop VS DoubleLoop the problem does not occur because we know that Singleloop is possible and DoubleLoop is easier on the address gen of the internal loop which is the limitting factor.
@@ -429,11 +395,11 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
   {
     InternalMemoryAccess l = compiled[0]; 
 
+    *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
     *list->PushElem() = {S8("per"),PushString(out,l.periodExpression)};
     *list->PushElem() = {S8("incr"),PushString(out,l.incrementExpression)};
     *list->PushElem() = {S8("iter"),PushString(out,l.iterationExpression)};
     *list->PushElem() = {S8("shift"),PushString(out,l.shiftExpression)};
-    *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
   }
     
   // TODO: This is stupid. We can just put some loop logic in here. Do this when tests are stable and quick changes are easy to do.
@@ -475,8 +441,6 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
 static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out){
   TEMP_REGION(temp,out);
 
-  DEBUG_BREAK();
-  Print(access);
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,access->dutyDivExpr,temp);
   CompiledAccess compiled = CompileAccess(access->internal,access->dutyDivExpr,temp);
 
@@ -520,11 +484,11 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   {
     InternalMemoryAccess l = internal[0]; 
 
+    *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
     *list->PushElem() = {S8("per"),PushString(out,l.periodExpression)};
     *list->PushElem() = {S8("incr"),PushString(out,l.incrementExpression)};
     *list->PushElem() = {S8("iter"),PushString(out,l.iterationExpression)};
     *list->PushElem() = {S8("shift"),PushString(out,l.shiftExpression)};
-    *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
   }
     
   if(internal.size > 1){
@@ -595,17 +559,17 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
     InternalMemoryAccess l = compiled[0]; 
 
     if(port == 0){
+      *list->PushElem() = {S8("dutyA"),PushString(out,l.dutyExpression)};
       *list->PushElem() = {S8("perA"),PushString(out,l.periodExpression)};
       *list->PushElem() = {S8("incrA"),PushString(out,l.incrementExpression)};
       *list->PushElem() = {S8("iterA"),PushString(out,l.iterationExpression)};
       *list->PushElem() = {S8("shiftA"),PushString(out,l.shiftExpression)};
-      *list->PushElem() = {S8("dutyA"),PushString(out,l.dutyExpression)};
     } else {
+      *list->PushElem() = {S8("dutyB"),PushString(out,l.dutyExpression)};
       *list->PushElem() = {S8("perB"),PushString(out,l.periodExpression)};
       *list->PushElem() = {S8("incrB"),PushString(out,l.incrementExpression)};
       *list->PushElem() = {S8("iterB"),PushString(out,l.iterationExpression)};
       *list->PushElem() = {S8("shiftB"),PushString(out,l.shiftExpression)};
-      *list->PushElem() = {S8("dutyB"),PushString(out,l.dutyExpression)};
     }
   }
     
@@ -647,7 +611,7 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
   return PushArrayFromList(out,list);
 }
 
-AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
+AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
   Arena* out = globalPermanent;
   
   TEMP_REGION(temp,out);
@@ -734,13 +698,6 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
       fullExpr = normalized->top;
       dutyDiv = normalized->bottom;
   }
-
-#if 1
-  if(dutyDiv){
-    finalExpression = SymbolicDiv(finalExpression,dutyDiv,temp);
-    finalExpression = Normalize(finalExpression,temp);
-  }
-#endif
   
   // NOTE: If this hits, we probaby need to improve the normalization of divs. It should always be possible to normalize a symbolic expression into a (A/B) format, I think.
   Assert(fullExpr->type != SymbolicExpressionType_DIV);
@@ -764,11 +721,6 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
     AddressGenForDef loop = def->loops[i];
 
     SymbolicExpression* end = loop.end;
-    if(i == 0 && dutyDiv){
-      // Duty expr was already removed from the total expression.
-      // But we still need to remove it from the end loop expression.
-      end = Normalize(SymbolicDiv(end,dutyDiv,temp),temp);
-    }
     
     LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,end,temp);
     expr = AddLoopLinearSum(sum,expr,temp);
@@ -792,9 +744,6 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
   result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
   result->dutyDivExpr = SymbolicDeepCopy(dutyDiv,out);
-  
-  Print(result);
-  DEBUG_BREAK();
   
   return result;
 };

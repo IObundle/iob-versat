@@ -11,7 +11,7 @@ module AddressGen #(
 
    input run_i,
 
-   //configurations 
+   //configurations
    input        [  ADDR_W - 1:0] start_i,
    input        [PERIOD_W - 1:0] duty_i,
 

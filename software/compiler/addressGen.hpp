@@ -53,7 +53,7 @@ struct CompiledAccess{
 void Repr(StringBuilder* builder,AddressAccess* access);
 void Print(AddressAccess* access);
 
-AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content);
+AddressAccess* CompileAddressGen(AddressGenDef* def,String content);
 
 AddressAccess* GetAddressGenOrFail(String name);
 
