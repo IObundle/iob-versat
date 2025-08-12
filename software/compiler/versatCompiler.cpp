@@ -897,13 +897,6 @@ Code Generation:
 
 Mainly the structs for the AddressGen arguments.
 
-AddressGen:
-
-- Parsing and error reporting.
-
--- No check is actually being done currently for the presence or absence of variables. No error is being reported if a variable that was not declared does not exist and stuff like that.
--- Would also be useful to print a warning if a variable is defined but never used inside a AddressGen.
-
 - Usability.
 
 -- Inside the loops we cannot put any expression that we want. Something like a for x 0..(A/B) is not working.

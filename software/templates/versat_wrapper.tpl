@@ -282,6 +282,12 @@ Once operator+(_OnceTag t,F&& f){
 #define TEMP_once(LINE) TEMP__once( LINE )
 #define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
 
+@{declareExtraConfigs}
+
+extern "C" void VersatReset(){
+@{resetExtraConfigs}
+}
+
 static void InternalStartAccelerator(){
   V@{typeName}* self = dut;
 

@@ -93,6 +93,7 @@ SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out);
 // Use this function to get the literal value of a literal type expression, takes into account negation.
 int GetLiteralValue(SymbolicExpression* expr);
 
+bool ExpressionEqual(SymbolicExpression* left,SymbolicExpression* right);
 bool IsZero(SymbolicExpression* expr);
 
 // Must call normalizeLiteral before calling this.
@@ -109,12 +110,9 @@ SymbolicExpression* CollectTerms(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* ApplyDistributivity(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* MoveDivToTop(SymbolicExpression* base,Arena* out);
-
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
-
 SymbolicExpression* SymbolicReplace(SymbolicExpression* base,String varToReplace,SymbolicExpression* replacingExpr,Arena* out);
 SymbolicExpression* ReplaceVariables(SymbolicExpression* expr,Hashmap<String,SymbolicExpression*>* values,Arena* out);
-
 SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrint = false);
 SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out);
 

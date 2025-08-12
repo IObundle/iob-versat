@@ -139,6 +139,11 @@ void Print(AddressAccess* access){
   printf("\nInternal:\n");
   Print(access->internal);
   printf("\n");
+  if(access->dutyDivExpr){
+    printf("Duty:\n");
+    Print(access->dutyDivExpr);
+    printf("\n");
+  }
 }
 
 SymbolicExpression* EvaluateMaxLinearSumValue(LoopLinearSum* sum,Arena* out){
@@ -225,7 +230,7 @@ SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term){
   return term->term;
 }
 
-static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Arena* out){
+static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,SymbolicExpression* dutyExpr,Arena* out){
   TEMP_REGION(temp,out);
 
   int size = access->terms.size;
@@ -261,6 +266,13 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
 
   result.length = GetLoopSizeRepr(inner,out);
 
+#if 0
+  if(dutyExpr){
+    String expr = PushRepresentation(dutyExpr,temp);
+    result.length = PushString(out,"((%.*s) / (%.*s))",UN(result.length),UN(expr));
+  }
+#endif
+  
   if(size == 1){
     result.totalTransferSize = result.length;
     result.amountMinusOne = STRING("0");
@@ -268,13 +280,19 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Ar
   } else {
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
     result.addrShift = PushRepresentation(derived,out);
+
+#if 0
+    if(dutyExpr){
+      String expr = PushRepresentation(dutyExpr,temp);
+      result.addrShift = PushString(out,"((%.*s) / (%.*s))",UN(result.addrShift),UN(expr));
+    }
+#endif
     
     SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
     SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
 
     result.totalTransferSize = PushRepresentation(all,out);
     result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
-
   }
   
   return result;
@@ -323,7 +341,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
       newLoops[0].loopStart = PushLiteral(temp,0);
       newLoops[0].loopEnd = duty;
 
-      newLoops[1].loopEnd = SymbolicDiv(newLoops[1].loopEnd,duty,temp);
+      //newLoops[1].loopEnd = SymbolicDiv(newLoops[1].loopEnd,duty,temp);
       
       loops = newLoops;
     }
@@ -456,12 +474,12 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
 
 static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out){
   TEMP_REGION(temp,out);
-  
-  ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,temp);
-  CompiledAccess compiled = CompileAccess(access->internal,access->dutyDivExpr,temp);
 
   DEBUG_BREAK();
-  
+  Print(access);
+  ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,access->dutyDivExpr,temp);
+  CompiledAccess compiled = CompileAccess(access->internal,access->dutyDivExpr,temp);
+
   auto internal = compiled.internalAccess;
   
   SymbolicExpression* freeTerm = access->external->freeTerm;
@@ -710,7 +728,6 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
   // Building expression for the external address
   SymbolicExpression* normalized = Normalize(def->symbolic,temp);
 
-  DEBUG_BREAK();
   SymbolicExpression* fullExpr = normalized;
   SymbolicExpression* dutyDiv = nullptr;
   if(normalized->type == SymbolicExpressionType_DIV){
@@ -718,6 +735,13 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
       dutyDiv = normalized->bottom;
   }
 
+#if 1
+  if(dutyDiv){
+    finalExpression = SymbolicDiv(finalExpression,dutyDiv,temp);
+    finalExpression = Normalize(finalExpression,temp);
+  }
+#endif
+  
   // NOTE: If this hits, we probaby need to improve the normalization of divs. It should always be possible to normalize a symbolic expression into a (A/B) format, I think.
   Assert(fullExpr->type != SymbolicExpressionType_DIV);
   
@@ -738,10 +762,18 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
     }
 
     AddressGenForDef loop = def->loops[i];
-    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,loop.end,temp);
+
+    SymbolicExpression* end = loop.end;
+    if(i == 0 && dutyDiv){
+      // Duty expr was already removed from the total expression.
+      // But we still need to remove it from the end loop expression.
+      end = Normalize(SymbolicDiv(end,dutyDiv,temp),temp);
+    }
+    
+    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,end,temp);
     expr = AddLoopLinearSum(sum,expr,temp);
   }
-
+  
   // Extracts the constant term
   SymbolicExpression* toCalcConst = fullExpr;
 
@@ -760,6 +792,9 @@ AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content){
   result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
   result->dutyDivExpr = SymbolicDeepCopy(dutyDiv,out);
+  
+  Print(result);
+  DEBUG_BREAK();
   
   return result;
 };
@@ -811,8 +846,6 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     // NOTE: The problem is that the convert access functions do not know how to handle duty.
     AddressAccess* doubleLoop = ConvertAccessTo2External(access,loopIndex,temp);
     AddressAccess* singleLoop = ConvertAccessTo1External(access,temp);
-    
-    DEBUG_BREAK();
 
     region(temp){
       String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
@@ -824,7 +857,8 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
       c->VarDeclare(STRING("int"),STRING("singleLoop"),repr2);
     }
 
-    c->If(STRING("(!forceSingleLoop && forceDoubleLoop) || doubleLoop < singleLoop"));
+    // TODO: Maybe it would be better to just not generate single or double loop if we can check that one is always gonna be better than the other, right?
+    c->If(STRING("(!forceSingleLoop && forceDoubleLoop) && doubleLoop < singleLoop"));
     c->Comment(STRING("Double is smaller (better)"));
     region(temp){
       StringBuilder* b = StartString(temp);

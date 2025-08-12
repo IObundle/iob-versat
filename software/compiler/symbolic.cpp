@@ -1502,8 +1502,40 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
   case SymbolicExpressionType_FUNC: //fallthrough
   case SymbolicExpressionType_LITERAL: //fallthrough
   case SymbolicExpressionType_VARIABLE: //fallthrough
-  case SymbolicExpressionType_DIV:
     return ApplyGeneric(expr,out,ApplySimilarTermsAddition);
+  case SymbolicExpressionType_DIV: {
+#if 1
+    SymbolicExpression* top = ApplySimilarTermsAddition(expr->top,out);
+    SymbolicExpression* bottom = ApplySimilarTermsAddition(expr->bottom,out);
+
+    if(top->type == SymbolicExpressionType_VARIABLE && bottom->type == SymbolicExpressionType_VARIABLE){
+      if(ExpressionEqual(top,bottom)){
+        return PushLiteral(out,1);
+      }
+    }
+    // TODO: We currently only handle the case where div bottom only contains a literal. We are missing the bottom div expr being a mul.
+    if(top->type == SymbolicExpressionType_MUL && bottom->type == SymbolicExpressionType_VARIABLE){
+      // MARKED
+      Array<SymbolicExpression*> terms = top->terms;
+
+      for(int i = 0; i <  terms.size; i++){
+        SymbolicExpression* expr = terms[i];
+
+        if(ExpressionEqual(expr,bottom)){
+          Array<SymbolicExpression*> leftOvers = RemoveElement(terms,i,out);
+
+          if(leftOvers.size > 0){
+            return SymbolicMult(leftOvers,out);
+          } else {
+            return PushLiteral(out,1);
+          }
+        }
+      }
+    }
+#endif
+    
+    return ApplyGeneric(expr,out,ApplySimilarTermsAddition);
+  } break;
   case SymbolicExpressionType_MUL: {
     return ApplyGeneric(expr,out,ApplySimilarTermsAddition);
   } break;
@@ -2139,6 +2171,8 @@ void TestSymbolic(){
     {STRING("-(1*(x-1))+0"),STRING("-(x)+1")},
     {STRING("ALIGN(1,2)"),STRING("ALIGN(1,2)")},
     {STRING("1/x * y"),STRING("y/x")},
+    {STRING("x/x"),STRING("1")},
+    {STRING("(x*y)/x"),STRING("y")},
   };
 
   bool printNormalizeProcess = true;

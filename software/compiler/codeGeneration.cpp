@@ -3524,38 +3524,81 @@ if(SimulateDatabus){
         }
 
         if(wire.stage == VersatStage_COMPUTE){
-          String format = S8(R"FOO(
-  static iptr COMPUTED_@{0} = 0;
-  self->@{0} = COMPUTED_@{0};
-  COMPUTED_@{0} = @{1}@{0};
-                              )FOO");
+          String format = S8(R"FOO(  self->@{0} = COMPUTED_@{0};
+  COMPUTED_@{0} = @{1}@{0};)FOO");
           String values[2] = {wire.name,wire.source};
             
           c->RawLine(TemplateSubstitute(format,values,temp));
         }
           
         if(wire.stage == VersatStage_WRITE){
-          String format = S8(R"FOO(
-  static iptr COMPUTED_@{0} = 0;
-  static iptr WRITE_@{0} = 0;
-
-  self->@{0} = COMPUTED_@{0};
+          String format = S8(R"FOO(  self->@{0} = COMPUTED_@{0};
   COMPUTED_@{0} = WRITE_@{0};
-  WRITE_@{0} = @{1}@{0};
-                              )FOO");
+  WRITE_@{0} = @{1}@{0};)FOO");
           String values[2] = {wire.name,wire.source};
             
           c->RawLine(TemplateSubstitute(format,values,temp));
         }
       }
     }
-
+    
     for(int i = 0; i < info.nIOs; i++){
       c->RawLine(PushString(temp,"databusBuffer[%d].latencyCounter = INITIAL_MEMORY_LATENCY;\n",i));
     }
       
     String content = PushASTRepr(c,temp);
     TemplateSetString("internalStart",content);
+  }
+
+  {
+    CEmitter* c = StartCCode(temp);
+    for(auto wire : allConfigsVerilatorSide){
+      if(wire.stage == VersatStage_COMPUTE){
+        String format = S8("  COMPUTED_@{0} = 0;");
+        String values[2] = {wire.name,wire.source};
+            
+        c->RawLine(TemplateSubstitute(format,values,temp));
+      }
+
+        if(wire.stage == VersatStage_WRITE){
+          String format = S8(R"FOO(  COMPUTED_@{0} = 0;
+  WRITE_@{0} = 0;)FOO");
+          String values[2] = {wire.name,wire.source};
+            
+          c->RawLine(TemplateSubstitute(format,values,temp));
+        }
+    }
+
+    c->RawLine(S8(R"FOO(
+  AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
+  AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
+  memset(config,0,sizeof(AcceleratorConfig));)FOO"));
+    
+    String content = PushASTRepr(c,temp);
+    TemplateSetString("resetExtraConfigs",content);
+  }
+  
+  {
+    CEmitter* c = StartCCode(temp);
+    for(auto wire : allConfigsVerilatorSide){
+      if(wire.stage == VersatStage_COMPUTE){
+        String format = S8("static iptr COMPUTED_@{0} = 0;");
+        String values[2] = {wire.name,wire.source};
+            
+        c->RawLine(TemplateSubstitute(format,values,temp));
+      }
+
+        if(wire.stage == VersatStage_WRITE){
+          String format = S8(R"FOO(static iptr COMPUTED_@{0} = 0;
+static iptr WRITE_@{0} = 0;)FOO");
+          String values[2] = {wire.name,wire.source};
+            
+          c->RawLine(TemplateSubstitute(format,values,temp));
+        }
+    }
+    
+    String content = PushASTRepr(c,temp);
+    TemplateSetString("declareExtraConfigs",content);
   }
 
   {
