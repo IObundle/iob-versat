@@ -844,6 +844,10 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     if(leftOverSize > 1){
       c->StartExpression();
       for(int i = loopIndex + 1; i < totalSize; i++){
+        if(i != loopIndex + 1){
+          c->And();
+        }
+
         c->Var(PushString(temp,"a%d",loopIndex));
         c->GreaterThan();
         c->Var(PushString(temp,"a%d",i));
