@@ -3661,8 +3661,7 @@ static iptr WRITE_@{0} = 0;)FOO");
 
         c->IfOrElseIfFromExpression();
 
-        String content = PushString(temp,"(MergeType) %d",i);
-        c->Return(content);
+        c->Return(PushString(temp,"(MergeType) %d",i));
       }
 
       c->Else();

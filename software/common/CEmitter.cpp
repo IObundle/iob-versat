@@ -150,8 +150,8 @@ CExpr* FixBinaryOp(Array<CExpr> expressions,int& index,Arena* out){
   }
 
   CExpr* op = &expressions[index];
-  index += 1;
-  while(op->type == CExprType_OP && op->op == CExprOp_GREATER){
+  while(op->type == CExprType_OP && (op->op == CExprOp_GREATER || op->op == CExprOp_EQUALITY)){
+    index += 1;
     CExpr* right = FixTerm(expressions,index);
 
     op->children = PushArray<CExpr*>(out,2);
@@ -162,7 +162,6 @@ CExpr* FixBinaryOp(Array<CExpr> expressions,int& index,Arena* out){
 
     if(index < expressions.size){
       op = &expressions[index];
-      index += 1;
       continue;
     } else {
       break;
@@ -180,8 +179,8 @@ CExpr* FixAnd(Array<CExpr> expressions,int& index,Arena* out){
   }
   
   CExpr* op = &expressions[index];
-  index += 1;
   while(op->type == CExprType_OP && op->op == CExprOp_AND){
+    index += 1;
     CExpr* right = FixBinaryOp(expressions,index,out);
 
     op->children = PushArray<CExpr*>(out,2);
@@ -192,7 +191,6 @@ CExpr* FixAnd(Array<CExpr> expressions,int& index,Arena* out){
 
     if(index < expressions.size){
       op = &expressions[index];
-      index += 1;
       continue;
     } else {
       break;
@@ -211,6 +209,8 @@ String CEmitter::EndExpressionAsString(Arena* out){
   int index = 0;
   CExpr* top = FixAnd(expressions,index,temp);
 
+  Assert(index == expressions.size);
+  
   auto builder = StartString(temp);
   
   auto Recurse = [builder](auto Recurse,CExpr* top) -> void{
@@ -222,6 +222,8 @@ String CEmitter::EndExpressionAsString(Arena* out){
       builder->PushString("%d",top->lit);
     } break;
     case CExprType_OP:{
+      builder->PushString("(");
+      
       Recurse(Recurse,top->children[0]);
 
       FULL_SWITCH(top->op){
@@ -238,6 +240,7 @@ String CEmitter::EndExpressionAsString(Arena* out){
 
       // NOTE: Assuming we only care about binary operators, 
       Recurse(Recurse,top->children[1]);
+      builder->PushString(")");
     } break;
     } END_SWITCH();
   };

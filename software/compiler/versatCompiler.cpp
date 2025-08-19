@@ -722,8 +722,6 @@ int main(int argc,char* argv[]){
   FillStaticInfo(&info);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
-
-  DEBUG_BREAK();
   
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
   int externalIndex = 0;
