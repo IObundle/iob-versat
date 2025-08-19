@@ -344,6 +344,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->isComposite = IsTypeHierarchical(inst->declaration);
     elem->isMerge = inst->declaration->type == FUDeclarationType_MERGED;
     elem->isStatic = inst->isStatic;
+    elem->debug = inst->debug;
     elem->isGloballyStatic = inst->isStatic;
     elem->isShared = inst->sharedEnable;
     elem->isSpecificConfigShared = inst->isSpecificConfigShared;

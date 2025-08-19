@@ -2068,9 +2068,17 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       if(reconNode){
         instance->baseNodeDelay = reconDelay[i].nodeDelay->GetOrFail(reconNode).value;
         instance->localOrder = reconToOrder[i]->GetOrFail(reconNode);
+
+        instance->debug = reconNode->debug;
       } else {
         instance->baseNodeDelay = 0; // NOTE: Even if they do not belong, this delay is directly inserted into the header file, meaning that for now it's better if we keep everything at zero.
         instance->localOrder = 0;
+
+        // TODO: There must be a better way of handling this. We basically want it so that we can have data that is only associated to a merge config partition but not others.
+        //       If we store the data inside the FUInstance, that data probably appears directly on all of the merge partitions because the data is copied when building the graph.
+        //       In fact, there might be a bug where if the data is in a unit that does not get copied, it only gets mapped, then it is possible that we never get the data in the first place.
+        //       What this essentially means is that storing data inside a FUInstance is kinda "bad" but I still do not know if it is because we are being careless everywhere else or if there is a much better way that we are missing.
+        instance->debug = false;
       }
 
       // These map directly from the merged accelerator into the flattenedBaseType per type used.

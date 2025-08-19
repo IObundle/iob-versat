@@ -877,7 +877,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
 
   EmitDebugAddressGenInfo(initial,m);
   
-  String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
+  String functionName = PushString(temp,"CompileVUnit_%.*s_Ext",UNPACK_SS(addressGenName));
   m->FunctionBlock(STRING("static AddressVArguments"),functionName);
   m->Argument(STRING("void*"),STRING("ext"));
   
@@ -1182,7 +1182,7 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
   bool addComma = true;
   FULL_SWITCH(type){
   case AddressGenType_READ: {
-    strBuilder->PushString("CompileVUnit_%.*s(ext",UNPACK_SS(access->name));
+    strBuilder->PushString("CompileVUnit_%.*s_Ext(ext",UNPACK_SS(access->name));
   } break;
   case AddressGenType_GEN: {
     strBuilder->PushString("CompileVUnit_%.*s(",UNPACK_SS(access->name));

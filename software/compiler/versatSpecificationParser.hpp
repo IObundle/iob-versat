@@ -79,6 +79,7 @@ struct InstanceDeclaration{
   Array<Token> addressGenUsed; // NOTE: We do not check if address gen exists at parse time, we check it later.
   Array<Token> shareNames;
   bool negateShareNames;
+  bool debug;
 };
 
 struct ConnectionDef{

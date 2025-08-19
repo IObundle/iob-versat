@@ -167,6 +167,7 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   if(oldInstance->isStatic){
     newInst->isStatic = oldInstance->isStatic;
   }
+  newInst->debug = oldInstance->debug;
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
   
   if(preserveIds){

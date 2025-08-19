@@ -583,7 +583,11 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   while(1){
     Token potentialModifier = tok->PeekToken();
 
-    if(CompareString(potentialModifier,"static")){
+    if(CompareString(potentialModifier,"debug")){
+      tok->AdvancePeek();
+
+      res.debug = true;
+    } else if(CompareString(potentialModifier,"static")){
       if(res.modifier == InstanceDeclarationType_SHARE_CONFIG){
         ReportError(tok,potentialModifier,"We already seen a static modifier. Versat currently does not support static and share at the same time inside the same modifier");
         return {};
@@ -612,13 +616,6 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
       CHECK_IDENTIFIER(res.typeName);
 
       if(tok->IfNextToken("(")){
-#if 0
-        res.negateShareNames = false;
-        if(tok->IfNextToken("~")){
-          res.negateShareNames = true;
-        }
-#endif
-
         // TODO: For now, we assume that every wire specified inside the spec file is a negative (remove share).
         auto toShare = StartArray<Token>(out);
         while(!tok->Done()){
@@ -1328,6 +1325,8 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
       // TODO: In order to collect more errors, we could keep running using a type that contains infinite inputs and outputs. 
       break; // For now skip over.
     }
+
+    FUInstance* inst = nullptr;
     
     switch(decl.modifier){
     case InstanceDeclarationType_SHARE_CONFIG:{
@@ -1337,7 +1336,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
 
           for(int i = 0; i < varDecl.arraySize; i++){
             String actualName = GetActualArrayName(varDecl.name,i,temp);
-            FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
+            inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
 
             inst->addressGenUsed = CopyArray<String,Token>(decl.addressGenUsed,perm); // TODO: Should be accelerator arena
             
@@ -1361,7 +1360,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
           }
         } else {
           // TODO: Missing sharing, right?
-          FUInstance* inst = CreateOrGetInput(circuit,varDecl.name,insertedInputs++);
+          inst = CreateOrGetInput(circuit,varDecl.name,insertedInputs++);
           inst->addressGenUsed = CopyArray<String,Token>(decl.addressGenUsed,perm); // TODO: Should be accelerator arena
 
           names->Insert(varDecl.name);
@@ -1383,7 +1382,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         for(int i = 0; i < varDecl.arraySize; i++){
           String actualName = GetActualArrayName(varDecl.name,i,temp);
 
-          FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
+          inst = CreateFUInstanceWithParameters(circuit,type,actualName,decl);
           inst->addressGenUsed = CopyArray<String,Token>(decl.addressGenUsed,perm); // TODO: Should be accelerator arena
 
           table->Insert(actualName,inst);
@@ -1393,7 +1392,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
           }
         }
       } else {
-        FUInstance* inst = CreateFUInstanceWithParameters(circuit,type,varDecl.name,decl);
+        inst = CreateFUInstanceWithParameters(circuit,type,varDecl.name,decl);
         inst->addressGenUsed = CopyArray<String,Token>(decl.addressGenUsed,perm); // TODO: Should be accelerator arena
 
         table->Insert(varDecl.name,inst);
@@ -1403,6 +1402,10 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         }
       }
     } break;
+    }
+
+    if(inst){
+      inst->debug = decl.debug;
     }
   }
 
@@ -1593,6 +1596,7 @@ Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
   }
 
   if(anyError){
+    printf("Error parsing versat spec\n");
     exit(-1);
   }
 
@@ -1761,9 +1765,15 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
   SymbolicExpression* symbolic = nullptr;
   while(!tok->Done()){
-    Token construct = tok->NextToken();
+    Token construct = tok->PeekToken();
+    
+    if(CompareString(construct,"}")){
+      break;
+    }
+    
     if(CompareString(construct,"for")){
-
+      tok->AdvancePeek();
+      
       Token loopVariable = tok->NextToken();
       CHECK_IDENTIFIER(loopVariable);
 
@@ -1777,6 +1787,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
       
       *loops->PushElem() = (AddressGenForDef){.loopVariable = loopVariable,.start = start,.end = end};
     } else if(CompareString(construct,"addr")){
+      tok->AdvancePeek();
+
       EXPECT(tok,"=");
 
       auto symbolicExpression = ParseSymbolicExpression(tok,out);
@@ -1789,7 +1801,8 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   }
 
   EXPECT(tok,"}");
-  
+
+  // TODO: We actually want to return something here. An "Empty" address gen, which basically does nothing but still lets the program run the normal flow. It just does nothing in the sense that we do not actually generate anything for such address gen.
   if(!symbolic){
     return {};
   }

@@ -3637,7 +3637,8 @@ static iptr WRITE_@{0} = 0;)FOO");
 
     // From accel config, obtain the merge index.
     CEmitter* c = StartCCode(temp);
-    
+
+    // MergeTypeFromConfig
     if(iter.MergeSize() > 1 && muxInfo.size > 0){
       c->FunctionBlock(S8("MergeType"),S8("MergeTypeFromConfig"));
       c->Argument(S8("AcceleratorConfig*"),S8("config"));
@@ -3814,8 +3815,19 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
   CEmitter* c = StartCCode(temp);
 
   Array<Array<InstanceInfo*>> unitInfoPerMerge = VUnitInfoPerMerge(info,temp);
+
   
-  c->VarDeclare(S8("bool"),S8("debugging"),S8("false"));
+  bool debug = false;
+  for(int i = 0; i <  unitInfoPerMerge.size; i++){
+    Array<InstanceInfo*> merge  =  unitInfoPerMerge[i];
+    for(int k = 0; k <  merge.size; k++){
+      InstanceInfo* unit =  merge[k];
+      debug |= unit->debug;
+    }
+  }
+
+  String debugVal = debug ? S8("true") : S8("false");
+  c->VarDeclare(S8("bool"),S8("debugging"),debugVal);
 
   for(int i = 0; i <  unitInfoPerMerge.size; i++){
     Array<InstanceInfo*> merge  =  unitInfoPerMerge[i];
@@ -3823,7 +3835,9 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
     for(int k = 0; k <  merge.size; k++){
       InstanceInfo* unit =  merge[k];
       String sim = PushString(temp,"SIMULATE_MERGE_%d_%.*s",i,UN(unit->baseName));
-      c->VarDeclare(S8("bool"),sim,S8("false"));
+
+      String debugVal = unit->debug ? S8("true") : S8("false");
+      c->VarDeclare(S8("bool"),sim,debugVal);
       String eff = PushString(temp,"EFFICIENCY_MERGE_%d_%.*s",i,UN(unit->baseName));
       c->VarDeclare(S8("bool"),eff,S8("false"));
     }
