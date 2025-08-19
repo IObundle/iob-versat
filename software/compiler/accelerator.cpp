@@ -127,7 +127,7 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
   // Copy of instances
   for(FUInstance* inst : accel->allocated){
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
-
+    
     MappingInsertEqualNode(map,inst,newInst);
   }
 
@@ -167,7 +167,6 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   if(oldInstance->isStatic){
     newInst->isStatic = oldInstance->isStatic;
   }
-  newInst->debug = oldInstance->debug;
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
   
   if(preserveIds){
@@ -175,6 +174,7 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   }
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
   newInst->addressGenUsed = oldInstance->addressGenUsed;
+  newInst->debug = oldInstance->debug;
   
   return newInst;
 }
