@@ -807,7 +807,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     }
 
     // TODO: Maybe it would be better to just not generate single or double loop if we can check that one is always gonna be better than the other, right?
-    c->If(STRING("(!forceSingleLoop && forceDoubleLoop) && doubleLoop < singleLoop"));
+    c->If(STRING("(!forceSingleLoop && forceDoubleLoop) || (!forceSingleLoop && (doubleLoop < singleLoop))"));
     c->Comment(STRING("Double is smaller (better)"));
     region(temp){
       StringBuilder* b = StartString(temp);
@@ -1225,6 +1225,32 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
   CAST* ast = EndCCode(m);
 
   strBuilder = StartString(temp);
+  Repr(ast,strBuilder);
+  String data = EndString(out,strBuilder);
+  return data;
+}
+
+String GenerateAddressPrintFunction(AddressAccess* access,Arena* out){
+  TEMP_REGION(temp,out);
+
+  CEmitter* m = StartCCode(temp);
+
+  Array<String> inputVars = access->inputVariableNames;
+
+  String functionName = PushString(temp,"Print_%.*s",UNPACK_SS(access->name));
+  m->FunctionBlock(STRING("static void"),functionName);
+  for(String input : inputVars){
+    m->Argument(STRING("int"),input);
+  }
+
+  for(String input : inputVars){
+    String statement = PushString(temp,"printf(\"%.*s:%%d\\n\",%.*s)",UN(input),UN(input));
+    m->Statement(statement);
+  }
+  
+  CAST* ast = EndCCode(m);
+
+  auto strBuilder = StartString(temp);
   Repr(ast,strBuilder);
   String data = EndString(out,strBuilder);
   return data;

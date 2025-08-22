@@ -2685,7 +2685,8 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   TrieSet<Pair<String,AccessAndType>>* structNameAndAddressGen = PushTrieSet<Pair<String,AccessAndType>>(temp);
   TrieSet<AccessAndType>* addressGenUsed = PushTrieSet<AccessAndType>(temp);
   TrieSet<Pair<String,AddressGenType>>* structsUsed = PushTrieSet<Pair<String,AddressGenType>>(temp);
-
+  TrieSet<AddressAccess*>* addressAccessUsed = PushTrieSet<AddressAccess*>(temp);
+  
   AccelInfoIterator top = StartIteration(&info);
   for(int i = 0; i < top.MergeSize(); i++){
     AccelInfoIterator iter = top;
@@ -2713,6 +2714,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         structNameAndAddressGen->Insert({typeName,{access,type}});
         addressGenUsed->Insert({access,type});
         structsUsed->Insert({typeName,type});
+        addressAccessUsed->Insert(access);
       }
     }
   }
@@ -2722,6 +2724,11 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   GrowableArray<String> builder = StartArray<String>(temp2);
     
+  for(AddressAccess* access : addressAccessUsed){
+    String data = GenerateAddressPrintFunction(access,temp);
+    *builder.PushElem() = data;
+  }
+
   for(AccessAndType p : addressGenUsed){
     AddressAccess* initial = p.access;
     AddressGenType type = p.type;

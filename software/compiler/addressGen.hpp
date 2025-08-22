@@ -66,3 +66,4 @@ SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 String GenerateAddressGenCompilationFunction(AddressAccess* initial,AddressGenType type,Arena* out);
 String GenerateAddressLoadingFunction(String structName,AddressGenType type,Arena* out);
 String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenType type,Arena* out);
+String GenerateAddressPrintFunction(AddressAccess* initial,Arena* out);
