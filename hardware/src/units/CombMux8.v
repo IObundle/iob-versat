@@ -3,13 +3,6 @@
 module CombMux8 #(
    parameter DATA_W = 32
 ) (
-   //control
-   input clk,
-   input rst,
-
-   input running,
-   input run,
-
    //input / output data
    input [DATA_W-1:0] in0,
    input [DATA_W-1:0] in1,
