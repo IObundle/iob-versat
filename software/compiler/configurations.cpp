@@ -8,6 +8,7 @@
 #include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 #include "versat.hpp"
 #include "textualRepresentation.hpp"
 #include <strings.h>
@@ -1052,7 +1053,7 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
     }
 
     info->signalLoop |= type->signalLoop;
-    if(ptr->declaration->implementsDone){
+    if(ptr->declaration->singleInterfaces & SingleInterfaces_DONE){
       nDones += 1;
     }
   }
@@ -1124,7 +1125,11 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   
   for(FUInstance* ptr : accel->allocated){
     info->numberConnections += Size(ptr->allOutputs);
-    info->implementsDone |= ptr->declaration->implementsDone;
+
+
+    if(ptr->declaration->singleInterfaces & SingleInterfaces_DONE){
+      info->implementsDone = true;
+    }
   }
 }
 

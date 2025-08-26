@@ -4,6 +4,8 @@
 
 // TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
 #include "embeddedData.hpp"
+#include "filesystem.hpp"
+#include "globals.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
@@ -181,6 +183,8 @@ parse_opt (int key, char *arg,
 
     case 'p': opts->options->prefixIObPort = STRING(arg); break;
 
+    case 'T': opts->options->opMode = VersatOperationMode_GENERATE_TESTBENCH; break;
+
     case 'E': {
       opts->options->extraIOb = true;
       opts->options->useSymbolAddress = true;
@@ -214,6 +218,7 @@ struct argp_option options[] =
     { 0, 'g',"Path",   OPTION_HIDDEN, "Debug path"},
     { 0, 'o',"Path",   0, "Hardware output path"},
     { 0, 'O',"Path",   0, "Software output path"},
+    { 0, 'T',0,        0, "Generate a testbench for the given unit that exercises it as if being used by an accelerator."},
     { 0 }
   };
 
@@ -242,7 +247,7 @@ int main(int argc,char* argv[]){
   return 0;
 #endif
   
-  argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
+  argp argp = { options, parse_opt, "SpecFile\n-T UnitName", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
   OptionsGather gather = {};
   gather.verilogFiles = PushArenaList<String>(temp);
@@ -257,12 +262,7 @@ int main(int argc,char* argv[]){
     printf("Error parsing arguments. Call -h help to print usage and argument help\n");
     return -1;
   }
-
-  if(Empty(globalOptions.topName)){
-    printf("Need to specify top unit with -t\n");
-    exit(-1);
-  }
-
+  
   globalOptions.verilogFiles = PushArrayFromList(perm,gather.verilogFiles);
   globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
@@ -271,12 +271,23 @@ int main(int argc,char* argv[]){
   InitializeTemplateEngine(perm);
   InitializeSimpleDeclarations();
 
-  globalDebug.outputAccelerator = true;
-  globalDebug.outputAcceleratorInfo = true;
-  globalDebug.outputVersat = true;
+  if(globalOptions.opMode == VersatOperationMode_GENERATE_TESTBENCH){
+    globalOptions.topName = globalOptions.specificationFilepath;
+  }
+
+  globalOptions.hardwareOutputFilepath = OS_NormalizePath(globalOptions.hardwareOutputFilepath,temp);
+  globalOptions.softwareOutputFilepath = OS_NormalizePath(globalOptions.softwareOutputFilepath,temp);
+
   globalDebug.outputGraphs = true;
   globalDebug.outputConsolidationGraphs = true;
   globalDebug.outputVCD = true;
+  
+  if(Empty(globalOptions.topName)){
+    char name[] = "versat";
+    argp_help(&argp,stdout,ARGP_HELP_STD_HELP,name);
+    printf("\nNeed to specify top unit with -t\n");
+    exit(-1);
+  }
   
   // Register Versat common files. 
   bool anyError = false;
@@ -380,6 +391,25 @@ int main(int argc,char* argv[]){
     }
   }
   if(error){
+    return -1;
+  }
+
+  if(globalOptions.opMode == VersatOperationMode_GENERATE_TESTBENCH){
+    String topLevelUnit = globalOptions.topName;
+
+    FUDeclaration* decl = GetTypeByName(topLevelUnit);
+
+    if(!decl){
+      printf("Unit of name '%.*s' does not exist\n",UN(topLevelUnit));
+      return -1;
+    }
+
+    String path = PushString(temp,"%.*s/testbench.v",UN(globalOptions.hardwareOutputFilepath));
+    FILE* testbenchLocation = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
+    DEFER_CLOSE_FILE(testbenchLocation);
+
+    OutputTestbench(decl,testbenchLocation);
+    
     return -1;
   }
   
@@ -880,6 +910,10 @@ An empty AddressGen is not working correctly. The address gen parser is programm
 */
 
 /*
+
+Code generation lint friendly:
+
+- If a module is composed of units that do not contain certain signals, like clk, rst, run and the likes, then the module should not have those signals as well. It is very simple in fact. We just need to do a OR of all the single interfaces of all the subunits and then make sure that the code generation is capable of handling the lack of these signals.
 
 Usability:
 

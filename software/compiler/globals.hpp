@@ -6,6 +6,11 @@
 struct AddressGenDef;
 struct FUDeclaration;
 
+enum VersatOperationMode{
+  VersatOperationMode_GENERATE_ACCELERATOR,
+  VersatOperationMode_GENERATE_TESTBENCH
+};
+
 struct Options{
   Array<String> verilogFiles;
   Array<String> extraSources;
@@ -33,9 +38,11 @@ struct Options{
   bool disableDelayPropagation;
   bool useDMA;
   bool exportInternalMemories;
-
+  
   bool extraIOb;
   bool useSymbolAddress; // If the system removes the LSB bits of the address (alignment info) and if we must generate code to account for that.
+
+  VersatOperationMode opMode;
 };
 
 enum GraphDotFormat : int;
@@ -44,11 +51,7 @@ struct DebugState{
   GraphDotFormat dotFormat;
   bool outputGraphs;
   bool outputConsolidationGraphs;
-  bool outputAccelerator;
-  bool outputVersat;
   bool outputVCD;
-  bool outputAcceleratorInfo;
-  bool useFixedBuffers;
 };
 
 extern Options globalOptions;

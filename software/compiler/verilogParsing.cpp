@@ -881,15 +881,15 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
         info.memoryMappedBits = decl.range;
       }
     } else if(CheckFormat("clk",decl.name)){
-      info.hasClk = true;
+      info.singleInterfaces |= SingleInterfaces_CLK;
     } else if(CheckFormat("rst",decl.name)){
-      info.hasReset = true;
+      info.singleInterfaces |= SingleInterfaces_RESET;
     } else if(CheckFormat("run",decl.name)){
-      info.hasRun = true;
+      info.singleInterfaces |= SingleInterfaces_RUN;
     } else if(CheckFormat("running",decl.name)){
-      info.hasRunning = true;
+      info.singleInterfaces |= SingleInterfaces_RUNNING;
     } else if(CheckFormat("done",decl.name)){
-      info.hasDone = true;
+      info.singleInterfaces |= SingleInterfaces_DONE;
     } else if(decl.type == PortDeclaration::INPUT){ // Config
       WireExpression* wire = configs.PushElem();
 

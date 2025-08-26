@@ -667,7 +667,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
       builder.PushArray(decl->externalMemory);
     }
 
-    if(decl->implementsDone){
+    if(decl->singleInterfaces & SingleInterfaces_DONE){
       numberDones += 1;
     }
   }

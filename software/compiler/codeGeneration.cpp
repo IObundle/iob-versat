@@ -14,6 +14,7 @@
 #include "templateEngine.hpp"
 
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 #include "versatSpecificationParser.hpp"
 
 // TODO: If we could find a way of describing the format of verilog modules that we care about, we could also perform
@@ -612,15 +613,21 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
       m->PortConnect("signal_loop","signal_loop");
     }
 
-    m->PortConnect("running","running");
-    m->PortConnect("run","run");
-
-    if(decl->implementsDone){
+    if(decl->singleInterfaces & SingleInterfaces_RUNNING){
+      m->PortConnect("running","running");
+    }
+    if(decl->singleInterfaces & SingleInterfaces_RUN){
+      m->PortConnect("run","run");
+    }
+    if(decl->singleInterfaces & SingleInterfaces_DONE){
       m->PortConnect("done",SF("unitDone[%d]",doneSeen++));
     }
-
-    m->PortConnect("clk","clk");
-    m->PortConnect("rst","rst");
+    if(decl->singleInterfaces & SingleInterfaces_CLK){
+      m->PortConnect("clk","clk");
+    }
+    if(decl->singleInterfaces & SingleInterfaces_RESET){
+      m->PortConnect("rst","rst");
+    }
       
     m->EndInstance();
   }
@@ -772,15 +779,21 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
       m->PortConnect("signal_loop","signal_loop");
     }
 
-    m->PortConnect("running","running");
-    m->PortConnect("run","run");
-
-    if(decl->implementsDone){
+    if(decl->singleInterfaces & SingleInterfaces_RUNNING){
+      m->PortConnect("running","running");
+    }
+    if(decl->singleInterfaces & SingleInterfaces_RUN){
+      m->PortConnect("run","run");
+    }
+    if(decl->singleInterfaces & SingleInterfaces_DONE){
       m->PortConnect("done",SF("unitDone[%d]",doneSeen++));
     }
-
-    m->PortConnect("clk","clk");
-    m->PortConnect("rst","rst");
+    if(decl->singleInterfaces & SingleInterfaces_CLK){
+      m->PortConnect("clk","clk");
+    }
+    if(decl->singleInterfaces & SingleInterfaces_RESET){
+      m->PortConnect("rst","rst");
+    }
       
     m->EndInstance();
   }
@@ -839,10 +852,20 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   m->ModuleParam("DELAY_W",0);
   m->ModuleParam("LEN_W",0);
 
-  m->Input("run");
-  m->Input("running");
-  m->Input("clk");
-  m->Input("rst");
+  // TODO: For now, we always output these interfaces because the wrapper that interacts with the Verilated unit is not capable of handling the lack of these wires. Furthermore, changing this stuff is probably a bit time consuming right now, as we need to change the logic used for simulating units that do not contain wires like rst, clk and so on.
+  //       In fact, simulating a design that does not contain a clk seems to require a entirely different approach compared to a clocked one. Since we are in full control of the generated code we can do it, but will probably take some work.
+  //if(module->singleInterfaces & SingleInterfaces_RUN){
+    m->Input("run");
+  //}
+  //if(module->singleInterfaces & SingleInterfaces_RUNNING){
+    m->Input("running");
+  //}
+  //if(module->singleInterfaces & SingleInterfaces_CLK){
+    m->Input("clk");
+  //}
+  //if(module->singleInterfaces & SingleInterfaces_RESET){
+    m->Input("rst");
+  //}
 
   if(info.nDones){
     m->Output("done");
@@ -4054,4 +4077,25 @@ assign axi_araddr_o = temp_axi_araddr_o;
     fflush(output);
     OS_SetScriptPermissions(output);
   }
+}
+
+void OutputTestbench(FUDeclaration* decl,FILE* file){
+  TEMP_REGION(temp,nullptr);
+
+  VEmitter* m = StartVCode(temp);
+  m->Timescale("1ps","1ps");
+  m->Module(S8("Testbench"));
+
+  
+  
+  m->EndModule();
+
+  VAST* ast = EndVCode(m);
+
+  auto* builder = StartString(temp);
+  Repr(ast,builder);
+
+  String content = EndString(temp,builder);
+
+  fprintf(file,"%.*s",UNPACK_SS(content));
 }
