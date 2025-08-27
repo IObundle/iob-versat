@@ -168,8 +168,8 @@ module LookupTableRead #(
       .run_i(run && !disabled),
 
       //configurations 
-      .iterations_i(iterA),
-      .period_i    (perA),
+      .iter_i(iterA),
+      .per_i    (perA),
       .duty_i      (dutyA),
       .delay_i     (delayA),
       .start_i     (startA),

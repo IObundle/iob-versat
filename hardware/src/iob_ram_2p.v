@@ -24,12 +24,22 @@ module iob_ram_2p #(
    // Declare the RAM
    reg [DATA_W-1:0] mem    [(2**ADDR_W)-1:0];
 
+`ifdef NO_X_SIM
+   integer i;
+`endif
    reg [DATA_W-1:0] r_data;
    // Initialize the RAM
    initial begin
        if (MEM_INIT_FILE_INT != "none") begin
            $readmemh(MEM_INIT_FILE_INT, mem, 0, (2 ** ADDR_W) - 1);
-       end
+       end else begin
+`ifdef NO_X_SIM
+         // We rather initialize with some dummy value than with zeroes. More likely to catch a problem.
+           for(i = 0; i < (2**ADDR_W); i = i + 1) begin
+               mem[i] = {(DATA_W/8){8'hBA}};
+           end
+`endif
+    end
    end
 
    //read port

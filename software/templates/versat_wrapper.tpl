@@ -163,6 +163,12 @@ static void CloseWaveform(){
 #endif
 }
 
+static void FillMemoryWithGarbage(){
+  // Need to select a value that is not likely to appear and that the user can quickly identify as a "garbage" value.
+  int unlikelyValue = 0xBA;
+  memset(externalMemory,unlikelyValue,totalExternalMemory);
+}
+
 extern "C" void VersatAcceleratorCreate(){
 #ifdef TRACE
    if(CreateVCD){
@@ -179,6 +185,9 @@ extern "C" void VersatAcceleratorCreate(){
       PRINT("Initialize function is being called multiple times\n");
       exit(-1);
    }
+
+   // In order to properly test memories, we fill them with a value different than zero. 
+   FillMemoryWithGarbage();
 
    dut = self;
 
@@ -281,6 +290,13 @@ Once operator+(_OnceTag t,F&& f){
 #define TEMP__once(LINE) TEMPonce_ ## LINE
 #define TEMP_once(LINE) TEMP__once( LINE )
 #define once static Once TEMP_once(__LINE__) = _OnceTag() + [&]()
+
+@{declareExtraConfigs}
+
+extern "C" void VersatReset(){
+  FillMemoryWithGarbage();
+  @{resetExtraConfigs}
+}
 
 static void InternalStartAccelerator(){
   V@{typeName}* self = dut;
@@ -485,17 +501,17 @@ SimulateVReadResult SimulateVRead(AddressVArguments args){
 
    self->start_i = 0;
    self->duty_i = args.duty;
-   self->period_i = args.per;
+   self->per_i = args.per;
    self->incr_i = args.incr;
-   self->iterations_i = args.iter;
+   self->iter_i = args.iter;
    self->shift_i = args.shift;
-   self->period2_i = args.per2;
+   self->per2_i = args.per2;
    self->incr2_i = args.incr2;
-   self->iterations2_i = args.iter2;
+   self->iter2_i = args.iter2;
    self->shift2_i = args.shift2;
-   self->period3_i = args.per3;
+   self->per3_i = args.per3;
    self->incr3_i = args.incr3;
-   self->iterations3_i = args.iter3;
+   self->iter3_i = args.iter3;
    self->shift3_i = args.shift3;
 
    self->databus_length = 0;
@@ -606,17 +622,17 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){
 
    self->start_i = 0;
    self->duty_i = args.duty;
-   self->period_i = args.per;
+   self->per_i = args.per;
    self->incr_i = args.incr;
-   self->iterations_i = args.iter;
+   self->iter_i = args.iter;
    self->shift_i = args.shift;
-   self->period2_i = args.per2;
+   self->per2_i = args.per2;
    self->incr2_i = args.incr2;
-   self->iterations2_i = args.iter2;
+   self->iter2_i = args.iter2;
    self->shift2_i = args.shift2;
-   self->period3_i = args.per3;
+   self->per3_i = args.per3;
    self->incr3_i = args.incr3;
-   self->iterations3_i = args.iter3;
+   self->iter3_i = args.iter3;
    self->shift3_i = args.shift3;
 
    self->databus_length = 0;
@@ -723,17 +739,17 @@ void SimulateAndPrintAddressGen(AddressVArguments args){
 
    self->start_i = 0;
    self->duty_i = args.duty;
-   self->period_i = args.per;
+   self->per_i = args.per;
    self->incr_i = args.incr;
-   self->iterations_i = args.iter;
+   self->iter_i = args.iter;
    self->shift_i = args.shift;
-   self->period2_i = args.per2;
+   self->per2_i = args.per2;
    self->incr2_i = args.incr2;
-   self->iterations2_i = args.iter2;
+   self->iter2_i = args.iter2;
    self->shift2_i = args.shift2;
-   self->period3_i = args.per3;
+   self->per3_i = args.per3;
    self->incr3_i = args.incr3;
-   self->iterations3_i = args.iter3;
+   self->iter3_i = args.iter3;
    self->shift3_i = args.shift3;
 
    self->databus_length = 0;

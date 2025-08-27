@@ -26,6 +26,7 @@ extern "C"{
 
 // Functions exported by wrapper that allow the accelerator to be simulated
 int VersatAcceleratorCyclesElapsed();
+void VersatReset();
 void InitializeVerilator();
 void VersatAcceleratorCreate();
 void VersatAcceleratorSimulate();
@@ -86,6 +87,11 @@ static void CheckVersatInitialized(){
   }
 }
 
+void ResetAccelerator(){
+  VersatReset();
+  VersatLoadDelay(delayBuffer);
+}
+
 void SignalLoop(){
   VersatSignalLoop();
 }
@@ -129,7 +135,7 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   }
   
   if(destInsideConfig){
-    memcpy(dest,data,size);
+    memcpy((void*) dest,(void*) data,size);
   } else {
     for(int i = 0; i < (size / 4); i++){
       VersatUnitWrite(dest,i,view[i]);

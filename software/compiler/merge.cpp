@@ -2081,7 +2081,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         FUInstance* test = MappingMapNode(inverted,ptr);
 
         if(test){
+          // TODO: This stuff is so complicated already. We need a good day of cleaning up all the merge stuff. Very hard to make any progress the way we are doing right now. This is almost collapsing as it stands and I find it hard that this is working at all.
           instance->addressGenUsed = test->addressGenUsed;
+          instance->debug = test->debug;
         }
       }
       

@@ -710,7 +710,9 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     
     EmitStatementList(b,top->top.declarations,state,level);
 
-    // Top level port connections are expected to always end in a ','. 
+    // Because we want to be able to emit stuff like portmaps and port connection files,
+    // the top level must be able to work even if it does not start with a module connection
+    // If this starts becoming complicated, need to find an alternate way of doing this.
     for(VAST* ast : top->top.portConnections){
       Repr(ast,b,state,level + 1);
       b->PushString(",\n");
@@ -782,7 +784,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
     EmitStatementList(b,top->module.declarations,state,level + 1);
 
-    b->PushString("endmodule\n");
+    b->PushString("\nendmodule");
   } break;
   
   case VASTType_INSTANCE:{

@@ -94,8 +94,8 @@ struct FUDeclaration{
   FUDeclarationType type;
   DelayType delayType;
 
+  SingleInterfaces singleInterfaces;
   bool isOperation;
-  bool implementsDone;
   bool signalLoop;
 
   // Simple access functions

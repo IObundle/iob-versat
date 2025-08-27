@@ -127,7 +127,7 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
   // Copy of instances
   for(FUInstance* inst : accel->allocated){
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
-
+    
     MappingInsertEqualNode(map,inst,newInst);
   }
 
@@ -174,6 +174,7 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   }
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
   newInst->addressGenUsed = oldInstance->addressGenUsed;
+  newInst->debug = oldInstance->debug;
   
   return newInst;
 }
@@ -666,7 +667,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
       builder.PushArray(decl->externalMemory);
     }
 
-    if(decl->implementsDone){
+    if(decl->singleInterfaces & SingleInterfaces_DONE){
       numberDones += 1;
     }
   }

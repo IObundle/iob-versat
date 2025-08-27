@@ -138,6 +138,19 @@ inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
   return res;
 }
 
+enum SingleInterfaces{
+  SingleInterfaces_DONE    = (1<<1),
+  SingleInterfaces_CLK     = (1<<2),
+  SingleInterfaces_RESET   = (1<<3),
+  SingleInterfaces_RUN     = (1<<4),
+  SingleInterfaces_RUNNING = (1<<5)
+};
+
+static inline SingleInterfaces& operator|=(SingleInterfaces& left,SingleInterfaces in){
+  left = (SingleInterfaces) (((int) left) | ((int) in));
+  return left;
+}
+
 struct ModuleInfo{
   String name;
   Array<ParameterExpression> defaultParameters;
@@ -150,13 +163,9 @@ struct ModuleInfo{
   int nIO;
   ExpressionRange memoryMappedBits;
   ExpressionRange databusAddrSize;
+  SingleInterfaces singleInterfaces;
   bool doesIO;
   bool memoryMapped;
-  bool hasDone;
-  bool hasClk;
-  bool hasReset;
-  bool hasRun;
-  bool hasRunning;
   bool isSource;
   bool signalLoop;
 };

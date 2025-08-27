@@ -128,6 +128,7 @@ enum CExprType{
 
 enum CExprOp{
   CExprOp_AND,
+  CExprOp_GREATER,
   CExprOp_EQUALITY
 };
 
@@ -211,6 +212,7 @@ struct CEmitter{
   void IfOrElseIf(String expression);
   
   void IfFromExpression();
+  void ElseIfFromExpression();
   void IfOrElseIfFromExpression();
   
   void SwitchBlock(String switchExpr);
@@ -226,6 +228,7 @@ struct CEmitter{
   // Binary operations for expressions.
   void IsEqual();
   void And();
+  void GreaterThan();
   
   void Comment(String expression);
   void Statement(String statement); // Generic statement, mostly to bypass any other logic and insert stuff directly.

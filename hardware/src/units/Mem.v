@@ -111,7 +111,6 @@
    assign out1 = (running & (|testDelay1) == 0) ? outB_reg : 0;
 
    // Delay done by 3 cycles so that pc-emul matches simulation
-   /*
    reg doneA_1,doneB_1;
    reg doneA_2,doneB_2;
    reg doneA_3,doneB_3;
@@ -131,10 +130,9 @@
          doneB_3 <= doneB_2;
       end
    end
-   */
-   //assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
+   assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
 
-   assign done = (doneA & doneB);
+   //assign done = (doneA & doneB);
 
    //function to reverse bits
    function [ADDR_W-1:0] reverseBits;
@@ -174,13 +172,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perA),
+      .per_i(perA),
       .start_i (startA),
       .incr_i  (incrA),
       .delay_i (delay0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
+      .iter_i(iterA),
       .duty_i      (dutyA),
       .shift_i     (shiftA),
 `endif
@@ -204,13 +202,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perB),
+      .per_i(perB),
       .start_i (startB),
       .incr_i  (incrB),
       .delay_i (delay1),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterB),
+      .iter_i(iterB),
       .duty_i      (dutyB),
       .shift_i     (shiftB),
 `endif

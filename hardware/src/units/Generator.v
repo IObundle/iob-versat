@@ -11,22 +11,22 @@ module Generator #(
    input run,
 
    //configurations 
-   input [          31:0] iterations,
+   input [          31:0] iter,
    input [          31:0] shift,
 
-   input [PERIOD_W - 1:0] period,
+   input [PERIOD_W - 1:0] per,
    input [          31:0] incr,
 
-   input [          31:0] iterations2,
+   input [          31:0] iter2,
    input [          31:0] shift2,
 
-   input [PERIOD_W - 1:0] period2,
+   input [PERIOD_W - 1:0] per2,
    input [          31:0] incr2,
 
-   input [          31:0] iterations3,
+   input [          31:0] iter3,
    input [          31:0] shift3,
 
-   input [PERIOD_W - 1:0] period3,
+   input [PERIOD_W - 1:0] per3,
    input [          31:0] incr3,
 
    input [PERIOD_W - 1:0] duty,
@@ -58,22 +58,22 @@ module Generator #(
       .ignore_first_i(0),
 
       //configurations 
-      .iterations_i(iterations),
+      .iter_i(iter),
       .shift_i     (shift),
 
-      .period_i    (period),
+      .per_i    (per),
       .incr_i      (incr),
 
-      .iterations2_i(iterations2),
+      .iter2_i(iter2),
       .shift2_i     (shift2),
 
-      .period2_i    (period2),
+      .per2_i    (per2),
       .incr2_i      (incr2),
 
-      .iterations3_i(iterations3),
+      .iter3_i(iter3),
       .shift3_i     (shift3),
 
-      .period3_i    (period3),
+      .per3_i    (per3),
       .incr3_i      (incr3),
 
       .duty_i      (duty),

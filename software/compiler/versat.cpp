@@ -7,6 +7,7 @@
 #include "templateEngine.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 
 int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now.
@@ -66,7 +67,7 @@ SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out
   return {};
 }
 
-// TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
+// TODO: Need to remake this function and probably ModuleInfo as the versat compiler change is made
 Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   TEMP_REGION(temp,nullptr);
 
@@ -179,33 +180,46 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     decl.memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
   }
 
-  decl.implementsDone = info->hasDone;
+  decl.singleInterfaces = info->singleInterfaces;
   decl.signalLoop = info->signalLoop;
 
   if(info->isSource){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
 
-  // TODO: Is this something generic that we could move into meta code?
-  for(AddressGenWireNames_GenType gen : AddressGenWireNames){
-    bool isType = true;
-    for(String str : gen.names){
-      bool foundOne = false;
-      for(Wire wire : configs){
-        if(CompareString(str,wire.name)){
-          foundOne = true;
+  auto FollowsInterface = [](Array<Wire> configs,Array<String> interfaceWireNames) -> bool{
+    // No point in even checking
+    if(configs.size < interfaceWireNames.size){
+      return false;
+    }
+    
+    for(String str : interfaceWireNames){
+      bool found = false;
+      for(Wire w : configs){
+        if(CompareString(w.name,str)){
+          found = true;
           break;
         }
       }
-      if(!foundOne){
-        isType = false;
-        break;
+
+      if(!found){
+        return false;
       }
     }
 
-    if(isType){
-      decl.supportedAddressGenType = (AddressGenType) (decl.supportedAddressGenType | gen.type);
-    }
+    return true;
+  };
+  
+  bool isGenLike = FollowsInterface(configs,META_AddressGenParameters_Members);
+  bool isExternLike = FollowsInterface(configs,META_AddressVParameters_Members);
+  bool isMemLike = FollowsInterface(configs,META_AddressMemParameters_Members);
+
+  if(isExternLike){
+    decl.supportedAddressGenType = AddressGenType_READ;
+  } else if(isGenLike){
+    decl.supportedAddressGenType = AddressGenType_GEN;
+  } else if(isMemLike){
+    decl.supportedAddressGenType = AddressGenType_MEM;
   }
   
   FUDeclaration* res = RegisterFU(decl);
@@ -230,6 +244,20 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
+  // All the single interfaces are simple of propagating. We can just do an OR of everything.
+#if 1
+  for(FUInstance* ptr : accel->allocated){
+    decl->singleInterfaces |= ptr->declaration->singleInterfaces;
+  }
+
+  // TODO: Check the TODO in the OutputCircuitSource. Basically, because the wrapper that interacts with the Verilated unit is not capable of handling these missing interfaces, we are forcing the modules to have them for now.
+  //       If we fix the wrapper generation to support the lack of these interfaces, we can remove this.
+  decl->singleInterfaces |= SingleInterfaces_RUN;
+  decl->singleInterfaces |= SingleInterfaces_RUNNING;
+  decl->singleInterfaces |= SingleInterfaces_CLK;
+  decl->singleInterfaces |= SingleInterfaces_RESET;
+#endif
+  
   decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int externalIndex = 0;
   for(FUInstance* ptr : accel->allocated){
@@ -303,7 +331,6 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
   bool hasSourceDelay = false;
   bool hasSinkDelay = false;
-  bool implementsDone = false;
 
   for(FUInstance* ptr : decl->fixedDelayCircuit->allocated){
     FUInstance* inst = ptr;
@@ -311,9 +338,6 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
       continue;
     }
 
-    if(inst->declaration->implementsDone){
-      implementsDone = true;
-    }
     if(ptr->type == NodeType_SINK){
       // TODO: There was a problem caused by a unit getting marked as a sink and source when it should have been marked as compute.
       //       This occured in the Variety1 test. Disabled this check caused no problem in any other test and solved our Variety1 problem. We probably want to do a full check of everything related to these calculations.
@@ -335,8 +359,6 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   if (hasSinkDelay){
     decl->delayType = (DelayType) ((int)decl->delayType | (int) DelayType::DelayType_SINK_DELAY);
   }
-
-  decl->implementsDone = implementsDone;
 }
 
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
@@ -404,7 +426,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
 
   FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit,permanent);
   FillDeclarationWithDelayType(res);
-
+ 
 #if 1
     // TODO: Maybe this check should be done elsewhere
     for(FUInstance* ptr : circuit->allocated){

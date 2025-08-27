@@ -617,44 +617,8 @@ static SymbolicExpression* ParseTerm(Tokenizer* tok,Arena* out){
   NOT_POSSIBLE();
 }
 
-static SymbolicExpression* ParseMul(Tokenizer* tok,Arena* out){
-  TEMP_REGION(temp,out);
-  SymbolicExpression* left = ParseTerm(tok,out);
-  
-  ArenaList<SymbolicExpression*>* expressions = PushArenaList<SymbolicExpression*>(temp);
-  *expressions->PushElem() = left;
-
-  while(!tok->Done()){
-    Token peek = tok->PeekToken();
-    
-    char op = '\0';
-    if(CompareString(peek,"*")){
-      op = '*';
-    }
-
-    if(op == '\0'){
-      break;
-    }
-    
-    tok->AdvancePeek();
-    
-    SymbolicExpression* expr = ParseTerm(tok,out);
-    *expressions->PushElem() = expr;
-  }
-
-  if(OnlyOneElement(expressions)){
-    return left;
-  }
-
-  SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
-  res->type = SymbolicExpressionType_MUL;
-  res->terms = PushArrayFromList(out,expressions);
-
-  return res;
-}
-
 static SymbolicExpression* ParseDiv(Tokenizer* tok,Arena* out){
-  SymbolicExpression* left = ParseMul(tok,out);
+  SymbolicExpression* left = ParseTerm(tok,out);
 
   SymbolicExpression* current = left;
   while(!tok->Done()){
@@ -675,7 +639,7 @@ static SymbolicExpression* ParseDiv(Tokenizer* tok,Arena* out){
 
     expr->type = SymbolicExpressionType_DIV;
     expr->top = current;
-    expr->bottom = ParseMul(tok,out);
+    expr->bottom = ParseTerm(tok,out);
 
     current = expr;
   }
@@ -683,9 +647,45 @@ static SymbolicExpression* ParseDiv(Tokenizer* tok,Arena* out){
   return current;
 }
 
-static SymbolicExpression* ParseSum(Tokenizer* tok,Arena* out){
+static SymbolicExpression* ParseMul(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
   SymbolicExpression* left = ParseDiv(tok,out);
+  
+  ArenaList<SymbolicExpression*>* expressions = PushArenaList<SymbolicExpression*>(temp);
+  *expressions->PushElem() = left;
+
+  while(!tok->Done()){
+    Token peek = tok->PeekToken();
+    
+    char op = '\0';
+    if(CompareString(peek,"*")){
+      op = '*';
+    }
+
+    if(op == '\0'){
+      break;
+    }
+    
+    tok->AdvancePeek();
+    
+    SymbolicExpression* expr = ParseDiv(tok,out);
+    *expressions->PushElem() = expr;
+  }
+
+  if(OnlyOneElement(expressions)){
+    return left;
+  }
+
+  SymbolicExpression* res = PushStruct<SymbolicExpression>(out);
+  res->type = SymbolicExpressionType_MUL;
+  res->terms = PushArrayFromList(out,expressions);
+
+  return res;
+}
+
+static SymbolicExpression* ParseSum(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  SymbolicExpression* left = ParseMul(tok,out);
 
   ArenaList<SymbolicExpression*>* expressions = PushArenaList<SymbolicExpression*>(temp);
   *expressions->PushElem() = left;
@@ -708,7 +708,7 @@ static SymbolicExpression* ParseSum(Tokenizer* tok,Arena* out){
     
     tok->AdvancePeek();
       
-    SymbolicExpression* expr = ParseDiv(tok,out);
+    SymbolicExpression* expr = ParseMul(tok,out);
     expr->negative = (expr->negative != negative);
     *expressions->PushElem() = expr;
   }
@@ -805,6 +805,10 @@ static SymbolicExpression* CopyExpression(SymbolicExpression* in,Arena* out){
 
 // By default just copy the things. Since we are using arenas, allocations and deallocations are basically free anyway. We only care about the final expression, so we can just allocate a bunch of nodes that are immediatly deallocated. The extra copy is the worst part, but since we only care about simple expressions for now, probably nothing that needs attention for now. Can always add a better implementation later.
 SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out){
+  if(expr == nullptr){
+    return nullptr;
+  }
+  
   switch(expr->type){
   case SymbolicExpressionType_LITERAL: // fallthrough
   case SymbolicExpressionType_VARIABLE: {
@@ -973,7 +977,13 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out){
     res->bottom = RemoveParenthesis(expr->bottom,out);
     return res;
   } break;
-  case SymbolicExpressionType_SUM: // fallthrough
+  case SymbolicExpressionType_SUM:
+    if(expr->terms.size == 1){
+      SymbolicExpression* onlyOne = RemoveParenthesis(expr->terms[0],out);
+      onlyOne->negative = (onlyOne->negative != expr->negative);
+      return onlyOne;
+    }
+    
     if(expr->negative){
       ArenaList<SymbolicExpression*>* list = PushArenaList<SymbolicExpression*>(temp);
       for(SymbolicExpression* child : expr->terms){
@@ -988,6 +998,8 @@ SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out){
       res->terms = PushArrayFromList(out,list);
       return res;
     }
+
+    // fallthrough
   case SymbolicExpressionType_MUL: {
     if(expr->terms.size == 1){
       SymbolicExpression* onlyOne = RemoveParenthesis(expr->terms[0],out);
@@ -1227,6 +1239,10 @@ SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out){
     MultPartition topLiteral = GetMultPartition(top,out);
     MultPartition bottomLiteral = GetMultPartition(bottom,out);
 
+    if(IsZero(top)){
+      return PushLiteral(out,0);
+    }
+    
     // NOTE: Not properly tested. Care when using divs.
     if(topLiteral.base && bottomLiteral.base){
       int top = topLiteral.base->literal;
@@ -1283,7 +1299,7 @@ MultPartition CollectTermsWithLiteralMultiplier(SymbolicExpression* expr,Arena* 
     return res;
   } break;
   case SymbolicExpressionType_FUNC:
-    //WARN_CODE();
+    // WARN_CODE();
     // Treating this the same as a variable
   case SymbolicExpressionType_VARIABLE: {
     MultPartition res = {};
@@ -1486,8 +1502,40 @@ SymbolicExpression* ApplySimilarTermsAddition(SymbolicExpression* expr,Arena* ou
   case SymbolicExpressionType_FUNC: //fallthrough
   case SymbolicExpressionType_LITERAL: //fallthrough
   case SymbolicExpressionType_VARIABLE: //fallthrough
-  case SymbolicExpressionType_DIV:
     return ApplyGeneric(expr,out,ApplySimilarTermsAddition);
+  case SymbolicExpressionType_DIV: {
+#if 1
+    SymbolicExpression* top = ApplySimilarTermsAddition(expr->top,out);
+    SymbolicExpression* bottom = ApplySimilarTermsAddition(expr->bottom,out);
+
+    if(top->type == SymbolicExpressionType_VARIABLE && bottom->type == SymbolicExpressionType_VARIABLE){
+      if(ExpressionEqual(top,bottom)){
+        return PushLiteral(out,1);
+      }
+    }
+    // TODO: We currently only handle the case where div bottom only contains a literal. We are missing the bottom div expr being a mul.
+    if(top->type == SymbolicExpressionType_MUL && bottom->type == SymbolicExpressionType_VARIABLE){
+      // MARKED
+      Array<SymbolicExpression*> terms = top->terms;
+
+      for(int i = 0; i <  terms.size; i++){
+        SymbolicExpression* expr = terms[i];
+
+        if(ExpressionEqual(expr,bottom)){
+          Array<SymbolicExpression*> leftOvers = RemoveElement(terms,i,out);
+
+          if(leftOvers.size > 0){
+            return SymbolicMult(leftOvers,out);
+          } else {
+            return PushLiteral(out,1);
+          }
+        }
+      }
+    }
+#endif
+    
+    return ApplyGeneric(expr,out,ApplySimilarTermsAddition);
+  } break;
   case SymbolicExpressionType_MUL: {
     return ApplyGeneric(expr,out,ApplySimilarTermsAddition);
   } break;
@@ -1729,7 +1777,8 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
     }
   } break;
   case SymbolicExpressionType_DIV:{
-    NOT_IMPLEMENTED("yet"); // Only care about divisions by constants, since other divisions we probably cannot handle in the address gen.
+    return PushLiteral(out,0);
+    //NOT_IMPLEMENTED("yet"); // Only care about divisions by constants, since other divisions we probably cannot handle in the address gen.
   } break;
   }
 
@@ -1879,6 +1928,78 @@ SymbolicExpression* ReplaceVariables(SymbolicExpression* base,Hashmap<String,Sym
   NOT_POSSIBLE();
 }
 
+SymbolicExpression* MoveDivToTop(SymbolicExpression* base,Arena* out){
+  switch(base->type){
+  case SymbolicExpressionType_LITERAL: {
+    return SymbolicDeepCopy(base,out);
+  } break;
+  case SymbolicExpressionType_VARIABLE: {
+    return SymbolicDeepCopy(base,out);
+  } break;
+  case SymbolicExpressionType_FUNC: {
+    return SymbolicDeepCopy(base,out);
+  } break;
+  case SymbolicExpressionType_SUM: {
+    Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,base->terms.size);
+    for(int i = 0; i < children.size; i++){
+      children[i] = MoveDivToTop(base->terms[i],out);
+    }
+
+    SymbolicExpression* copy = CopyExpression(base,out);
+    copy->terms = children;
+
+    // TODO: Need to handle this.
+    //NOT_IMPLEMENTED("Need to check if there something that we can do here");
+    
+    return copy;
+  } break;
+  case SymbolicExpressionType_MUL: {
+    SymbolicExpression* divLike = nullptr;
+    Array<SymbolicExpression*> children = PushArray<SymbolicExpression*>(out,base->terms.size);
+    for(int i = 0; i < children.size; i++){
+      children[i] = MoveDivToTop(base->terms[i],out);
+      if(children[i]->type == SymbolicExpressionType_DIV){
+        divLike = children[i];
+      }
+    }
+
+    if(!divLike){
+      SymbolicExpression* copy = CopyExpression(base,out);
+      copy->terms = children;
+
+      return copy;
+    }
+
+    // We have at least one div. We multiple all the expressions to 
+    SymbolicExpression* topExpr = divLike->top;
+    SymbolicExpression* bottomExpr = divLike->bottom;
+    
+    for(int i = 0; i < children.size; i++){
+      if(children[i] == divLike){
+        continue;
+      }
+
+      if(children[i]->type == SymbolicExpressionType_DIV){
+        topExpr = SymbolicMult(topExpr,children[i]->top,out);
+        bottomExpr = SymbolicMult(bottomExpr,children[i]->bottom,out);
+      } else {
+        topExpr = SymbolicMult(topExpr,children[i],out);
+      }
+    }
+
+    return SymbolicDiv(topExpr,bottomExpr,out);
+  }
+  case SymbolicExpressionType_DIV:{
+    SymbolicExpression* res = CopyExpression(base,out);
+    res->top = MoveDivToTop(base->top,out);
+    res->bottom = MoveDivToTop(base->bottom,out); 
+
+    return res;
+  } break;
+  }
+  NOT_POSSIBLE();
+}
+
 Array<String> ExtractAllVariables(SymbolicExpression* top,Arena* out){
   TEMP_REGION(temp,out);
   auto Recurse = [](auto Recurse,SymbolicExpression* expr,ArenaList<String>* accum){
@@ -2009,6 +2130,13 @@ SymbolicExpression* Normalize(SymbolicExpression* expr,Arena* out,bool debugPrin
     if(debugPrint) printf("Normalize Literals:\n");
     if(debugPrint) {Print(current); printf("\n");}
     if(debugPrintAST) PrintAST(current);
+
+    next = MoveDivToTop(current,out);
+    CheckIfSymbolicExpressionsShareNodes(current,next);
+    current = next;
+    if(debugPrint) printf("MoveDivToTop:\n");
+    if(debugPrint) {Print(current); printf("\n");}
+    if(debugPrintAST) PrintAST(current);
   }
 
   current = ApplyNonRecursive(current,out,SortTerms);
@@ -2041,7 +2169,10 @@ void TestSymbolic(){
     {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-(y)")},
     {STRING("-6*(4-1)+5"),STRING("-13")},
     {STRING("-(1*(x-1))+0"),STRING("-(x)+1")},
-    {STRING("ALIGN(1,2)"),STRING("ALIGN(1,2)")}
+    {STRING("ALIGN(1,2)"),STRING("ALIGN(1,2)")},
+    {STRING("1/x * y"),STRING("y/x")},
+    {STRING("x/x"),STRING("1")},
+    {STRING("(x*y)/x"),STRING("y")},
   };
 
   bool printNormalizeProcess = true;
@@ -2097,10 +2228,13 @@ Array<String> GetAllSymbols(SymbolicExpression* expr,Arena* out){
 }
 
 Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,String variableName,Arena* out){
-  switch(expr->type){
-    case SymbolicExpressionType_FUNC:{
-      NOT_IMPLEMENTED("yet");
-    } break;
+  FULL_SWITCH(expr->type){
+  case SymbolicExpressionType_LITERAL:{
+    return {};
+  } break;
+  case SymbolicExpressionType_FUNC:{
+    NOT_IMPLEMENTED("yet");
+  } break;
   case SymbolicExpressionType_VARIABLE:{
     if(CompareString(expr->variable,variableName)){
       return ApplyNegation(PushLiteral(out,1),expr->negative);
@@ -2157,7 +2291,22 @@ Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,
 
     return res;
   } break;
-  default: return {};
+  case SymbolicExpressionType_DIV:{
+    Opt<SymbolicExpression*> top = GetMultExpressionAssociatedTo(expr->top,variableName,out);
+
+    if(top.has_value()){
+      return SymbolicDiv(top.value(),expr->bottom,out);
+    }
+
+    Opt<SymbolicExpression*> bottom = GetMultExpressionAssociatedTo(expr->bottom,variableName,out);
+
+    // TODO: Need to figure out this one. Assuming that the normalization process was good, we should probably not reawch this point if the expression is linear, right?. Are there any cases where we can still do something?
+    if(bottom.has_value()){
+      NOT_IMPLEMENTED("What do we do for this case? The expression is no longer linear, right?");
+    }
+    
+    return {};
+  } break;
   }
   return {};
 }
@@ -2248,6 +2397,8 @@ SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* ou
   int size = sum->terms.size;
   Array<SymbolicExpression*> individualTermsArray = PushArray<SymbolicExpression*>(temp,size + 1);
 
+  // TODO: We probably can simplify this function. The rest of the code appears to be able to handle normalization of this expression and it appears that we do not have to be as careful when creating the expression as we previously where.
+  
   // The expression is carefully constructed in order to avoid the normalization process removing the grouping of variables. Easier than changing the normalization process to preserve groupings in some situations and not in others.
   int inserted = 0;
   for(LoopLinearSumTerm term : sum->terms){

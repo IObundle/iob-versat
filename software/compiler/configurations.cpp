@@ -8,6 +8,7 @@
 #include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 #include "versat.hpp"
 #include "textualRepresentation.hpp"
 #include <strings.h>
@@ -344,6 +345,7 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     elem->isComposite = IsTypeHierarchical(inst->declaration);
     elem->isMerge = inst->declaration->type == FUDeclarationType_MERGED;
     elem->isStatic = inst->isStatic;
+    elem->debug = inst->debug;
     elem->isGloballyStatic = inst->isStatic;
     elem->isShared = inst->sharedEnable;
     elem->isSpecificConfigShared = inst->isSpecificConfigShared;
@@ -1051,7 +1053,7 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
     }
 
     info->signalLoop |= type->signalLoop;
-    if(ptr->declaration->implementsDone){
+    if(ptr->declaration->singleInterfaces & SingleInterfaces_DONE){
       nDones += 1;
     }
   }
@@ -1123,7 +1125,11 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   
   for(FUInstance* ptr : accel->allocated){
     info->numberConnections += Size(ptr->allOutputs);
-    info->implementsDone |= ptr->declaration->implementsDone;
+
+
+    if(ptr->declaration->singleInterfaces & SingleInterfaces_DONE){
+      info->implementsDone = true;
+    }
   }
 }
 

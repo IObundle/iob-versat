@@ -51,7 +51,7 @@ struct InstanceInfo{
 
   bool isStatic;
   bool isGloballyStatic;
-
+  
   bool isShared;
   int sharedIndex;
   Array<bool> isSpecificConfigShared;
@@ -82,6 +82,7 @@ struct InstanceInfo{
   int special;
   int localOrder;
   FUInstance* inst;
+  bool debug;
 
   NodeType connectionType;
   Array<int> inputDelays;

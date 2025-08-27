@@ -4,6 +4,8 @@
 
 // TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
 #include "embeddedData.hpp"
+#include "filesystem.hpp"
+#include "globals.hpp"
 #include "memory.hpp"
 #include "utils.hpp"
 #include "parser.hpp"
@@ -181,6 +183,8 @@ parse_opt (int key, char *arg,
 
     case 'p': opts->options->prefixIObPort = STRING(arg); break;
 
+    case 'T': opts->options->opMode = VersatOperationMode_GENERATE_TESTBENCH; break;
+
     case 'E': {
       opts->options->extraIOb = true;
       opts->options->useSymbolAddress = true;
@@ -214,6 +218,7 @@ struct argp_option options[] =
     { 0, 'g',"Path",   OPTION_HIDDEN, "Debug path"},
     { 0, 'o',"Path",   0, "Hardware output path"},
     { 0, 'O',"Path",   0, "Software output path"},
+    { 0, 'T',0,        0, "Generate a testbench for the given unit that exercises it as if being used by an accelerator."},
     { 0 }
   };
 
@@ -239,9 +244,10 @@ int main(int argc,char* argv[]){
 
 #if 0
   TestSymbolic();
+  return 0;
 #endif
   
-  argp argp = { options, parse_opt, "SpecFile", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
+  argp argp = { options, parse_opt, "SpecFile\n-T UnitName", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
   OptionsGather gather = {};
   gather.verilogFiles = PushArenaList<String>(temp);
@@ -256,12 +262,7 @@ int main(int argc,char* argv[]){
     printf("Error parsing arguments. Call -h help to print usage and argument help\n");
     return -1;
   }
-
-  if(Empty(globalOptions.topName)){
-    printf("Need to specify top unit with -t\n");
-    exit(-1);
-  }
-
+  
   globalOptions.verilogFiles = PushArrayFromList(perm,gather.verilogFiles);
   globalOptions.extraSources = PushArrayFromList(perm,gather.extraSources);
   globalOptions.includePaths = PushArrayFromList(perm,gather.includePaths);
@@ -270,12 +271,23 @@ int main(int argc,char* argv[]){
   InitializeTemplateEngine(perm);
   InitializeSimpleDeclarations();
 
-  globalDebug.outputAccelerator = true;
-  globalDebug.outputAcceleratorInfo = true;
-  globalDebug.outputVersat = true;
+  if(globalOptions.opMode == VersatOperationMode_GENERATE_TESTBENCH){
+    globalOptions.topName = globalOptions.specificationFilepath;
+  }
+
+  globalOptions.hardwareOutputFilepath = OS_NormalizePath(globalOptions.hardwareOutputFilepath,temp);
+  globalOptions.softwareOutputFilepath = OS_NormalizePath(globalOptions.softwareOutputFilepath,temp);
+
   globalDebug.outputGraphs = true;
   globalDebug.outputConsolidationGraphs = true;
   globalDebug.outputVCD = true;
+  
+  if(Empty(globalOptions.topName)){
+    char name[] = "versat";
+    argp_help(&argp,stdout,ARGP_HELP_STD_HELP,name);
+    printf("\nNeed to specify top unit with -t\n");
+    exit(-1);
+  }
   
   // Register Versat common files. 
   bool anyError = false;
@@ -379,6 +391,25 @@ int main(int argc,char* argv[]){
     }
   }
   if(error){
+    return -1;
+  }
+
+  if(globalOptions.opMode == VersatOperationMode_GENERATE_TESTBENCH){
+    String topLevelUnit = globalOptions.topName;
+
+    FUDeclaration* decl = GetTypeByName(topLevelUnit);
+
+    if(!decl){
+      printf("Unit of name '%.*s' does not exist\n",UN(topLevelUnit));
+      return -1;
+    }
+
+    String path = PushString(temp,"%.*s/testbench.v",UN(globalOptions.hardwareOutputFilepath));
+    FILE* testbenchLocation = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
+    DEFER_CLOSE_FILE(testbenchLocation);
+
+    OutputTestbench(decl,testbenchLocation);
+    
     return -1;
   }
   
@@ -540,8 +571,8 @@ int main(int argc,char* argv[]){
     for(String name : allAddressGens){
       ConstructDef def = GetConstructOrFail(name);
 
-      AddressAccess* access = ConvertAddressGenDef(&def.addressGen,content);
-
+      AddressAccess* access = CompileAddressGen(&def.addressGen,content);
+      
       if(!access){
         anyError = true;
       }
@@ -721,7 +752,7 @@ int main(int argc,char* argv[]){
   FillStaticInfo(&info);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
-
+  
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
   int externalIndex = 0;
   for(InstanceInfo& in : info.infos[0].info){
@@ -858,9 +889,81 @@ There is probably a lot of cleanup left (overall and inside Merge).
 
 Need to take a look at State and Mem struct interfaces. State is not taking into account merge types and neither is Mem. Also need to see if we can generate the Mem as an actual structure where the programmer must use pointer arithmetic directly.
 
+BUG:
+
+module Test(){
+Mem m0;
+Mem m1;
+#
+m0 -> m1;
+m1 -> m0;
+}
+
+produces a design that cannot work directly. Both units are given a delay of 0 but each unit takes 3 cycles to produce data which means that the design is fundamentally broken.
+
+Fixing this bug would also give me an opportunity to booster up the delay and graph side of the code. It is probably more complex than if I would write it today.
+
+BUG:
+
+An empty AddressGen is not working correctly. The address gen parser is programmed to return an error if the address gen expression does not contain anything, but it is technically good syntax. Either we allow the program to have empty address gens or we put an error that detects such case and reports this info to the user.
+
 */
 
 /*
+
+Code generation lint friendly:
+
+- If a module is composed of units that do not contain certain signals, like clk, rst, run and the likes, then the module should not have those signals as well. It is very simple in fact. We just need to do a OR of all the single interfaces of all the subunits and then make sure that the code generation is capable of handling the lack of these signals.
+
+Usability:
+
+"Bugs" that arise from forgetting to activate the merged accelerator are starting to become problematic.
+Need to find a way, at least in PC-Emul, of detecting that the proper merged accelerator was not activated.
+There are two things that we can do.
+First, start the accelerator in an empty state and give an error if no merged was set when doing a run. Very likely an error. The user cannot rely on the fact that the accelerator starts on merged 0.
+Second, we can make it so that changing an accelerator merge state clears the config structure and we can figure out which config values are associated to each merged state.
+What this means is that we can potently figure out which merged state the user is likely configuring the accelerator regardless of the actual state the accelerator is set to and we can warn the user if
+it is very likely that the user is missing some configuration or it appears to miss configure the current merged accelerator.
+
+Hardware
+
+- Memories are not being properly registered. Also tired of keeping the iob_ stuff around. We probably want to spend one day just cleaning up all this stuff and maybe find a way of checking for places where registering could improve performance. Maybe yosis could be used for this, need to check.
+
+Address Gen:
+
+Address gen logic is very strict. Any deviation leads to program error and stacktraces start popping up.
+- Empty address gens fail and give errors.
+- Address gen with only address fail and give errors.
+
+We spend a good deal of time writing address gens that access matrix like structures.
+- Maybe it would be a good idea to push some of this logic to the address gens.
+-- Imagine being able to declare that the data follows a certain matrix like structure and then being able to provide addresses by accessing it.
+
+Something like:
+
+addressGen test(width,height){
+  format[height][width];
+  for y 0..height
+  for x 0..width
+  addr = format[y][x];
+}
+
+- Currently stride is kinda "faked". We basically just look at the expression and if it is a division, we pick the divisor and make the duty logic from there.
+-- Before we could think about the addresses generated and figure out how the unit would work based on the address used, but with this approach to stride it is no different to having a separate input to the address gen construct where we could put the duty stuff.
+
+-- In fact, if we continue down this road, we might as well make it something like:
+
+address Test(a,b){
+  for x 0..a
+  addr = a;
+  stride = stride;
+  }
+
+Versat Spec:
+
+- The using stuff is kinda weird syntax. What we probably want is to think about types as parameterizable.
+-- Insteand of "using(Addr) VRead ...", we probably want "VRead(Addr) ...", where Addr is a parameter for the VRead type.
+-- We then end up with two types of parameters, Versat parameters and Verilog parameters, which we probably want to collapse into a single type from the perspective of the user and let Versat handle how to route the parameter itself.
 
 Usability:
 x
@@ -874,28 +977,10 @@ Code Generation:
 
 - Header file generating code that should depend on Metadata.
 
-Mainly the structs for the AddressGen arguments.
-
-AddressGen:
-
-- Parsing and error reporting.
-
--- No check is actually being done currently for the presence or absence of variables. No error is being reported if a variable that was not declared does not exist and stuff like that.
--- Would also be useful to print a warning if a variable is defined but never used inside a AddressGen.
-
 - Usability.
-
--- Inside the loops we cannot put any expression that we want. Something like a for x 0..(A/B) is not working.
-
-- Datapath width
-
--- Current address gen is kinda hardcoding the datapath width.
--- Also not sure how it handles axi_data_w as well.
--- Need to start making some tests that exercise this.
 
 - Optimizations:
 
--- Duty is not being used.
 -- We could collapse certain loops, assuming that we have the info needed (or we can push it into runtime).
 -- Leftover loops can be used to reduce the preassure on the lower loops (less bits needed and stuff like that, we currently pay for the upper loops bits wether we use them or not)
 
