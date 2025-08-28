@@ -2,8 +2,6 @@
 
 (* source *) module RegFile #(
    parameter DELAY_W = 7,
-   parameter NUMBER_REGS = 16,
-   parameter NUMBER_REGS_W = 4,
    parameter ADDR_W  = 6, // 2 + $CLOG(NUMBER_REGS)
    parameter DATA_W  = 32,
    parameter AXI_DATA_W = 32
@@ -53,7 +51,7 @@
 
 wire lastCycle;
 
-   DelayCalc delay(
+   DelayCalc delay_inst (
    .clk(clk),
    .rst(rst),
 

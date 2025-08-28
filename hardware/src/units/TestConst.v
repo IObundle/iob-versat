@@ -23,18 +23,19 @@ module TestConst #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         out0 <= 0;
+         out0 <= {DATA_W{1'b0}};
       end else if (run) begin
          if (delay0 == 0) begin
             out0 <= constant;
          end
          delay <= delay0;
-      end else if (|delay) begin
+      end else if (running & (|delay)) begin
          delay <= delay - 1;
-
-         if (delay == 1) out0 <= constant;
+         if (delay == 1) begin
+             out0 <= constant;
+         end
       end else begin
-         out0 <= 0;
+         out0 <= {DATA_W{1'b0}};
       end
    end
 

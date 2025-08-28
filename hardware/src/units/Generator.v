@@ -40,7 +40,6 @@ module Generator #(
 );
 
    wire [31:0] genOut;
-   wire        done;
 
    assign out0 = genOut;  //done ? off_value : genOut;
 
@@ -58,36 +57,36 @@ module Generator #(
       .ignore_first_i(0),
 
       //configurations 
-      .iter_i(iter),
-      .shift_i     (shift),
+      .duty_i  (duty),
+      .start_i (start),
 
-      .per_i    (per),
-      .incr_i      (incr),
+      .per_i   (per),
+      .incr_i  (incr),
 
-      .iter2_i(iter2),
-      .shift2_i     (shift2),
+      .iter_i  (iter),
+      .shift_i (shift),
 
-      .per2_i    (per2),
-      .incr2_i      (incr2),
+      .per2_i  (per2),
+      .incr2_i (incr2),
 
-      .iter3_i(iter3),
-      .shift3_i     (shift3),
+      .iter2_i (iter2),
+      .shift2_i(shift2),
 
-      .per3_i    (per3),
-      .incr3_i      (incr3),
+      .per3_i  (per3),
+      .incr3_i (incr3),
 
-      .duty_i      (duty),
-      .start_i     (start),
+      .iter3_i (iter3),
+      .shift3_i(shift3),
 
-      .delay_i     (delay0),
+      .delay_i (delay0),
 
       //outputs 
-      .valid_o(),
-      .ready_i(1'b1),
-      .addr_o (genOut),
-      .store_o(),
+      .valid_o (),
+      .ready_i (running),
+      .addr_o  (genOut),
+      .store_o (),
 
-      .done_o(done)
+      .done_o  ()
    );
 
 endmodule

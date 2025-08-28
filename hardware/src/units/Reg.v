@@ -13,7 +13,6 @@
    output done,
 
    // native interface 
-   input               [1:0] addr,
    input      [DATA_W/8-1:0] wstrb,
    input      [  DATA_W-1:0] wdata,
    input                     valid,
@@ -32,7 +31,7 @@
 
    wire lastCycle;
 
-   DelayCalc #(.DELAY_W(DELAY_W)) delay(
+   DelayCalc #(.DELAY_W(DELAY_W)) delay_inst (
    .clk(clk),
    .rst(rst),
 
@@ -50,7 +49,7 @@
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         out0   <= 0;
+         out0   <= {DATA_W{1'b0}};
          rvalid <= 1'b0;
       end else begin
          // Native interface
