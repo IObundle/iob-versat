@@ -1,8 +1,6 @@
 `timescale 1ns / 1ps
 
-module Counter #(
-   parameter PERIOD_W = 16
-) (
+module Counter (
    input clk,
    input rst,
 

@@ -1,8 +1,6 @@
 `timescale 1ns / 1ps
 
-module DoneCycle #(
-   parameter DATA_W = 32
-) (
+module DoneCycle (
    //control
    input clk,
    input rst,
@@ -23,10 +21,10 @@ module DoneCycle #(
          counter <= 0;
       end else if (run) begin
          counter <= amount;
+      end else if (running & (|counter)) begin
+         counter <= counter - 1;
       end else begin
-         if (|counter) begin
-            counter <= counter - 1;
-         end
+         counter <= counter;
       end
    end
 

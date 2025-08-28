@@ -8,7 +8,6 @@ module Mux2 #(
    input rst,
 
    input running,
-   input run,
 
    //input / output data
    input [DATA_W-1:0] in0,
@@ -20,9 +19,15 @@ module Mux2 #(
 );
 
    always @(posedge clk, posedge rst) begin
-      if (rst) out0 <= 0;
-      else if (sel) out0 <= in1;
-      else out0 <= in0;
+      if (rst) begin
+         out0 <= {DATA_W{1'b0}};
+      end else if (running) begin
+        if (sel) begin
+           out0 <= in1;
+        end else begin
+           out0 <= in0;
+        end
+      end
    end
 
 endmodule

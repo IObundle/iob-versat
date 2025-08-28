@@ -1,13 +1,10 @@
 `timescale 1ns / 1ps
 
-module Conditional #(
-   parameter DELAY_W = 32
-) (
+module Conditional (
    input clk,
    input rst,
 
    input running,
-   input run,
 
    input [31:0] in0,  // Selector
    input [31:0] in1,
@@ -19,7 +16,7 @@ module Conditional #(
 always @(posedge clk, posedge rst) begin
    if(rst) begin
       out0[31:0] <= 0;
-   end else begin
+   end else if (running) begin
       if (|in0) begin
          out0[31:0] <= in1[31:0];
       end else begin

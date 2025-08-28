@@ -3,7 +3,6 @@
 module PipelineRegister #(
    parameter DATA_W = 32
 ) (
-   input run,
    input running,
 
    input [DATA_W-1:0] in0,
@@ -14,8 +13,14 @@ module PipelineRegister #(
    input rst
 );
 
-   always @(posedge clk) begin
-      out0 <= in0;
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
+         out0 <= {DATA_W{1'b0}};
+      end else if (running) begin
+         out0 <= in0;
+      end else begin
+         out0 <= {DATA_W{1'b0}};
+      end
    end
 
 endmodule
