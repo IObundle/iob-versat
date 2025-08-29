@@ -17,6 +17,8 @@ VERILATOR_COMMON_ARGS += -GDELAY_W=20
 VERILATOR_COMMON_ARGS += -GLEN_W=20
 VERILATOR_COMMON_ARGS += @{traceType}
 
+VERILATOR_SUPERADDRESS_ARGS := $(filter-out -GAXI_DATA_W=%, $(VERILATOR_COMMON_ARGS))
+
 all: libaccel.a
 
 # Joins wrapper with verilator object files into a library
@@ -35,7 +37,7 @@ $(VHEADER): $(HARDWARE_SRC)
 	cp ./obj_dir/*.h ./
 
 VSuperAddress.h: $(HARDWARE_SRC)
-	verilator $(VERILATOR_COMMON_ARGS) -GADDR_W=32 --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress
+	verilator $(VERILATOR_SUPERADDRESS_ARGS) -GADDR_W=32 --cc $(HARDWARE_FOLDER)/SuperAddress.v --top-module SuperAddress
 	$(MAKE) -C ./obj_dir -f VSuperAddress.mk
 	cp ./obj_dir/*.h ./
 

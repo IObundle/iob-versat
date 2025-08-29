@@ -133,7 +133,6 @@ module VRead #(
 
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
-      .AXI_DATA_W(AXI_DATA_W),
       .LEN_W(LEN_W),
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
