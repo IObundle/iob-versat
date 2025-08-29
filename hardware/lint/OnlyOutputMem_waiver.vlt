@@ -3,5 +3,5 @@
 `verilator_config
 
 // Unused submodule output
-lint_off -rule PINCONNECTEMPTY -file "*submodules/VERSAT/hardware/src/units/OnlyOutputMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/OnlyOutputMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
 

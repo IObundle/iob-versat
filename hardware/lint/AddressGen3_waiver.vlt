@@ -1,0 +1,20 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Below you find suggested waivers. You have three options:
+//   1. Fix the reason for the linter warning
+//   2. Keep the waiver permanently if you are sure this is okay
+//   3. Keep the waiver temporarily to suppress the output
+
+lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'doneDatabus'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'doneAddress'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'databus_valid'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'databus_addr'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'databus_len'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'data_last_o'"
