@@ -2,7 +2,6 @@
 
 module LookupTableRead #(
    parameter DATA_W     = 32,
-   parameter SIZE_W     = 32,
    parameter ADDR_W     = 16,
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
@@ -21,7 +20,7 @@ module LookupTableRead #(
 
    output reg done,
 
-   input [DATA_W-1:0] in0,
+   input [ADDR_W-3:0] in0,
 
    (* versat_latency = 2 *) output [DATA_W-1:0] out0,
 
@@ -35,13 +34,11 @@ module LookupTableRead #(
    // Used to write data into lookup table
    output [    ADDR_W-1:0] ext_dp_addr_0_port_1,
    output [AXI_DATA_W-1:0] ext_dp_out_0_port_1,
-   input  [AXI_DATA_W-1:0] ext_dp_in_0_port_1,
    output                  ext_dp_enable_0_port_1,
    output                  ext_dp_write_0_port_1,
 
    // configurations
    input [AXI_ADDR_W-1:0] ext_addr,
-   input [    ADDR_W-1:0] int_addr,
    input [    ADDR_W-1:0] iterA,
    input [    ADDR_W-1:0] perA,
    input [    ADDR_W-1:0] dutyA,
@@ -51,8 +48,6 @@ module LookupTableRead #(
    input                  pingPong,
 
    input disabled,
-
-   input [DELAY_W-1:0] delay0,
 
    input running,
    input clk,
@@ -79,11 +74,8 @@ module LookupTableRead #(
 
    reg [ADDR_W-1:0] addr_0;
    always @* begin
-      addr_0 = 0;
-      addr_0[ADDR_W-1:0] = {
-         in0[ADDR_W-3:0], 2'b00
-      };  // Increments by 4 because SIZE_W == 32 //symbolSpaceConvert(in0[ADDR_W-1:0]);
-      addr_0[ADDR_W-1] = pingPong && !pingPongState;
+      addr_0 = {in0[ADDR_W-3:0], 2'b0};
+      addr_0[ADDR_W-1] = pingPong && (!pingPongState);
    end
 
    always @(posedge clk, posedge rst) begin
@@ -149,13 +141,10 @@ module LookupTableRead #(
    end
 
    wire [ADDR_W-1:0] startA = 0;
-   wire [      31:0] delayA = 0;
-   wire [ADDR_W-1:0] addrA, addrA_int, addrA_int2;
+   wire [DELAY_W-1:0] delayA = 0;
 
-   wire              next;
    wire              gen_ready;
    wire [ADDR_W-1:0] gen_addr;
-   wire              gen_done;
 
    AddressGen #(
       .ADDR_W  (ADDR_W),
@@ -182,7 +171,7 @@ module LookupTableRead #(
       .addr_o (gen_addr),
       .store_o(),
 
-      .done_o (gen_done)
+      .done_o ()
    );
 
    wire                  write_en;

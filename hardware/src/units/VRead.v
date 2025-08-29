@@ -206,7 +206,7 @@ assign data_data = databus_rdata_0;
    wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
 
    // mem enables output by addr gen
-   wire output_enabled,output_store;
+   wire output_enabled;
 
    AddressGen3 #(
       .ADDR_W(ADDR_W),
@@ -244,22 +244,10 @@ assign data_data = databus_rdata_0;
       .valid_o(output_enabled),
       .ready_i(1'b1),
       .addr_o (output_addr_temp),
-      .store_o(output_store),
+      .store_o(),
       .done_o (doneOutput_int)
    );
 
-   reg [ADDR_W-1:0] last_output_addr;
-
-   always @(posedge clk,posedge rst) begin
-      if(rst) begin
-         last_output_addr <= 0;
-      end 
-      else if(output_enabled && output_store) begin
-         last_output_addr <= output_addr_temp;
-      end
-   end
-
-   //wire [ADDR_W-1:0] true_output_addr = ignore_first ? last_output_addr : output_addr_temp;
    wire [ADDR_W-1:0] true_output_addr = output_addr_temp;
 
    /*

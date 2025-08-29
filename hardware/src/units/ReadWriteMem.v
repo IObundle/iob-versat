@@ -4,7 +4,6 @@
 
 // Probably could be implemented using Mem.v but for now simplify
 (* source *) module ReadWriteMem #(
-   parameter MEM_INIT_FILE = "none",
    parameter DATA_W        = 32,
    parameter DELAY_W       = 7,
    parameter SIZE_W        = 32,
@@ -34,7 +33,6 @@
    // External memory
    output [ADDR_W-1:0] ext_dp_addr_0_port_0,
    output [DATA_W-1:0] ext_dp_out_0_port_0,
-   input  [DATA_W-1:0] ext_dp_in_0_port_0,
    output              ext_dp_enable_0_port_0,
    output              ext_dp_write_0_port_0,
 
@@ -92,7 +90,6 @@
    //mem enables output by addr gen
    wire enA_int;
    wire enA = enA_int | valid;
-   wire enB;
 
    //write enables
    wire wrA = valid ? we : (enA_int & in0_wr & ~extA); //addrgen on & input on & input isn't address
@@ -158,7 +155,7 @@
 `endif
 
       //outputs 
-      .valid_o(enB),
+      .valid_o(),
       .ready_i(1'b1),
       .addr_o (addrB_int),
       .store_o(), // TODO: Handle duty

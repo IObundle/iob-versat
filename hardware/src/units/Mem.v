@@ -54,10 +54,6 @@
    input              reverseA,
    input              extA,
    input              in0_wr,
-   input [ADDR_W-1:0] iter2A,
-   input [       9:0] per2A,
-   input [ADDR_W-1:0] shift2A,
-   input [ADDR_W-1:0] incr2A,
 
    input [ADDR_W-1:0] iterB,
    input [       9:0] perB,
@@ -68,10 +64,6 @@
    input              reverseB,
    input              extB,
    input              in1_wr,
-   input [ADDR_W-1:0] iter2B,
-   input [       9:0] per2B,
-   input [ADDR_W-1:0] shift2B,
-   input [ADDR_W-1:0] incr2B,
 
    input [DELAY_W-1:0] delay0,
    input [DELAY_W-1:0] delay1
@@ -82,7 +74,6 @@
    wire doneA, doneB;
 
    //output databus
-   wire [DATA_W-1:0] outA, outB;
    reg [DATA_W-1:0] outA_reg, outB_reg;
 
    reg [DELAY_W-1:0] testDelay0;

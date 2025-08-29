@@ -1,0 +1,16 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Unused submodule outputs
+lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'doneDatabus'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'doneAddress'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'valid_o'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'addr_o'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'store_o'"
+
+lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'm_addr_o'"

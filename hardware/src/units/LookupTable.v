@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 
 module LookupTable #(
-   parameter INIT_MEM_FILE = "none",
    parameter DATA_W        = 32,
    parameter SIZE_W        = 32,
    parameter ADDR_W        = 8
@@ -34,8 +33,7 @@ module LookupTable #(
 
    input running,
    input clk,
-   input rst,
-   input run
+   input rst
 );
 
    assign rdata = 0;
@@ -45,7 +43,7 @@ module LookupTable #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         data     <= 0;
+         data     <= {DATA_W{1'b0}};
          write    <= 1'b0;
          rvalid   <= 1'b0;
       end else begin
@@ -62,8 +60,6 @@ module LookupTable #(
          end
       end
    end
-
-   wire [DATA_W-1:0] outA, outB;
 
    assign ext_dp_out_0_port_0    = data;
    assign ext_dp_enable_0_port_0 = 1'b1;
@@ -143,9 +139,12 @@ module LookupTable #(
       if (rst) begin
          out0 <= 0;
          out1 <= 0;
-      end else begin
+      end else if (running) begin
          out0 <= outA_int;
          out1 <= outB_int;
+      end else begin
+         out0 <= 0;
+         out1 <= 0;
       end
    end
 

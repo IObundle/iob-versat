@@ -62,8 +62,8 @@ module iob_fifo_sync #(
       .cke_i(cke_i), //clock enable
       .arst_i(arst_i), //asynchronous reset
 
-      .rst_i (rst_i),
-      .en_i  (w_en_int),
+      .counter_rst_i (rst_i),
+      .counter_en_i  (w_en_int),
       .data_o(w_addr)
    );
 
@@ -80,8 +80,8 @@ module iob_fifo_sync #(
       .cke_i(cke_i), //clock enable
       .arst_i(arst_i), //asynchronous reset
 
-      .rst_i (rst_i),
-      .en_i  (r_en_int),
+      .counter_rst_i (rst_i),
+      .counter_en_i  (r_en_int),
       .data_o(r_addr)
    );
 
