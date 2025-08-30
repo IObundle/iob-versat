@@ -1,5 +1,5 @@
 #include "symbolic.hpp"
-#include "globals.hpp"
+//#include "globals.hpp"
 #include "memory.hpp"
 #include "parser.hpp"
 #include "utils.hpp"
@@ -730,10 +730,17 @@ static SymbolicExpression* ParseExpression(Tokenizer* tok,Arena* out){
 
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out){
   // TODO: For now, only handle the simplest expressions and parenthesis
+#if 0
   if(!tmpl){
     tmpl = CreateTokenizerTemplate(globalPermanent,",+-*/();[]",{".."}); // TODO: It is impossible to fully abstract the tokenizer as long as we have the template not being correctly constructed. We need a way of describing the things that we want (including digits), instead of just describing what symbols are or not allowed
   }
+#endif
 
+  // TODO: We need to find a way of solving the problem of creating a tokenizer template once and be done with it.
+  //       We probably want to move this somewhat to the META data, no point in doing this at runtime.
+  TEMP_REGION(temp,out);
+  tmpl = CreateTokenizerTemplate(temp,",+-*/();[]",{".."});
+  
   TOKENIZER_REGION(tok,tmpl);
 
   SymbolicExpression* expr = ParseExpression(tok,out);

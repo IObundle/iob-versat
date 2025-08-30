@@ -2,6 +2,7 @@
 
 #include "templateEngine.hpp"
 #include "embeddedData.hpp"
+#include "utilsCore.hpp"
 
 typedef Value (*MathFunction)(Value f,Value g);
 
@@ -630,11 +631,11 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
 
       Token portType = tok->NextToken();
       if(CompareString(portType,"input")){
-        port.type = PortDeclaration::INPUT;
+        port.type = WireDir_INPUT;
       } else if(CompareString(portType,"output")){
-        port.type = PortDeclaration::OUTPUT;
+        port.type = WireDir_OUTPUT;
       } else if(CompareString(portType,"inout")){
-        port.type = PortDeclaration::INOUT;
+        port.type = WireDir_INOUT;
       } else {
         UNHANDLED_ERROR("TODO: Should be a handled error");
       }
@@ -756,7 +757,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
     Tokenizer port(decl.name,"",{"in","out","delay","done","rst","clk","run","running","databus"});
     
     if(CompareString("signal_loop",decl.name)){
-      info.signalLoop = true;
+      info.singleInterfaces |= SingleInterfaces_SIGNAL_LOOP;
     } else if(CheckFormat("ext_dp_%s_%d_port_%d",decl.name)){
       Array<Value> values = ExtractValues("ext_dp_%s_%d_port_%d",decl.name,temp);
 
@@ -890,7 +891,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
       info.singleInterfaces |= SingleInterfaces_RUNNING;
     } else if(CheckFormat("done",decl.name)){
       info.singleInterfaces |= SingleInterfaces_DONE;
-    } else if(decl.type == PortDeclaration::INPUT){ // Config
+    } else if(decl.type == WireDir_INPUT){ // Config
       WireExpression* wire = configs.PushElem();
 
       Value* stageValue = decl.attributes->Get(VERSAT_STAGE);
@@ -909,7 +910,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
       wire->name = decl.name;
       wire->isStatic = decl.attributes->Exists(VERSAT_STATIC);
       wire->stage = stage;
-    } else if(decl.type == PortDeclaration::OUTPUT){ // State
+    } else if(decl.type == WireDir_OUTPUT){ // State
       WireExpression* wire = states.PushElem();
 
       wire->bitSize = decl.range;

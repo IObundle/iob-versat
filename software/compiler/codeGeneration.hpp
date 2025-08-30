@@ -148,13 +148,6 @@ static bool operator==(StructInfo& l,StructInfo& r){
   return true;
 }
 
-struct VerilogInterfaceSpec{
-  String name;
-  String sizeExpr;
-  bool isInput;
-  bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
-};
-
 struct AddressAccess;
 
 struct AccessAndType{

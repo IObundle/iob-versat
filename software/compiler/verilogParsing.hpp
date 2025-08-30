@@ -21,11 +21,18 @@ enum VersatStage{
   VersatStage_WRITE
 };
 
+enum WireDir{
+  WireDir_INPUT,
+  WireDir_OUTPUT,
+  WireDir_INOUT // We do not actually support this, but still need to represent it so that later we can report this as error
+};
+
 struct PortDeclaration{
   Hashmap<String,Value>* attributes;
   ExpressionRange range;
   String name;
-  enum {INPUT,OUTPUT,INOUT} type;
+  WireDir type;
+  //enum {INPUT,OUTPUT,INOUT} type;
 };
 
 struct ParameterExpression{
@@ -139,11 +146,12 @@ inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
 }
 
 enum SingleInterfaces{
-  SingleInterfaces_DONE    = (1<<1),
-  SingleInterfaces_CLK     = (1<<2),
-  SingleInterfaces_RESET   = (1<<3),
-  SingleInterfaces_RUN     = (1<<4),
-  SingleInterfaces_RUNNING = (1<<5)
+  SingleInterfaces_DONE        = (1<<1),
+  SingleInterfaces_CLK         = (1<<2),
+  SingleInterfaces_RESET       = (1<<3),
+  SingleInterfaces_RUN         = (1<<4),
+  SingleInterfaces_RUNNING     = (1<<5),
+  SingleInterfaces_SIGNAL_LOOP = (1<<6)
 };
 
 static inline SingleInterfaces& operator|=(SingleInterfaces& left,SingleInterfaces in){
@@ -167,8 +175,18 @@ struct ModuleInfo{
   bool doesIO;
   bool memoryMapped;
   bool isSource;
-  bool signalLoop;
 };
+
+// TODO: Move this to a better place, no actual reason to be inside verilogParsing
+static inline WireDir ReverseDir(WireDir dir){
+  FULL_SWITCH(dir){
+  case WireDir_INPUT: return WireDir_OUTPUT;
+  case WireDir_OUTPUT: return WireDir_INPUT;
+  case WireDir_INOUT: return WireDir_INOUT;
+  }
+
+  NOT_POSSIBLE();
+}
 
 String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out);
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out); // Only handles preprocessed files

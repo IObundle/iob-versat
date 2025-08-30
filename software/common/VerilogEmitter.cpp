@@ -1,5 +1,154 @@
 #include "VerilogEmitter.hpp"
+#include "symbolic.hpp"
 #include "utilsCore.hpp"
+
+// ============================================================================
+// Verilog module interface manipulation
+
+void VerilogModuleBuilder::StartGroup(const char* name){
+  Assert(currentPorts == nullptr);
+
+  if(name != nullptr){
+    currentPortGroupName = PushString(arena,"%s",name);
+  }
+  currentPorts = PushArenaList<VerilogPortSpec>(arena);
+}
+
+void VerilogModuleBuilder::EndGroup(){
+  VerilogPortGroup* group = this->groups->PushElem();
+
+  group->name = this->currentPortGroupName;
+  group->ports = PushArrayFromList(arena,this->currentPorts);
+
+  this->currentPortGroupName = {};
+  this->currentPorts = nullptr;
+}
+
+void VerilogModuleBuilder::AddPort(const char* name,SymbolicExpression* expr,WireDir dir,bool isShared){
+  bool endGroup = false;
+  if(!this->currentPorts){
+    StartGroup(nullptr);
+    endGroup = true;
+  }
+  
+  VerilogPortSpec* spec = this->currentPorts->PushElem();
+
+  spec->name = PushString(arena,"%s",name);
+  spec->size = expr;
+  spec->dir = dir;
+  spec->isShared = isShared;
+
+  if(endGroup){
+    EndGroup();
+  }
+}
+
+void VerilogModuleBuilder::AddPortIndexed(const char* name,int index,SymbolicExpression* expr,WireDir dir,bool isShared){
+  bool endGroup = false;
+  if(!this->currentPorts){
+    StartGroup(nullptr);
+    endGroup = true;
+  }
+
+  VerilogPortSpec* spec = this->currentPorts->PushElem();
+
+  spec->name = PushString(arena,name,index);
+  spec->size = expr;
+  spec->dir = dir;
+  spec->isShared = isShared;
+
+  if(endGroup){
+    EndGroup();
+  }
+}
+
+void VerilogModuleBuilder::AddInterface(Array<VerilogPortSpec> interface,String prefix){
+  for(VerilogPortSpec spec : interface){
+    char* name = CS(spec.name);
+    if(!Empty(prefix)){
+      name = SF("%.*s_%.*s",UN(prefix),UN(spec.name));
+    }
+    
+    AddPort(name,spec.size,spec.dir,spec.isShared);
+  }
+}
+
+void VerilogModuleBuilder::AddInterfaceIndexed(Array<VerilogPortSpec> interfaceFormat,int index,String prefix){
+  for(VerilogPortSpec spec : interfaceFormat){
+    char* name = CS(spec.name);
+    if(!Empty(prefix)){
+      name = SF("%.*s_%.*s",UN(prefix),UN(spec.name));
+    }
+
+    AddPortIndexed(name,index,spec.size,spec.dir,spec.isShared);
+  }
+}
+
+VerilogModuleBuilder* StartVerilogModuleInterface(Arena* arena){
+  VerilogModuleBuilder* builder = PushStruct<VerilogModuleBuilder>(arena);
+  builder->arena = arena;
+  builder->groups = PushArenaList<VerilogPortGroup>(arena);
+  
+  return builder;
+}
+
+VerilogPortSpec Copy(VerilogPortSpec in,Arena* out){
+  VerilogPortSpec res = in;
+  res.name = PushString(out,in.name);
+  res.size = SymbolicDeepCopy(in.size,out);
+  return res;
+}
+
+VerilogPortGroup Copy(VerilogPortGroup in,Arena* out){
+  VerilogPortGroup res = {};
+  res.name = PushString(out,in.name);
+  res.ports = PushArray<VerilogPortSpec>(out,in.ports.size);
+  for(int i = 0; i < in.ports.size; i++){
+    res.ports[i] = Copy(in.ports[i],out);
+  }
+  return res;
+}
+
+VerilogModuleInterface* End(VerilogModuleBuilder* builder,Arena* out){
+  VerilogModuleInterface* res = PushStruct<VerilogModuleInterface>(out);
+
+  res->portGroups = PushArray<VerilogPortGroup>(out,Size(builder->groups));
+  int index = 0;
+  for(VerilogPortGroup group : builder->groups){
+    res->portGroups[index++] = Copy(group,out);
+  }
+
+  return res;
+}
+
+// ======================================
+// Verilog interface manipulation
+
+Array<VerilogPortSpec>  AppendSuffix(Array<VerilogPortSpec> in,String suffix,Arena* out){
+  Array<VerilogPortSpec> res = PushArray<VerilogPortSpec>(out,in.size);
+  for(int i = 0; i < in.size; i++){
+    res[i] = in[i];
+
+    res[i].size = SymbolicDeepCopy(in[i].size,out);
+    res[i].name = PushString(out,"%.*s%.*s",UN(in[i].name),UN(suffix));
+  }
+
+  return res;
+}
+
+Array<VerilogPortSpec>  ReverseInterfaceDirection(Array<VerilogPortSpec> in,Arena* out){
+  Array<VerilogPortSpec> res = PushArray<VerilogPortSpec>(out,in.size);
+  for(int i = 0; i < in.size; i++){
+    res[i] = Copy(in[i],out);
+
+    res[i].dir = ReverseDir(in[i].dir);
+  }
+
+  return res;
+}
+
+// ============================================================================
+// Emitter
 
 String Repr(VASTType type){
   return {};

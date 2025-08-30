@@ -96,7 +96,6 @@ struct FUDeclaration{
 
   SingleInterfaces singleInterfaces;
   bool isOperation;
-  bool signalLoop;
 
   // Simple access functions
   int NumberInputs(){

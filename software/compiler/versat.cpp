@@ -181,8 +181,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   }
 
   decl.singleInterfaces = info->singleInterfaces;
-  decl.signalLoop = info->signalLoop;
-
+  
   if(info->isSource){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
@@ -244,8 +243,8 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
-  // All the single interfaces are simple of propagating. We can just do an OR of everything.
 #if 1
+  // All the single interfaces are simple of propagating. We can just do an OR of everything.
   for(FUInstance* ptr : accel->allocated){
     decl->singleInterfaces |= ptr->declaration->singleInterfaces;
   }
@@ -318,7 +317,9 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
 
-  decl->signalLoop = val.signalLoop;
+  if(val.signalLoop){
+    decl->singleInterfaces |= SingleInterfaces_SIGNAL_LOOP;
+  }
 
   Array<bool> belongArray = PushArray<bool>(out,accel->allocated.Size());
   Memset(belongArray,true);

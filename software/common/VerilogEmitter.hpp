@@ -1,8 +1,77 @@
 #pragma once
 
 #include "utils.hpp"
+#include "verilogParsing.hpp"
 
-// TODO: Because the way verilog tools work and how certain linters expect code to follow a certain format, try to abstract the rules on this level and inside the Repr function. This means that, if, for example, linter demands that a signal is cleared in a certain way, then implement a Clear function that makes sure that we always clear the signal that way, instead of pushing the logic outwards. Try to consolidate as much of verilog logic on this Emitter as much as possible and abstract the actual Verilog generation from the rest of the code.
+struct SymbolicExpression;
+
+// ============================================================================
+// Verilog interface manipulation
+
+struct VerilogPortSpec{
+  String name;
+  SymbolicExpression* size;
+  WireDir dir;
+  bool isShared; // For unpacking, shared wires are replicated accross every interface (think rdata and the like)
+};
+
+struct VerilogPortGroup{
+  String name;
+  Array<VerilogPortSpec> ports;
+};
+
+struct VerilogModuleInterface{
+  Array<VerilogPortGroup> portGroups;
+};
+
+// ======================================
+// Verilog interface builder
+
+struct VerilogModuleBuilder{
+  Arena* arena;
+
+  String currentPortGroupName;
+  
+  ArenaList<VerilogPortSpec>* currentPorts;
+  ArenaList<VerilogPortGroup>* groups;
+  
+  // TODO: We probably want to give a name to the groups, even if we do not end up doing anything with them
+  void StartGroup(const char* name);
+  void EndGroup();
+
+  // If called without group, creates a single wire group.
+  void AddPort(const char* name,SymbolicExpression* expr,WireDir dir,bool isShared = false);
+  void AddPortIndexed(const char* name,int index,SymbolicExpression* expr,WireDir dir,bool isShared = false);
+
+  // Acts as a bunch of AddPort calls
+  void AddInterface(Array<VerilogPortSpec> interface,String prefix);
+  void AddInterfaceIndexed(Array<VerilogPortSpec> interfaceFormat,int index,String prefix);
+};
+
+VerilogModuleBuilder*   StartVerilogModuleInterface(Arena* arena);
+VerilogModuleInterface* End(VerilogModuleBuilder*,Arena* out);
+
+// ======================================
+// Verilog interface manipulation
+
+Array<VerilogPortSpec>  AppendSuffix(Array<VerilogPortSpec> in,String suffix,Arena* out);
+Array<VerilogPortSpec>  ReverseInterfaceDirection(Array<VerilogPortSpec> in,Arena* out);
+
+// ============================================================================
+// Emitter
+
+// TODO: Because the way verilog tools work and how certain linters
+// expect code to follow a certain format, try to abstract the rules
+// on this level and inside the Repr function. This means that if, for
+// example, linter demands that a signal is cleared in a certain way,
+// then implement a Clear function that makes sure that we always
+// clear the signal that way, instead of pushing the logic
+// outwards. Try to consolidate as much of verilog logic on this
+// Emitter as much as possible and abstract the actual Verilog
+// generation from the rest of the code. Basically, we do not actually
+// care if the "VAST" actually corresponds to a Verilog AST node or if
+// it corresponds to a higher order node that does not match a single
+// verilog construct.
 
 enum VASTType{
   VASTType_TOP_LEVEL,

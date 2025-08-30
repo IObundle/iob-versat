@@ -101,7 +101,7 @@ struct MergePartition{
   Array<InstanceInfo> info;
 
   // TODO: Composite units currently break the meaning of baseType.
-  //       Since a composite unit with 2 merged instances would have 2 base types.
+  //       Since a composite unit with 2 merged instances would need to have 2 base types.
   FUDeclaration* baseType;
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;

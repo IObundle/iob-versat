@@ -609,7 +609,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
       ioSeen += 1;
     }
 
-    if(decl->signalLoop){
+    if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
       m->PortConnect("signal_loop","signal_loop");
     }
 
@@ -775,10 +775,9 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
       ioSeen += 1;
     }
 
-    if(decl->signalLoop){
+    if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
       m->PortConnect("signal_loop","signal_loop");
     }
-
     if(decl->singleInterfaces & SingleInterfaces_RUNNING){
       m->PortConnect("running","running");
     }
@@ -821,6 +820,82 @@ void EmitConnectOutputsToOut(VEmitter* v,Pool<FUInstance> instances){
       v->Assign(PushString(temp,"out%d",i),OutputName(instances,other,temp));
     }
   }
+}
+
+VerilogModuleInterface* CalculateModuleInterface(FUDeclaration* decl,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  VerilogModuleBuilder* m = StartVerilogModuleInterface(out);
+
+  SymbolicExpression* dataW = PushVariable(out,S8("DATA_W"));
+  SymbolicExpression* delayW = PushVariable(out,S8("DELAY_W"));
+  SymbolicExpression* sizeOne = PushLiteral(out,1);  
+  
+  m->StartGroup("Inputs");
+  for(int i = 0; i < decl->NumberInputs(); i++){
+    m->AddPortIndexed("in%d",i,dataW,WireDir_INPUT,false);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Outputs");
+  for(int i = 0; i < decl->NumberInputs(); i++){
+    m->AddPortIndexed("out%d",i,dataW,WireDir_OUTPUT,false);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Control");
+  if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
+    m->AddPort("signal_loop",sizeOne,WireDir_OUTPUT,false);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RUNNING){
+    m->AddPort("running",sizeOne,WireDir_OUTPUT,false);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RUN){
+    m->AddPort("run",sizeOne,WireDir_OUTPUT,false);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_DONE){
+    m->AddPort("done",sizeOne,WireDir_OUTPUT,false);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_CLK){
+    m->AddPort("clk",sizeOne,WireDir_OUTPUT,false);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RESET){
+    m->AddPort("rst",sizeOne,WireDir_OUTPUT,false);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Config");
+  for(Wire w : decl->configs){
+    m->AddPort(CS(w.name),w.sizeExpr,WireDir_OUTPUT,false);
+  }
+
+  for(Pair<StaticId,StaticData*> p : decl->staticUnits){
+    for(Wire w : p.second->configs){
+      String wireTrueName = GlobalStaticWireName(p.first,w,temp);
+      m->AddPort(CS(wireTrueName),w.sizeExpr,WireDir_OUTPUT,false);
+    }
+  }
+  m->EndGroup();
+
+  m->StartGroup("State");
+  for(Wire w : decl->states){
+    m->AddPort(CS(w.name),w.sizeExpr,WireDir_INPUT,false);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Delays");
+  for(int i = 0; i < decl->numberDelays; i++){
+    m->AddPortIndexed("delay%d",i,delayW,WireDir_INPUT,false);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Databus");
+  for(int i = 0; i < decl->nIOs; i++){
+    m->AddInterfaceIndexed(INT_IObFormat,i,S8("databus"));
+  }
+  m->EndGroup();
+  
+  return End(m,out);
 }
 
 void OutputCircuitSource(FUDeclaration* module,FILE* file){
@@ -870,7 +945,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   if(info.nDones){
     m->Output("done");
   }
-  if(module->signalLoop){
+  if(module->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
     m->Input("signal_loop");
   }
   
@@ -1999,29 +2074,30 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   }
 }
 
-void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,String unpackBase,String packedBase){
+void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogPortSpec> spec,String unpackBase,String packedBase){
   if(arraySize == 0){
     return;
   }
 
   TEMP_REGION(temp,m->arena);
       
-  for(VerilogInterfaceSpec info : spec){
+  for(VerilogPortSpec info : spec){
     String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
 
-    if(Empty(info.sizeExpr)){
-      m->WireArray(CS(unpackedName),arraySize,1);
-    } else {
-      m->WireArray(CS(unpackedName),arraySize,CS(info.sizeExpr));
-    }
+    String repr = PushRepresentation(info.size,temp);
+    
+    m->WireArray(CS(unpackedName),arraySize,CS(repr));
   }
       
   for(int i = 0; i < arraySize; i++){
-    for(VerilogInterfaceSpec info : spec){
+    for(VerilogPortSpec info : spec){
+
+      String repr = PushRepresentation(info.size,temp);
 
       String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
       String packedName = PushString(temp,"%.*s_%.*s",UN(packedBase),UN(info.name));
-          
+
+#if 0
       if(Empty(info.sizeExpr)){
         if(info.isShared){
           String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
@@ -2042,25 +2118,28 @@ void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,
           }
         }
       } else {
+#endif
         if(info.isShared){
           String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-          if(info.isInput){
+          if(info.dir == WireDir_INPUT){
             m->Assign(fullUnpacked,packedName);
           } else {
             m->Assign(packedName,fullUnpacked);
           }
         } else {
-          if(info.isInput){
-            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(info.sizeExpr),UN(info.sizeExpr));
+          if(info.dir == WireDir_INPUT){
+            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
             String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
             m->Assign(fullUnpacked,fullPacked);
           } else {
-            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(info.sizeExpr),UN(info.sizeExpr));
+            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
             String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
             m->Assign(fullPacked,fullUnpacked);
           }
         }
+#if 0
       }
+#endif
     }
   }
 }
@@ -2150,18 +2229,18 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
 
   VEmitter* m = StartVCode(temp);
 
-  VerilogInterfaceSpec databus[] = {
-    {S8("ready"),{},true},
-    {S8("valid"),{}},
-    {S8("addr"),S8("AXI_ADDR_W")},
-    {S8("rdata"),S8("AXI_DATA_W"),true,true},
-    {S8("wdata"),S8("AXI_DATA_W")},
-    {S8("wstrb"),S8("(AXI_DATA_W/8)")},
-    {S8("len"),S8("LEN_W")},
-    {S8("last"),{},true},
+  VerilogPortSpec databus[] = {
+    {S8("ready"),SYM_one,WireDir_INPUT},
+    {S8("valid"),SYM_one,WireDir_OUTPUT},
+    {S8("addr"),SYM_axiAddrW,WireDir_OUTPUT},
+    {S8("rdata"),SYM_axiDataW,WireDir_INPUT,true},
+    {S8("wdata"),SYM_axiDataW,WireDir_OUTPUT},
+    {S8("wstrb"),SYM_axiStrobeW,WireDir_OUTPUT},
+    {S8("len"),SYM_lenW,WireDir_OUTPUT},
+    {S8("last"),SYM_one,WireDir_INPUT},
   };
     
-  Array<VerilogInterfaceSpec> data = {databus,ARRAY_SIZE(databus)};
+  Array<VerilogPortSpec> data = {databus,ARRAY_SIZE(databus)};
     
   EmitIOUnpacking(m,val.nUnitsIO,data,S8("databus"),S8("m_databus"));
     
@@ -4082,14 +4161,16 @@ assign axi_araddr_o = temp_axi_araddr_o;
 void OutputTestbench(FUDeclaration* decl,FILE* file){
   TEMP_REGION(temp,nullptr);
 
+  VerilogModuleInterface* interface = CalculateModuleInterface(decl,temp);
+  
   VEmitter* m = StartVCode(temp);
   m->Timescale("1ps","1ps");
   m->Module(S8("Testbench"));
-
-  
   
   m->EndModule();
 
+  DEBUG_BREAK();
+  
   VAST* ast = EndVCode(m);
 
   auto* builder = StartString(temp);
