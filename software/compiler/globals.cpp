@@ -62,21 +62,21 @@ void InitializeDefaultData(Arena* perm){
   SYM_axiStrobeW = SymbolicDiv(PushVariable(perm,S8("AXI_DATA_W")),SYM_eight,perm);
   SYM_dataStrobeW = SymbolicDiv(PushVariable(perm,S8("DATA_W")),SYM_eight,perm);
 
-  VerilogPortSpec iobDatabus[] = {
-    {S8("ready"),SYM_one,WireDir_INPUT},
-    {S8("valid"),SYM_one,WireDir_OUTPUT},
-    {S8("addr"),SYM_axiAddrW,WireDir_OUTPUT},
-    {S8("rdata"),SYM_axiDataW,WireDir_INPUT,true},
-    {S8("wdata"),SYM_axiDataW,WireDir_OUTPUT},
-    {S8("wstrb"),SYM_axiStrobeW,WireDir_OUTPUT},
-    {S8("len"),SYM_lenW,WireDir_OUTPUT},
-    {S8("last"),SYM_one,WireDir_INPUT},
+  static VerilogPortSpec iobDatabus[] = {
+    {S8("databus_ready"),SYM_one,WireDir_INPUT},
+    {S8("databus_valid"),SYM_one,WireDir_OUTPUT},
+    {S8("databus_addr"),SYM_axiAddrW,WireDir_OUTPUT},
+    {S8("databus_rdata"),SYM_axiDataW,WireDir_INPUT,SpecialPortProperties_IsShared},
+    {S8("databus_wdata"),SYM_axiDataW,WireDir_OUTPUT},
+    {S8("databus_wstrb"),SYM_axiStrobeW,WireDir_OUTPUT},
+    {S8("databus_len"),SYM_lenW,WireDir_OUTPUT},
+    {S8("databus_last"),SYM_one,WireDir_INPUT},
   };
   INT_IOb = {iobDatabus,ARRAY_SIZE(iobDatabus)};
 
   INT_IObFormat = AppendSuffix(INT_IOb,S8("_%d"),perm);
   
-  VerilogPortSpec dpFormat[] = {
+  static VerilogPortSpec dpFormat[] = {
     {S8("addr_%d_port_0"),SYM_addrW,WireDir_OUTPUT},
     {S8("out_%d_port_0"),SYM_dataW,WireDir_OUTPUT},
     {S8("in_%d_port_0"),SYM_dataW,WireDir_INPUT},
@@ -90,13 +90,13 @@ void InitializeDefaultData(Arena* perm){
   };
   INT_DPFormat = {dpFormat,ARRAY_SIZE(dpFormat)};
 
-  VerilogPortSpec tpFormat[] = {
+  static VerilogPortSpec tpFormat[] = {
     {S8("addr_out_%d"),SYM_addrW,WireDir_OUTPUT},
     {S8("addr_in_%d"),SYM_addrW,WireDir_OUTPUT},
-    {S8("write_%d"),SYM_addrW,WireDir_OUTPUT},
-    {S8("read_%d"),SYM_addrW,WireDir_OUTPUT},
-    {S8("data_in_%d"),SYM_addrW,WireDir_INPUT},
-    {S8("data_out_%d"),SYM_addrW,WireDir_OUTPUT}
+    {S8("write_%d"),SYM_one,WireDir_OUTPUT},
+    {S8("read_%d"),SYM_one,WireDir_OUTPUT},
+    {S8("data_in_%d"),SYM_dataW,WireDir_INPUT},
+    {S8("data_out_%d"),SYM_dataW,WireDir_OUTPUT}
   };
   INT_TPFormat = {tpFormat,ARRAY_SIZE(tpFormat)};
 

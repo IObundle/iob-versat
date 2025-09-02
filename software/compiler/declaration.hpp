@@ -67,7 +67,8 @@ struct FUDeclaration{
   
   int numberDelays;
   Array<Parameter> parameters;
-  
+
+  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
 

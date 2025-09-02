@@ -822,79 +822,101 @@ void EmitConnectOutputsToOut(VEmitter* v,Pool<FUInstance> instances){
   }
 }
 
-VerilogModuleInterface* CalculateModuleInterface(FUDeclaration* decl,Arena* out){
+VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   TEMP_REGION(temp,out);
   
-  VerilogModuleBuilder* m = StartVerilogModuleInterface(out);
+  VerilogModuleBuilder* m = StartVerilogModuleInterface(temp);
 
-  SymbolicExpression* dataW = PushVariable(out,S8("DATA_W"));
-  SymbolicExpression* delayW = PushVariable(out,S8("DELAY_W"));
-  SymbolicExpression* sizeOne = PushLiteral(out,1);  
-  
   m->StartGroup("Inputs");
   for(int i = 0; i < decl->NumberInputs(); i++){
-    m->AddPortIndexed("in%d",i,dataW,WireDir_INPUT,false);
+    m->AddPortIndexed("in%d",i,SYM_dataW,WireDir_INPUT);
   }
   m->EndGroup();
 
   m->StartGroup("Outputs");
   for(int i = 0; i < decl->NumberInputs(); i++){
-    m->AddPortIndexed("out%d",i,dataW,WireDir_OUTPUT,false);
+    m->AddPortIndexed("out%d",i,SYM_dataW,WireDir_OUTPUT);
   }
   m->EndGroup();
 
   m->StartGroup("Control");
   if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
-    m->AddPort("signal_loop",sizeOne,WireDir_OUTPUT,false);
+    m->AddPort("signal_loop",SYM_one,WireDir_INPUT);
   }
   if(decl->singleInterfaces & SingleInterfaces_RUNNING){
-    m->AddPort("running",sizeOne,WireDir_OUTPUT,false);
+    m->AddPort("running",SYM_one,WireDir_INPUT);
   }
   if(decl->singleInterfaces & SingleInterfaces_RUN){
-    m->AddPort("run",sizeOne,WireDir_OUTPUT,false);
+    m->AddPort("run",SYM_one,WireDir_INPUT);
   }
   if(decl->singleInterfaces & SingleInterfaces_DONE){
-    m->AddPort("done",sizeOne,WireDir_OUTPUT,false);
+    m->AddPort("done",SYM_one,WireDir_OUTPUT);
   }
   if(decl->singleInterfaces & SingleInterfaces_CLK){
-    m->AddPort("clk",sizeOne,WireDir_OUTPUT,false);
+    m->AddPort("clk",SYM_one,WireDir_INPUT,SpecialPortProperties_IsClock);
   }
   if(decl->singleInterfaces & SingleInterfaces_RESET){
-    m->AddPort("rst",sizeOne,WireDir_OUTPUT,false);
+    m->AddPort("rst",SYM_one,WireDir_INPUT,SpecialPortProperties_IsReset);
   }
   m->EndGroup();
 
   m->StartGroup("Config");
   for(Wire w : decl->configs){
-    m->AddPort(CS(w.name),w.sizeExpr,WireDir_OUTPUT,false);
+    m->AddPort(CS(w.name),w.sizeExpr,WireDir_INPUT);
   }
 
   for(Pair<StaticId,StaticData*> p : decl->staticUnits){
     for(Wire w : p.second->configs){
       String wireTrueName = GlobalStaticWireName(p.first,w,temp);
-      m->AddPort(CS(wireTrueName),w.sizeExpr,WireDir_OUTPUT,false);
+      m->AddPort(CS(wireTrueName),w.sizeExpr,WireDir_INPUT);
     }
   }
   m->EndGroup();
 
   m->StartGroup("State");
   for(Wire w : decl->states){
-    m->AddPort(CS(w.name),w.sizeExpr,WireDir_INPUT,false);
+    Assert(w.sizeExpr);
+    m->AddPort(CS(w.name),w.sizeExpr,WireDir_OUTPUT);
   }
   m->EndGroup();
 
   m->StartGroup("Delays");
   for(int i = 0; i < decl->numberDelays; i++){
-    m->AddPortIndexed("delay%d",i,delayW,WireDir_INPUT,false);
+    m->AddPortIndexed("delay%d",i,SYM_delayW,WireDir_INPUT);
   }
   m->EndGroup();
 
   m->StartGroup("Databus");
   for(int i = 0; i < decl->nIOs; i++){
-    m->AddInterfaceIndexed(INT_IObFormat,i,S8("databus"));
+    m->AddInterfaceIndexed(INT_IObFormat,i,S8(""));
   }
   m->EndGroup();
+
+  if(decl->memoryMapBits){
+    m->StartGroup("MemoryMapped");
+    m->AddPort("valid",SYM_one,WireDir_INPUT);
+    if(decl->memoryMapBits.value() > 0){
+      SymbolicExpression* expr = PushLiteral(out,decl->memoryMapBits.value());
+      m->AddPort("addr",expr,WireDir_INPUT);
+    }
+    m->AddPort("wstrb",SYM_dataStrobeW,WireDir_INPUT);
+    m->AddPort("wdata",SYM_dataW,WireDir_INPUT);
+    m->AddPort("rvalid",SYM_one,WireDir_OUTPUT);
+    m->AddPort("rdata",SYM_dataW,WireDir_OUTPUT);
+    m->EndGroup();
+  }
   
+  m->StartGroup("External Memory");
+  for(int i = 0; i <  decl->externalMemory.size; i++){
+    ExternalMemoryInterface ext = decl->externalMemory[i];
+    if(ext.type == ExternalMemoryType::DP){
+      m->AddInterfaceIndexed(INT_DPFormat,i,S8("ext_dp"));
+    } else {
+      m->AddInterfaceIndexed(INT_TPFormat,i,S8("ext_2p"));
+    }
+  }
+  m->EndGroup();
+
   return End(m,out);
 }
 
@@ -1025,7 +1047,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
     m->Output("rvalid");
     m->Output("rdata","DATA_W");
   }
-
+  
   // Memory mapped units
   if(info.unitsMapped >= 1){
     Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
@@ -2097,49 +2119,24 @@ void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogPortSpec> spec,Strin
       String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
       String packedName = PushString(temp,"%.*s_%.*s",UN(packedBase),UN(info.name));
 
-#if 0
-      if(Empty(info.sizeExpr)){
-        if(info.isShared){
-          String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-          if(info.isInput){
-            m->Assign(fullUnpacked,packedName);
-          } else {
-            m->Assign(packedName,fullUnpacked);
-          }
+      if(info.props & SpecialPortProperties_IsShared){
+        String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+        if(info.dir == WireDir_INPUT){
+          m->Assign(fullUnpacked,packedName);
         } else {
-          if(info.isInput){
-            String fullPacked = PushString(temp,"%.*s[%d]",UN(packedName),i);
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullUnpacked,fullPacked);
-          } else {
-            String fullPacked = PushString(temp,"%.*s[%d]",UN(packedName),i);
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullPacked,fullUnpacked);
-          }
+          m->Assign(packedName,fullUnpacked);
         }
       } else {
-#endif
-        if(info.isShared){
+        if(info.dir == WireDir_INPUT){
+          String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
           String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-          if(info.dir == WireDir_INPUT){
-            m->Assign(fullUnpacked,packedName);
-          } else {
-            m->Assign(packedName,fullUnpacked);
-          }
+          m->Assign(fullUnpacked,fullPacked);
         } else {
-          if(info.dir == WireDir_INPUT){
-            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullUnpacked,fullPacked);
-          } else {
-            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullPacked,fullUnpacked);
-          }
+          String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
+          String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+          m->Assign(fullPacked,fullUnpacked);
         }
-#if 0
       }
-#endif
     }
   }
 }
@@ -2228,21 +2225,8 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   }
 
   VEmitter* m = StartVCode(temp);
-
-  VerilogPortSpec databus[] = {
-    {S8("ready"),SYM_one,WireDir_INPUT},
-    {S8("valid"),SYM_one,WireDir_OUTPUT},
-    {S8("addr"),SYM_axiAddrW,WireDir_OUTPUT},
-    {S8("rdata"),SYM_axiDataW,WireDir_INPUT,true},
-    {S8("wdata"),SYM_axiDataW,WireDir_OUTPUT},
-    {S8("wstrb"),SYM_axiStrobeW,WireDir_OUTPUT},
-    {S8("len"),SYM_lenW,WireDir_OUTPUT},
-    {S8("last"),SYM_one,WireDir_INPUT},
-  };
     
-  Array<VerilogPortSpec> data = {databus,ARRAY_SIZE(databus)};
-    
-  EmitIOUnpacking(m,val.nUnitsIO,data,S8("databus"),S8("m_databus"));
+  EmitIOUnpacking(m,val.nUnitsIO,INT_IOb,S8(""),S8("m_"));
     
   VAST* ast = EndVCode(m);
 
@@ -4161,11 +4145,176 @@ assign axi_araddr_o = temp_axi_araddr_o;
 void OutputTestbench(FUDeclaration* decl,FILE* file){
   TEMP_REGION(temp,nullptr);
 
-  VerilogModuleInterface* interface = CalculateModuleInterface(decl,temp);
+  VerilogModuleInterface* interface = GenerateModuleInterface(decl,temp);
+  Array<VerilogPortSpec> databus = ObtainGroupByName(interface,S8("Databus"));
+  Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,S8("MemoryMapped"));
+
+  // NOTE: Kinda hacky way of making everything a wire (needed since these connect directly to a module)
+  for(VerilogPortSpec& spec : databus){
+    spec.dir = WireDir_OUTPUT;
+  }
+  for(VerilogPortSpec& spec : memoryMapped){
+    spec.dir = WireDir_OUTPUT;
+  }
+  
+  Array<VerilogPortSpec> allPorts = ExtractAllPorts(interface,temp);
+  
+  bool containsMemoryMapped = ContainsGroup(interface,S8("MemoryMapped"));
+  bool containsDatabus = ContainsGroup(interface,S8("Databus"));
+  
+  Array<VerilogPortSpec> processedPorts = ExtractAllPorts(interface,temp);
+  
+  auto FindPortIndexByProperty = [](Array<VerilogPortSpec> ports,SpecialPortProperties prop) -> int{
+    int index = -1;
+    for(int i = 0; i < ports.size; i++){
+      VerilogPortSpec spec = ports[i];
+      if(spec.props & prop){
+        Assert(index == -1);
+        index = i;
+      }
+    }
+
+    return index;
+  };
+  
+  int clkPortIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsClock);
+  String clkWire = allPorts[clkPortIndex].name;
+  allPorts = RemoveElement(allPorts,clkPortIndex,temp);
+
+  int resetWireIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsReset);
+  String resetWire = allPorts[resetWireIndex].name; 
   
   VEmitter* m = StartVCode(temp);
-  m->Timescale("1ps","1ps");
+  m->Timescale("1ns","1ps");
   m->Module(S8("Testbench"));
+
+  for(Parameter p : decl->parameters){
+    String repr = PushRepresentation(p.valueExpr,temp);
+
+    // NOTE: Since AXI_ADDR_W is usually used to instantiate a memory,
+    // need severely reduce size otherwise simulation can get stuck
+    // and not even a warning is given
+    if(CompareString(p.name,"AXI_ADDR_W")){
+      repr = S8("16");
+    }
+
+    m->LocalParam(p.name,repr);
+  }
+  
+  m->DeclareInterface(interface,S8(""));
+
+  m->LocalParam(S8("CLOCK_PERIOD"),S8("10"));
+  m->Blank();
+  m->RawStatement(S8("initial clk = 0"));
+  m->RawStatement(S8("always #(CLOCK_PERIOD/2) clk = ~clk"));
+  m->Blank();
+  
+  m->StartInstance(decl->name,"uut");
+  for(Parameter p : decl->parameters){
+    const char* asChar = CS(p.name);
+    m->InstanceParam(asChar,asChar);
+  }
+  m->PortConnectInterface(interface,S8(""));
+  m->EndInstance();
+
+  // NOTE: We remove the MemoryMapped and Databus interfaces from
+  // automatic handling since we have special logic for it
+  for(int i = 0; i < interface->portGroups.size; i++){
+    if(CompareString(interface->portGroups[i].name,"Databus")){
+      interface->portGroups = RemoveElement(interface->portGroups,i);
+      break;
+    }
+  }
+  for(int i = 0; i < interface->portGroups.size; i++){
+    if(CompareString(interface->portGroups[i].name,"MemoryMapped")){
+      interface->portGroups = RemoveElement(interface->portGroups,i);
+      break;
+    }
+  }
+  
+  auto AdvanceClock = [m]() -> void{
+    m->Blank();
+    m->RawStatement(S8("@(posedge clk) #(CLOCK_PERIOD/2)"));
+    m->Blank();
+  };
+
+  if(containsMemoryMapped){
+    m->Task(S8("Write"));
+
+    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,S8("addr"));
+    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,S8("wdata"));
+
+    m->Input("addr_i",addressSpec.value().size);
+    m->Input("data_i",dataSpec.value().size);
+
+    AdvanceClock();
+
+    m->Set(S8("valid"),S8("1"));
+    m->Set(S8("wstrb"),S8("~0"));
+    m->Set(S8("addr"),S8("addr_i"));
+    m->Set(S8("wdata"),S8("data_i"));
+
+    AdvanceClock();
+
+    m->Set(S8("valid"),S8("0"));
+    m->Set(S8("wstrb"),S8("0"));
+    m->Set(S8("addr"),S8("0"));
+    m->Set(S8("wdata"),S8("0"));
+    
+    m->EndTask();
+  }
+
+  if(containsDatabus){
+    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,S8("databus_addr_0"));
+    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,S8("databus_wdata_0"));
+    Opt<VerilogPortSpec> lenSpec = GetPortSpecByName(allPorts,S8("databus_len_0"));
+
+    String dataW = PushRepresentation(dataSpec.value().size,temp);
+    String addrW = PushRepresentation(addressSpec.value().size,temp);
+    String lenW = PushRepresentation(lenSpec.value().size,temp);
+
+    m->Wire("insertValue",1);
+    m->Wire("addrToInsert",CS(addrW));
+    m->Wire("valueToInsert",CS(dataW));
+
+    m->StartInstance(S8("SimHelper_DatabusMem"),"DatabusMem");
+    m->InstanceParam("DATA_W",CS(dataW));
+
+    m->InstanceParam("ADDR_W",CS(addrW));
+
+    m->InstanceParam("LEN_W",CS(lenW));
+    
+    m->PortConnect(INT_IOb,S8("_0"));
+    m->PortConnect(S8("insertValue"),S8("insertValue"));
+    m->PortConnect(S8("addrToInsert"),S8("addrToInsert"));
+    m->PortConnect(S8("valueToInsert"),S8("valueToInsert"));
+    m->PortConnect(S8("clk"),S8("clk"));
+    m->PortConnect(S8("rst"),S8("rst"));
+    
+    m->EndInstance();
+  }
+  
+  m->InitialBlock();
+
+  m->RawStatement(S8("`ifdef VCD"));
+  m->RawStatement(S8("$dumpfile(\"uut.vcd\")"));
+  m->RawStatement(S8("$dumpvars()"));
+  m->RawStatement(S8("`endif // VCD"));
+  
+  for(VerilogPortSpec port : processedPorts){
+    if(port.dir == WireDir_INPUT){
+      m->Set(port.name,S8("0"));
+    }
+  }
+
+  AdvanceClock();
+  m->Set(resetWire,S8("1"));
+  AdvanceClock();
+  m->Set(resetWire,S8("0"));
+  AdvanceClock();
+  m->RawStatement(S8("$finish()"));
+
+  m->EndBlock();
   
   m->EndModule();
 

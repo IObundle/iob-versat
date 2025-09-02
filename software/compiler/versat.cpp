@@ -139,6 +139,10 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     states[i].bitSize = size;
     states[i].isStatic = false;
     states[i].stage = info->states[i].stage;
+
+    SymbolicExpression* top = SymbolicExpressionFromVerilog(wire.bitSize.top,temp);
+    SymbolicExpression* bottom = SymbolicExpressionFromVerilog(wire.bitSize.bottom,temp);
+    states[i].sizeExpr = Normalize(SymbolicAdd(SymbolicSub(top,bottom,temp),literalOne,temp),out);
   }
 
   for(int i = 0; i < info->externalInterfaces.size; i++){

@@ -411,8 +411,13 @@ int main(int argc,char* argv[]){
     DEFER_CLOSE_FILE(testbenchLocation);
 
     OutputTestbench(decl,testbenchLocation);
+
+    int res = CopyFileGroup(defaultVerilogFiles,globalOptions.hardwareOutputFilepath,true,FilePurpose_VERILOG_COMMON_CODE);
+    if(res){
+      return res;
+    }
     
-    return -1;
+    return 0;
   }
   
   String specFilepath = globalOptions.specificationFilepath;
