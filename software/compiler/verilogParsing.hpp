@@ -56,9 +56,13 @@ struct WireExpression{
   bool isStatic;
 };
 
-enum ExternalMemoryType{TWO_P = 0,DP}; // Two ports: one input and one output (think FIFO). Dual port: two input or output ports (think LUT)
+enum ExternalMemoryType {
+  ExternalMemoryType_2P,  // Two ports: one input and one output each with individual address (think FIFO)
+  ExternalMemoryType_DP   // Dual port: two input or output ports (think LUT)
+}; 
 
 // TODO: Because we changed memories to be byte space instead of symbol space, maybe it would be best to change how the address bit size is stored. These structures are supposed to be clean, and so the parser should identify any differences in address size and report an error. These structures should only have one address if we keep going with the byte space memories idea and the data size is used to calculate the bitSize for each respective port
+// NOTE: Although we should do this after parsing everything. Parse first, check errors later.
 template<typename T>
 struct ExternalMemoryTwoPortsTemplate{ // tp
   T bitSizeIn;
@@ -170,6 +174,9 @@ struct ModuleInfo{
   bool memoryMapped;
   bool isSource;
 };
+
+SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out);
+SymbolicExpression* SymbolicExpressionFromVerilog(ExpressionRange range,Arena* out);
 
 String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out);
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out); // Only handles preprocessed files

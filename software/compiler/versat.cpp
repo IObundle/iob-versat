@@ -24,49 +24,6 @@ int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   return size;
 }
 
-SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out){
-  FULL_SWITCH(topExpr->type){
-  case Expression::UNDEFINED: {
-    Assert(false);
-  } break;
-  case Expression::OPERATION: {
-    SymbolicExpression* left = SymbolicExpressionFromVerilog(topExpr->expressions[0],out);
-    SymbolicExpression* right = SymbolicExpressionFromVerilog(topExpr->expressions[1],out);
-    
-    switch(topExpr->op[0]){
-    case '+':{
-      return SymbolicAdd(left,right,out);
-    } break;
-    case '-':{
-      return SymbolicSub(left,right,out);
-    } break;
-    case '*':{
-      return SymbolicMult(left,right,out);
-    } break;
-    case '/':{
-      return SymbolicDiv(left,right,out);
-    } break;
-    default:{
-      // TODO: Better error message
-      NOT_IMPLEMENTED("");
-    } break;
-    } 
-  } break;
-  case Expression::IDENTIFIER: {
-    return PushVariable(out,topExpr->id);
-  } break;
-  case Expression::FUNCTION: {
-    // TODO: Better error message and we probably can do more stuff here
-    NOT_IMPLEMENTED("");
-  } break;
-  case Expression::LITERAL: {
-    return PushLiteral(out,topExpr->val.number);
-  } break;
-} END_SWITCH();
-  
-  return {};
-}
-
 // TODO: Need to remake this function and probably ModuleInfo as the versat compiler change is made
 Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   TEMP_REGION(temp,nullptr);
@@ -113,8 +70,6 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     instantiated[i] = def;
   }
 
-  auto literalOne = PushLiteral(temp,1);
-  
   for(int i = 0; i < info->configs.size; i++){
     WireExpression& wire = info->configs[i];
 
@@ -125,9 +80,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     configs[i].isStatic = false;
     configs[i].stage = info->configs[i].stage;
 
-    SymbolicExpression* top = SymbolicExpressionFromVerilog(wire.bitSize.top,temp);
-    SymbolicExpression* bottom = SymbolicExpressionFromVerilog(wire.bitSize.bottom,temp);
-    configs[i].sizeExpr = Normalize(SymbolicAdd(SymbolicSub(top,bottom,temp),literalOne,temp),out);
+    configs[i].sizeExpr = SymbolicExpressionFromVerilog(wire.bitSize,out);
   }
 
   for(int i = 0; i < info->states.size; i++){
@@ -140,9 +93,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     states[i].isStatic = false;
     states[i].stage = info->states[i].stage;
 
-    SymbolicExpression* top = SymbolicExpressionFromVerilog(wire.bitSize.top,temp);
-    SymbolicExpression* bottom = SymbolicExpressionFromVerilog(wire.bitSize.bottom,temp);
-    states[i].sizeExpr = Normalize(SymbolicAdd(SymbolicSub(top,bottom,temp),literalOne,temp),out);
+    states[i].sizeExpr = SymbolicExpressionFromVerilog(wire.bitSize,out);
   }
 
   for(int i = 0; i < info->externalInterfaces.size; i++){
@@ -152,13 +103,13 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     external[i].type = expr.type;
 
     switch(expr.type){
-    case ExternalMemoryType::TWO_P:{
+    case ExternalMemoryType::ExternalMemoryType_2P:{
       external[i].tp.bitSizeIn = EvalRange(expr.tp.bitSizeIn,instantiated);
       external[i].tp.bitSizeOut = EvalRange(expr.tp.bitSizeOut,instantiated);
       external[i].tp.dataSizeIn = EvalRange(expr.tp.dataSizeIn,instantiated);
       external[i].tp.dataSizeOut = EvalRange(expr.tp.dataSizeOut,instantiated);
     }break;
-    case ExternalMemoryType::DP:{
+    case ExternalMemoryType::ExternalMemoryType_DP:{
       for(int ii = 0; ii < 2; ii++){
         external[i].dp[ii].bitSize = EvalRange(expr.dp[ii].bitSize,instantiated);
         external[i].dp[ii].dataSizeIn = EvalRange(expr.dp[ii].dataSizeIn,instantiated);

@@ -798,7 +798,7 @@ int main(int argc,char* argv[]){
     int index = 0;
     for(ExternalMemoryInterface inter : external){
       switch(inter.type){
-      case ExternalMemoryType::DP:{
+      case ExternalMemoryType::ExternalMemoryType_DP:{
         printf("DP - %d",index++);
         for(int i = 0; i < 2; i++){
           printf(",%d",inter.dp[i].bitSize);
@@ -807,7 +807,7 @@ int main(int argc,char* argv[]){
         }
         printf("\n");
       }break;
-      case ExternalMemoryType::TWO_P:{
+      case ExternalMemoryType::ExternalMemoryType_2P:{
         printf("2P - %d",index++);
         printf(",%d",inter.tp.bitSizeOut);
         printf(",%d",inter.tp.bitSizeIn);

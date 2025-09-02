@@ -98,7 +98,7 @@ extern SymbolicExpression* SYM_dataStrobeW;
 //       important this is. Memory interfaces are kinda limitted, right?
 extern Array<VerilogPortSpec> INT_IOb;
 extern Array<VerilogPortSpec> INT_IObFormat;
-extern Array<VerilogPortSpec> INT_DPFormat;
-extern Array<VerilogPortSpec> INT_TPFormat;
+//extern Array<VerilogPortSpec> INT_DPFormat;
+//extern Array<VerilogPortSpec> INT_TPFormat;
 
 void InitializeDefaultData(Arena* perm);

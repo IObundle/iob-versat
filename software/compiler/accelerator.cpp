@@ -550,10 +550,10 @@ bool VerifyExternalMemory(ExternalMemoryInterface* inter){
   bool res = false;
 
   switch(inter->type){
-  case ExternalMemoryType::TWO_P:{
+  case ExternalMemoryType::ExternalMemoryType_2P:{
     res = (inter->tp.bitSizeIn == inter->tp.bitSizeOut);
   }break;
-  case ExternalMemoryType::DP:{
+  case ExternalMemoryType::ExternalMemoryType_DP:{
     res = (inter->dp[0].bitSize == inter->dp[1].bitSize);
   }break;
   }
@@ -585,11 +585,11 @@ int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
   int addressBitSize = 0;
   int byteOffset = 0;
   switch(inter->type){
-  case ExternalMemoryType::TWO_P:{
+  case ExternalMemoryType::ExternalMemoryType_2P:{
     addressBitSize = inter->tp.bitSizeIn;
     byteOffset = std::min(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
   }break;
-  case ExternalMemoryType::DP:{
+  case ExternalMemoryType::ExternalMemoryType_DP:{
     addressBitSize = inter->dp[0].bitSize;
     byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
   }break;

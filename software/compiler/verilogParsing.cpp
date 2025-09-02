@@ -1,8 +1,12 @@
 #include "verilogParsing.hpp"
 
+#include "globals.hpp"
+#include "memory.hpp"
 #include "templateEngine.hpp"
 #include "embeddedData.hpp"
 #include "utilsCore.hpp"
+
+#include "symbolic.hpp"
 
 typedef Value (*MathFunction)(Value f,Value g);
 
@@ -736,6 +740,59 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
   return PushArrayFromList(out,modules);
 }
 
+SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out){
+  FULL_SWITCH(topExpr->type){
+  case Expression::UNDEFINED: {
+    Assert(false);
+  } break;
+  case Expression::OPERATION: {
+    SymbolicExpression* left = SymbolicExpressionFromVerilog(topExpr->expressions[0],out);
+    SymbolicExpression* right = SymbolicExpressionFromVerilog(topExpr->expressions[1],out);
+    
+    switch(topExpr->op[0]){
+    case '+':{
+      return SymbolicAdd(left,right,out);
+    } break;
+    case '-':{
+      return SymbolicSub(left,right,out);
+    } break;
+    case '*':{
+      return SymbolicMult(left,right,out);
+    } break;
+    case '/':{
+      return SymbolicDiv(left,right,out);
+    } break;
+    default:{
+      // TODO: Better error message
+      NOT_IMPLEMENTED("");
+    } break;
+    } 
+  } break;
+  case Expression::IDENTIFIER: {
+    return PushVariable(out,topExpr->id);
+  } break;
+  case Expression::FUNCTION: {
+    // TODO: Better error message and we probably can do more stuff here
+    NOT_IMPLEMENTED("");
+  } break;
+  case Expression::LITERAL: {
+    return PushLiteral(out,topExpr->val.number);
+  } break;
+} END_SWITCH();
+  
+  return {};
+}
+
+SymbolicExpression* SymbolicExpressionFromVerilog(ExpressionRange range,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  SymbolicExpression* top = SymbolicExpressionFromVerilog(range.top,temp);
+  SymbolicExpression* bottom = SymbolicExpressionFromVerilog(range.bottom,temp);
+  SymbolicExpression* res = Normalize(SymbolicAdd(SymbolicSub(top,bottom,temp),SYM_one,temp),out);
+
+  return res;
+}
+
 ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
   TEMP_REGION(temp,out);
 
@@ -763,7 +820,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
       ExternalMemoryID id = {};
       id.interface = values[1].number;
-      id.type = ExternalMemoryType::DP;
+      id.type = ExternalMemoryType::ExternalMemoryType_DP;
 
       String wire = values[0].str;
       int port = values[2].number;
@@ -772,7 +829,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
       ExternalMemoryInfo* ext = external->GetOrInsert(id,{});
       if(CompareString(wire,"addr")){
-        ext->dp[port].bitSize = decl.range;
+        ext->dp[port].bitSize = decl.range; //SymbolicExpressionFromVerilog(decl.range,out); // decl.range;
       } else if(CompareString(wire,"out")){
         ext->dp[port].dataSizeOut = decl.range;
       } else if(CompareString(wire,"in")){
@@ -784,7 +841,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
       }
     } else if(CheckFormat("ext_2p_%s",decl.name)){
       ExternalMemoryID id = {};
-      id.type = ExternalMemoryType::TWO_P;
+      id.type = ExternalMemoryType::ExternalMemoryType_2P;
 
       String wire = {};
 	  bool out = false;
@@ -938,10 +995,10 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
     inter.type = pair.first.type;
 
 	switch(inter.type){
-	case ExternalMemoryType::TWO_P:{
+	case ExternalMemoryType::ExternalMemoryType_2P:{
 	  inter.tp = pair.second.tp;
 	} break;
-	case ExternalMemoryType::DP:{
+	case ExternalMemoryType::ExternalMemoryType_DP:{
 	  inter.dp[0] = pair.second.dp[0];
 	  inter.dp[1] = pair.second.dp[1];
 	}break;

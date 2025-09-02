@@ -201,6 +201,17 @@ Array<VerilogPortSpec> ObtainGroupByName(VerilogModuleInterface* interface,Strin
   return {};
 }
 
+bool RemoveGroupInPlace(VerilogModuleInterface* interface,String name){
+  for(int i = 0; i < interface->portGroups.size; i++){
+    if(CompareString(interface->portGroups[i].name,name)){
+      interface->portGroups = RemoveElement(interface->portGroups,i);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 Opt<VerilogPortSpec> GetPortSpecByName(Array<VerilogPortSpec> array,String name){
   for(VerilogPortSpec spec : array){
     if(CompareString(spec.name,name)){
@@ -1141,19 +1152,24 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
   case VASTType_TASK_DECL: {
     b->PushSpaces(level * 2);
-    b->PushString("task %.*s (",UNPACK_SS(top->task.name));
 
-    bool first = true;
-    for(VAST* ast : top->task.portDeclarations){
-      if(!first){
-        b->PushString(",");
+    if(Empty(top->task.portDeclarations)){
+      b->PushString("task %.*s;\n",UNPACK_SS(top->task.name));
+    } else {
+      b->PushString("task %.*s (",UNPACK_SS(top->task.name));
+
+      bool first = true;
+      for(VAST* ast : top->task.portDeclarations){
+        if(!first){
+          b->PushString(",");
+        }
+
+        Repr(ast,b,state,0);
+        first = false;
       }
-
-      Repr(ast,b,state,0);
-      first = false;
+      b->PushString(");\n");
     }
-    b->PushString(");\n");
-
+    
     b->PushSpaces(level * 2);
     b->PushString("begin\n");
     
@@ -1162,6 +1178,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushSpaces(level * 2);
     b->PushString("end\n");
 
+    b->PushSpaces(level * 2);
     b->PushString("endtask\n");
   } break;
   
@@ -1349,8 +1366,12 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
   case VASTType_LOOP:{
     b->PushSpaces(level * 2);
-    
-    b->PushString("for(%.*s;%.*s;%.*s) begin\n",UN(top->loopExpr.initExpr),UN(top->loopExpr.loopExpr),UN(top->loopExpr.incrExpr));
+
+    if(Empty(top->loopExpr.initExpr) && Empty(top->loopExpr.incrExpr)){
+      b->PushString("while(%.*s) begin\n",UN(top->loopExpr.loopExpr));
+    } else {
+      b->PushString("for(%.*s ; %.*s ; %.*s) begin\n",UN(top->loopExpr.initExpr),UN(top->loopExpr.loopExpr),UN(top->loopExpr.incrExpr));
+    }
 
     EmitStatementList(b,top->loopExpr.statements,state,level + 1);
     

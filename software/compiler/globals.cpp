@@ -45,8 +45,8 @@ SymbolicExpression* SYM_dataStrobeW;
 
 Array<VerilogPortSpec> INT_IOb;
 Array<VerilogPortSpec> INT_IObFormat;
-Array<VerilogPortSpec> INT_DPFormat;
-Array<VerilogPortSpec> INT_TPFormat;
+//Array<VerilogPortSpec> INT_DPFormat;
+//Array<VerilogPortSpec> INT_TPFormat;
 
 void InitializeDefaultData(Arena* perm){
   SYM_zero = PushLiteral(perm,0);
@@ -75,7 +75,10 @@ void InitializeDefaultData(Arena* perm){
   INT_IOb = {iobDatabus,ARRAY_SIZE(iobDatabus)};
 
   INT_IObFormat = AppendSuffix(INT_IOb,S8("_%d"),perm);
-  
+
+#if 0
+  // TODO: This is not good. We cannot just assume the size of the ports.
+  //       It should depend on the unit.
   static VerilogPortSpec dpFormat[] = {
     {S8("addr_%d_port_0"),SYM_addrW,WireDir_OUTPUT},
     {S8("out_%d_port_0"),SYM_dataW,WireDir_OUTPUT},
@@ -99,6 +102,6 @@ void InitializeDefaultData(Arena* perm){
     {S8("data_out_%d"),SYM_dataW,WireDir_OUTPUT}
   };
   INT_TPFormat = {tpFormat,ARRAY_SIZE(tpFormat)};
-
+#endif
   
 }

@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module iob_counter #(
+module versat_counter #(
    parameter DATA_W  = 21,
    parameter RST_VAL = {DATA_W{1'b0}}
 ) (

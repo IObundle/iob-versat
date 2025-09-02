@@ -84,6 +84,9 @@ Array<VerilogPortSpec> AddDirectionToName(Array<VerilogPortSpec> in,Arena* out);
 Array<VerilogPortSpec> ExtractAllPorts(VerilogModuleInterface* interface,Arena* out);
 Array<VerilogPortSpec> ObtainGroupByName(VerilogModuleInterface* interface,String name);
 
+// True if group was found and removed
+bool RemoveGroupInPlace(VerilogModuleInterface* interface,String name);
+
 Opt<VerilogPortSpec>   GetPortSpecByName(Array<VerilogPortSpec> array,String name);
 
 // TODO: We might eventually change from using strings to using an enum for group type.
