@@ -33,6 +33,7 @@
    // External memory
    output [ADDR_W-1:0] ext_dp_addr_0_port_0,
    output [DATA_W-1:0] ext_dp_out_0_port_0,
+   input  [DATA_W-1:0] ext_dp_in_0_port_0,
    output              ext_dp_enable_0_port_0,
    output              ext_dp_write_0_port_0,
 

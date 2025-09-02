@@ -2,11 +2,7 @@
 
 `verilator_config
 
-// Below you find suggested waivers. You have three options:
-//   1. Fix the reason for the linter warning
-//   2. Keep the waiver permanently if you are sure this is okay
-//   3. Keep the waiver temporarily to suppress the output
-
+// Unused submodule outputs
 lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'doneDatabus'"
 
 lint_off -rule PINCONNECTEMPTY -file "**/AddressGen3.v" -match "Cell pin connected by name with empty reference: 'doneAddress'"

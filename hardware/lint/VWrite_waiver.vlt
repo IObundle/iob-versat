@@ -2,6 +2,9 @@
 
 `verilator_config
 
+// Unused module input: keep to match Databus Interface
+lint_off -rule UNUSEDSIGNAL -file "**/VWrite.v" -match "Signal is not used: 'databus_rdata_0'"
+
 // Unused submodule outputs
 lint_off -rule PINCONNECTEMPTY -file "**/VWrite.v" -match "Cell pin connected by name with empty reference: 'doneDatabus'"
 

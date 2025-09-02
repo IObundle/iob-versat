@@ -20,6 +20,7 @@ module DebugReadMem #(
    output [  AXI_DATA_W-1:0] databus_wdata_0,
    output [AXI_DATA_W/8-1:0] databus_wstrb_0,
    output [       LEN_W-1:0] databus_len_0,
+   output                    databus_last_0,
 
    input [AXI_ADDR_W-1:0]    address,
 

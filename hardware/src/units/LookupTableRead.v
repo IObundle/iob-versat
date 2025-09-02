@@ -35,6 +35,7 @@ module LookupTableRead #(
    output [    ADDR_W-1:0] ext_dp_addr_0_port_1,
    output [AXI_DATA_W-1:0] ext_dp_out_0_port_1,
    output                  ext_dp_enable_0_port_1,
+   input  [AXI_DATA_W-1:0] ext_dp_in_0_port_1,
    output                  ext_dp_write_0_port_1,
 
    // configurations

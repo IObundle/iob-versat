@@ -13,6 +13,7 @@
    output done,
 
    // native interface 
+   input      [         1:0] addr,
    input      [DATA_W/8-1:0] wstrb,
    input      [  DATA_W-1:0] wdata,
    input                     valid,
