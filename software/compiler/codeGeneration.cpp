@@ -17,12 +17,6 @@
 #include "verilogParsing.hpp"
 #include "versatSpecificationParser.hpp"
 
-// TODO: If we could find a way of describing the format of verilog modules that we care about, we could also perform
-//       a check at Versat runtime that we are producing correct code, although it might take longer than the simple
-//       loop of making a change and checking if Verilator/Icarus complains about it.
-
-// TODO: Is there a way of describing the format of the wires for an interface and have the code generate it automatically? We would need to be able to describe the format of the wires, the place where the indexes change, the place where the port index changes, etc. So far, this would only be needed if we added more memory types or if we started generating more code.
-
 // TODO: Emit functions do not need to return a String. They could just write directly the result to a file and skip having to push a new string for no reason.
 
 // TODO: Move all this stuff to a better place
@@ -185,7 +179,7 @@ String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena
     ExternalMemoryInterface ext = external[i];
 
     FULL_SWITCH(ext.type){
-    case ExternalMemoryType::DP:{
+    case ExternalMemoryType::ExternalMemoryType_DP:{
       m->StartInstance("my_dp_asym_ram",SF("ext_dp_%d",i));
       {
         m->InstanceParam("A_DATA_W",ext.dp[0].dataSizeOut);
@@ -208,7 +202,7 @@ String EmitExternalMemoryInstances(Array<ExternalMemoryInterface> external,Arena
       }      
       m->EndInstance();
     } break;
-    case ExternalMemoryType::TWO_P:{
+    case ExternalMemoryType::ExternalMemoryType_2P:{
       m->StartInstance("my_2p_asym_ram",SF("ext_2p_%d",i));
       {
         m->InstanceParam("W_DATA_W",ext.tp.dataSizeOut);
@@ -248,7 +242,7 @@ String EmitExternalMemoryPort(Array<ExternalMemoryInterface> external,Arena* out
     ExternalMemoryInterface ext = external[i];
 
     FULL_SWITCH(ext.type){
-    case ExternalMemoryType::DP:{
+    case ExternalMemoryType::ExternalMemoryType_DP:{
       for(int k = 0; k < 2; k++){
         m->Output(SF("ext_dp_addr_%d_port_%d_o",i,k),ext.dp[k].bitSize);
         m->Output(SF("ext_dp_out_%d_port_%d_o",i,k),ext.dp[k].dataSizeOut);
@@ -257,7 +251,7 @@ String EmitExternalMemoryPort(Array<ExternalMemoryInterface> external,Arena* out
         m->Output(SF("ext_dp_write_%d_port_%d_o",i,k));
       }      
     } break;
-    case ExternalMemoryType::TWO_P:{
+    case ExternalMemoryType::ExternalMemoryType_2P:{
       m->Output(SF("ext_2p_write_%d_o",i));
       m->Output(SF("ext_2p_addr_out_%d_o",i),ext.tp.bitSizeOut);
       m->Output(SF("ext_2p_data_out_%d_o",i),ext.tp.dataSizeOut);
@@ -288,7 +282,7 @@ String EmitExternalMemoryInternalPortmap(Array<ExternalMemoryInterface> external
     ExternalMemoryInterface ext = external[i];
 
     FULL_SWITCH(ext.type){
-    case ExternalMemoryType::DP:{
+    case ExternalMemoryType::ExternalMemoryType_DP:{
       for(int k = 0; k < 2; k++){
         m->PortConnect(PushString(temp,"ext_dp_out_%d_port_%d_o",i,k),PushString(temp,"ext_dp_out_%d_port_%d_o",i,k));
         m->PortConnect(PushString(temp,"ext_dp_addr_%d_port_%d_o",i,k),PushString(temp,"ext_dp_addr_%d_port_%d_o",i,k));
@@ -297,7 +291,7 @@ String EmitExternalMemoryInternalPortmap(Array<ExternalMemoryInterface> external
         m->PortConnect(PushString(temp,"ext_dp_in_%d_port_%d_i",i,k),PushString(temp,"ext_dp_in_%d_port_%d_i",i,k));
       }
     } break;
-    case ExternalMemoryType::TWO_P:{
+    case ExternalMemoryType::ExternalMemoryType_2P:{
       m->PortConnect(PushString(temp,"ext_2p_write_%d_o",i),PushString(temp,"ext_2p_write_%d_o",i));
       m->PortConnect(PushString(temp,"ext_2p_addr_out_%d_o",i),PushString(temp,"ext_2p_addr_out_%d_o",i));
       m->PortConnect(PushString(temp,"ext_2p_data_out_%d_o",i),PushString(temp,"ext_2p_data_out_%d_o",i));
@@ -325,7 +319,7 @@ String EmitInternalMemoryWires(Array<ExternalMemoryInterface> external,Arena* ou
     ExternalMemoryInterface ext = external[i];
 
     FULL_SWITCH(ext.type){
-    case ExternalMemoryType::DP:{
+    case ExternalMemoryType::ExternalMemoryType_DP:{
       for(int k = 0; k < 2; k++){
         m->Wire(SF("ext_dp_addr_%d_port_%d_o",i,k),ext.dp[k].bitSize);
         m->Wire(SF("ext_dp_out_%d_port_%d_o",i,k),ext.dp[k].dataSizeOut);
@@ -346,7 +340,7 @@ String EmitInternalMemoryWires(Array<ExternalMemoryInterface> external,Arena* ou
         m->Assign(PushString(temp,"VERSAT0_ext_dp_write_%d_port_%d_o",i,k),PushString(temp,"ext_dp_write_%d_port_%d_o",i,k));
       }
     } break;
-    case ExternalMemoryType::TWO_P:{
+    case ExternalMemoryType::ExternalMemoryType_2P:{
       m->Wire(SF("ext_2p_addr_out_%d_o",i),ext.tp.bitSizeOut);
       m->Wire(SF("ext_2p_addr_in_%d_o",i),ext.tp.bitSizeIn);
       m->Wire(SF("ext_2p_data_in_%d_i",i),ext.tp.dataSizeIn);
@@ -558,7 +552,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
     // External memories
     for(int i = 0; i <  decl->externalMemory.size; i++){
       ExternalMemoryInterface ext = decl->externalMemory[i];
-      if(ext.type == ExternalMemoryType::DP){
+      if(ext.type == ExternalMemoryType::ExternalMemoryType_DP){
         m->PortConnectIndexed("ext_dp_addr_%d_port_0",i,"ext_dp_addr_%d_port_0",externalSeen);
         m->PortConnectIndexed("ext_dp_out_%d_port_0",i,"ext_dp_out_%d_port_0",externalSeen);
         m->PortConnectIndexed("ext_dp_in_%d_port_0",i,"ext_dp_in_%d_port_0",externalSeen);
@@ -609,7 +603,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
       ioSeen += 1;
     }
 
-    if(decl->signalLoop){
+    if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
       m->PortConnect("signal_loop","signal_loop");
     }
 
@@ -724,7 +718,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
     // External memories
     for(int i = 0; i <  decl->externalMemory.size; i++){
       ExternalMemoryInterface ext = decl->externalMemory[i];
-      if(ext.type == ExternalMemoryType::DP){
+      if(ext.type == ExternalMemoryType::ExternalMemoryType_DP){
         m->PortConnectIndexed("ext_dp_addr_%d_port_0",i,"ext_dp_addr_%d_port_0_o",externalSeen);
         m->PortConnectIndexed("ext_dp_out_%d_port_0",i,"ext_dp_out_%d_port_0_o",externalSeen);
         m->PortConnectIndexed("ext_dp_in_%d_port_0",i,"ext_dp_in_%d_port_0_i",externalSeen);
@@ -775,10 +769,9 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
       ioSeen += 1;
     }
 
-    if(decl->signalLoop){
+    if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
       m->PortConnect("signal_loop","signal_loop");
     }
-
     if(decl->singleInterfaces & SingleInterfaces_RUNNING){
       m->PortConnect("running","running");
     }
@@ -821,6 +814,107 @@ void EmitConnectOutputsToOut(VEmitter* v,Pool<FUInstance> instances){
       v->Assign(PushString(temp,"out%d",i),OutputName(instances,other,temp));
     }
   }
+}
+
+VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  VerilogModuleBuilder* m = StartVerilogModuleInterface(temp);
+
+  m->StartGroup("Inputs");
+  for(int i = 0; i < decl->NumberInputs(); i++){
+    m->AddPortIndexed("in%d",i,SYM_dataW,WireDir_INPUT);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Outputs");
+  for(int i = 0; i < decl->NumberInputs(); i++){
+    m->AddPortIndexed("out%d",i,SYM_dataW,WireDir_OUTPUT);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Control");
+  if(decl->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
+    m->AddPort("signal_loop",SYM_one,WireDir_INPUT);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RUNNING){
+    m->AddPort("running",SYM_one,WireDir_INPUT);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RUN){
+    m->AddPort("run",SYM_one,WireDir_INPUT);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_DONE){
+    m->AddPort("done",SYM_one,WireDir_OUTPUT);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_CLK){
+    m->AddPort("clk",SYM_one,WireDir_INPUT,SpecialPortProperties_IsClock);
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RESET){
+    m->AddPort("rst",SYM_one,WireDir_INPUT,SpecialPortProperties_IsReset);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Config");
+  for(Wire w : decl->configs){
+    m->AddPort(CS(w.name),w.sizeExpr,WireDir_INPUT);
+  }
+
+  for(Pair<StaticId,StaticData*> p : decl->staticUnits){
+    for(Wire w : p.second->configs){
+      String wireTrueName = GlobalStaticWireName(p.first,w,temp);
+      m->AddPort(CS(wireTrueName),w.sizeExpr,WireDir_INPUT);
+    }
+  }
+  m->EndGroup();
+
+  m->StartGroup("State");
+  for(Wire w : decl->states){
+    Assert(w.sizeExpr);
+    m->AddPort(CS(w.name),w.sizeExpr,WireDir_OUTPUT);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Delays");
+  for(int i = 0; i < decl->numberDelays; i++){
+    m->AddPortIndexed("delay%d",i,SYM_delayW,WireDir_INPUT);
+  }
+  m->EndGroup();
+
+  m->StartGroup("Databus");
+  for(int i = 0; i < decl->nIOs; i++){
+    m->AddInterfaceIndexed(INT_IObFormat,i,S8(""));
+  }
+  m->EndGroup();
+
+  if(decl->memoryMapBits){
+    m->StartGroup("MemoryMapped");
+    m->AddPort("valid",SYM_one,WireDir_INPUT);
+    if(decl->memoryMapBits.value() > 0){
+      SymbolicExpression* expr = PushLiteral(out,decl->memoryMapBits.value());
+      m->AddPort("addr",expr,WireDir_INPUT);
+    }
+    m->AddPort("wstrb",SYM_dataStrobeW,WireDir_INPUT);
+    m->AddPort("wdata",SYM_dataW,WireDir_INPUT);
+    m->AddPort("rvalid",SYM_one,WireDir_OUTPUT);
+    m->AddPort("rdata",SYM_dataW,WireDir_OUTPUT);
+    m->EndGroup();
+  }
+  
+  // TODO: We cannot do this as the parameters must depend on the specific unit.
+#if 0
+  m->StartGroup("ExternalMemory");
+  for(int i = 0; i <  decl->externalMemory.size; i++){
+    ExternalMemoryInterface ext = decl->externalMemory[i];
+    if(ext.type == ExternalMemoryType::ExternalMemoryType_DP){
+      m->AddInterfaceIndexed(INT_DPFormat,i,S8("ext_dp"));
+    } else {
+      m->AddInterfaceIndexed(INT_TPFormat,i,S8("ext_2p"));
+    }
+  }
+  m->EndGroup();
+#endif
+  
+  return End(m,out);
 }
 
 void OutputCircuitSource(FUDeclaration* module,FILE* file){
@@ -870,7 +964,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   if(info.nDones){
     m->Output("done");
   }
-  if(module->signalLoop){
+  if(module->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
     m->Input("signal_loop");
   }
   
@@ -918,7 +1012,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   // External Memory interface
   for(int i = 0; i <  module->externalMemory.size; i++){
     ExternalMemoryInterface ext  =  module->externalMemory[i];
-    if(ext.type == ExternalMemoryType::DP){
+    if(ext.type == ExternalMemoryType::ExternalMemoryType_DP){
       m->OutputIndexed("ext_dp_addr_%d_port_0",i,ext.dp[0].bitSize);
       m->OutputIndexed("ext_dp_out_%d_port_0",i,ext.dp[0].dataSizeOut);
       m->InputIndexed("ext_dp_in_%d_port_0",i,ext.dp[0].dataSizeIn);
@@ -950,7 +1044,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
     m->Output("rvalid");
     m->Output("rdata","DATA_W");
   }
-
+  
   // Memory mapped units
   if(info.unitsMapped >= 1){
     Array<String> memoryMasks = ExtractMemoryMasks(info,temp);
@@ -1261,7 +1355,6 @@ Array<FUDeclaration*> SortTypesByMemDependency(Array<FUDeclaration*> types,Arena
 
   for(int i = 0; i < size; i++){
     subTypes[i] = MemSubTypes(&types[i]->info,temp);
-    //subTypes[i] = MemSubTypes(types[i]->fixedDelayCircuit,temp); // TODO: We can reuse the SortTypesByConfigDependency function if we change it to receive the subTypes array from outside, since the rest of the code is equal.
     seen->Insert(types[i],false);
   }
 
@@ -1999,66 +2092,45 @@ void PushMergeMultiplexersUpTheHierarchy(StructInfo* top){
   }
 }
 
-void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogInterfaceSpec> spec,String unpackBase,String packedBase){
+void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogPortSpec> spec,String packedBase){
   if(arraySize == 0){
     return;
   }
 
   TEMP_REGION(temp,m->arena);
       
-  for(VerilogInterfaceSpec info : spec){
-    String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
+  for(VerilogPortSpec info : spec){
+    String unpackedName = info.name;
 
-    if(Empty(info.sizeExpr)){
-      m->WireArray(CS(unpackedName),arraySize,1);
-    } else {
-      m->WireArray(CS(unpackedName),arraySize,CS(info.sizeExpr));
-    }
+    String repr = PushRepresentation(info.size,temp);
+    
+    m->WireArray(CS(unpackedName),arraySize,CS(repr));
   }
       
   for(int i = 0; i < arraySize; i++){
-    for(VerilogInterfaceSpec info : spec){
+    for(VerilogPortSpec info : spec){
 
-      String unpackedName = PushString(temp,"%.*s_%.*s",UN(unpackBase),UN(info.name));
+      String repr = PushRepresentation(info.size,temp);
+
+      String unpackedName = PushString(temp,"%.*s",UN(info.name));
       String packedName = PushString(temp,"%.*s_%.*s",UN(packedBase),UN(info.name));
-          
-      if(Empty(info.sizeExpr)){
-        if(info.isShared){
-          String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-          if(info.isInput){
-            m->Assign(fullUnpacked,packedName);
-          } else {
-            m->Assign(packedName,fullUnpacked);
-          }
+
+      if(info.props & SpecialPortProperties_IsShared){
+        String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+        if(info.dir == WireDir_INPUT){
+          m->Assign(fullUnpacked,packedName);
         } else {
-          if(info.isInput){
-            String fullPacked = PushString(temp,"%.*s[%d]",UN(packedName),i);
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullUnpacked,fullPacked);
-          } else {
-            String fullPacked = PushString(temp,"%.*s[%d]",UN(packedName),i);
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullPacked,fullUnpacked);
-          }
+          m->Assign(packedName,fullUnpacked);
         }
       } else {
-        if(info.isShared){
+        if(info.dir == WireDir_INPUT){
+          String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
           String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-          if(info.isInput){
-            m->Assign(fullUnpacked,packedName);
-          } else {
-            m->Assign(packedName,fullUnpacked);
-          }
+          m->Assign(fullUnpacked,fullPacked);
         } else {
-          if(info.isInput){
-            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(info.sizeExpr),UN(info.sizeExpr));
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullUnpacked,fullPacked);
-          } else {
-            String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(info.sizeExpr),UN(info.sizeExpr));
-            String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
-            m->Assign(fullPacked,fullUnpacked);
-          }
+          String fullPacked = PushString(temp,"%.*s[(%d * %.*s) +: %.*s]",UN(packedName),i,UN(repr),UN(repr));
+          String fullUnpacked = PushString(temp,"%.*s[%d]",UN(unpackedName),i);
+          m->Assign(fullPacked,fullUnpacked);
         }
       }
     }
@@ -2149,21 +2221,8 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   }
 
   VEmitter* m = StartVCode(temp);
-
-  VerilogInterfaceSpec databus[] = {
-    {S8("ready"),{},true},
-    {S8("valid"),{}},
-    {S8("addr"),S8("AXI_ADDR_W")},
-    {S8("rdata"),S8("AXI_DATA_W"),true,true},
-    {S8("wdata"),S8("AXI_DATA_W")},
-    {S8("wstrb"),S8("(AXI_DATA_W/8)")},
-    {S8("len"),S8("LEN_W")},
-    {S8("last"),{},true},
-  };
     
-  Array<VerilogInterfaceSpec> data = {databus,ARRAY_SIZE(databus)};
-    
-  EmitIOUnpacking(m,val.nUnitsIO,data,S8("databus"),S8("m_databus"));
+  EmitIOUnpacking(m,val.nUnitsIO,INT_IOb,S8("m"));
     
   VAST* ast = EndVCode(m);
 
@@ -2369,7 +2428,7 @@ assign data_wstrb = csr_wstrb;
         m->Set("memoryMappedEnable",SF("%d'b0",info.unitsMapped));
         m->If("data_valid & memoryMappedAddr");
         for(int i = 0; i <  memoryMasks.size; i++){
-          String mask  =  memoryMasks[i];
+           String mask  =  memoryMasks[i];
           if(!Empty(mask)){
             m->If(SF("csr_addr[(%d-1) -: %d] == %d'b%.*s",topLevelDecl->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask)));
             m->Set(SF("memoryMappedEnable[%d]",i),"1'b1");
@@ -3180,7 +3239,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
 
       // NOTE: This defines work from values that are extracted directly from the header generated by verilator. This ensures that we match the actual expected size since the accelerator needs to be instantiated at generation time.
       FULL_SWITCH(ext.type){
-      case ExternalMemoryType::DP:{
+      case ExternalMemoryType::ExternalMemoryType_DP:{
         c->Comment(S8("DP"));
 
         c->Define(PushString(temp,"WIRE_SIZE_ext_dp_addr_%d",id),
@@ -3201,7 +3260,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
         c->Define(PushString(temp,"BYTE_SIZE_ext_dp_data_%d_1",id),
                   PushString(temp,"(WIRE_SIZE_ext_dp_data_%d_1 / 8)",id));
       } break;
-      case ExternalMemoryType::TWO_P:{
+      case ExternalMemoryType::ExternalMemoryType_2P:{
         c->Comment(S8("2P"));
 
         c->Define(PushString(temp,"WIRE_SIZE_ext_2p_addr_in_%d",id),
@@ -3243,10 +3302,10 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
       }
         
       FULL_SWITCH(ext.type){
-      case ExternalMemoryType::DP:{
+      case ExternalMemoryType::ExternalMemoryType_DP:{
         b->PushString("BYTE_SIZE_ext_dp_%d",id);
       } break;
-      case ExternalMemoryType::TWO_P:{
+      case ExternalMemoryType::ExternalMemoryType_2P:{
         b->PushString("BYTE_SIZE_ext_2p_%d",id);
       } break;
     } END_SWITCH();
@@ -3387,12 +3446,12 @@ if(SimulateDatabus){
     auto* s = StartString(temp);
     for(auto ext : external){
       FULL_SWITCH(ext.type){
-      case ExternalMemoryType::DP:{
+      case ExternalMemoryType::ExternalMemoryType_DP:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
         vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,saveExternalDP,vals);
       } break;
-      case ExternalMemoryType::TWO_P:{
+      case ExternalMemoryType::ExternalMemoryType_2P:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
         vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,saveExternalTwoP,vals);
@@ -3436,12 +3495,12 @@ if(SimulateDatabus){
     auto* s = StartString(temp);
     for(auto ext : external){
       FULL_SWITCH(ext.type){
-      case ExternalMemoryType::DP:{
+      case ExternalMemoryType::ExternalMemoryType_DP:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
         vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,readMemoryDP,vals);
       } break;
-      case ExternalMemoryType::TWO_P:{
+      case ExternalMemoryType::ExternalMemoryType_2P:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
         vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,readMemoryTwoP,vals);
@@ -3485,12 +3544,12 @@ if(SimulateDatabus){
     auto* s = StartString(temp);
     for(auto ext : external){
       FULL_SWITCH(ext.type){
-      case ExternalMemoryType::DP:{
+      case ExternalMemoryType::ExternalMemoryType_DP:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
         vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,writeMemoryDP,vals);
       } break;
-      case ExternalMemoryType::TWO_P:{
+      case ExternalMemoryType::ExternalMemoryType_2P:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
         vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,writeMemoryTwoP,vals);
@@ -4082,14 +4141,266 @@ assign axi_araddr_o = temp_axi_araddr_o;
 void OutputTestbench(FUDeclaration* decl,FILE* file){
   TEMP_REGION(temp,nullptr);
 
+  VerilogModuleInterface* interface = GenerateModuleInterface(decl,temp);
+  Array<VerilogPortSpec> databus = ObtainGroupByName(interface,S8("Databus"));
+  Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,S8("MemoryMapped"));
+  Array<VerilogPortSpec> externalMemory = ObtainGroupByName(interface,S8("ExternalMemory"));
+
+  // NOTE: Kinda hacky way of making everything a wire (needed since these connect directly to a module)
+  for(VerilogPortSpec& spec : databus){
+    spec.dir = WireDir_OUTPUT;
+  }
+  for(VerilogPortSpec& spec : memoryMapped){
+    spec.dir = WireDir_OUTPUT;
+  }
+  for(VerilogPortSpec& spec : externalMemory){
+    spec.dir = WireDir_OUTPUT;
+  }
+  
+  Array<VerilogPortSpec> allPorts = ExtractAllPorts(interface,temp);
+  
+  Array<VerilogPortSpec> processedPorts = ExtractAllPorts(interface,temp);
+  
+  auto FindPortIndexByProperty = [](Array<VerilogPortSpec> ports,SpecialPortProperties prop) -> int{
+    int index = -1;
+    for(int i = 0; i < ports.size; i++){
+      VerilogPortSpec spec = ports[i];
+      if(spec.props & prop){
+        Assert(index == -1);
+        index = i;
+      }
+    }
+
+    return index;
+  };
+  
+  int clkPortIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsClock);
+  String clkWire = allPorts[clkPortIndex].name;
+  allPorts = RemoveElement(allPorts,clkPortIndex,temp);
+
+  int resetWireIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsReset);
+  String resetWire = allPorts[resetWireIndex].name; 
+  
   VEmitter* m = StartVCode(temp);
-  m->Timescale("1ps","1ps");
+  m->Timescale("1ns","1ps");
   m->Module(S8("Testbench"));
 
+  for(Parameter p : decl->parameters){
+    String repr = PushRepresentation(p.valueExpr,temp);
+
+    // NOTE: Since AXI_ADDR_W is usually used to instantiate a memory,
+    // need severely reduce size otherwise simulation can get stuck
+    // and not even a warning is given
+    if(CompareString(p.name,"AXI_ADDR_W")){
+      repr = S8("16");
+    }
+
+    m->LocalParam(p.name,repr);
+  }
   
+  m->DeclareInterface(interface,S8(""));
+
+  m->LocalParam(S8("CLOCK_PERIOD"),S8("10"));
+  m->Blank();
+  m->RawStatement(S8("initial clk = 0"));
+  m->RawStatement(S8("always #(CLOCK_PERIOD/2) clk = ~clk"));
+  m->RawStatement(S8("`define ADVANCE @(posedge clk) #(CLOCK_PERIOD/2)"));
+  m->Blank();
+  
+  m->StartInstance(decl->name,"uut");
+  for(Parameter p : decl->parameters){
+    const char* asChar = CS(p.name);
+    m->InstanceParam(asChar,asChar);
+  }
+  m->PortConnectInterface(interface,S8(""));
+  m->EndInstance();
+
+  // NOTE: These interfaces are handled by module instantiation.
+  bool containsDatabus = RemoveGroupInPlace(interface,S8("Databus"));
+  bool containsMemoryMapped = RemoveGroupInPlace(interface,S8("MemoryMapped"));
+  bool containsMemories = RemoveGroupInPlace(interface,S8("ExternalMemory"));
+  
+  auto AdvanceClock = [m]() -> void{
+    m->Blank();
+    m->RawStatement(S8("`ADVANCE"));
+    m->Blank();
+  };
+
+  if(containsMemoryMapped){
+    m->Task(S8("Write"));
+
+    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,S8("addr"));
+    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,S8("wdata"));
+
+    m->Input("addr_i",addressSpec.value().size);
+    m->Input("data_i",dataSpec.value().size);
+
+    AdvanceClock();
+
+    m->Set(S8("valid"),S8("1"));
+    m->Set(S8("wstrb"),S8("~0"));
+    m->Set(S8("addr"),S8("addr_i"));
+    m->Set(S8("wdata"),S8("data_i"));
+
+    AdvanceClock();
+
+    m->Set(S8("valid"),S8("0"));
+    m->Set(S8("wstrb"),S8("0"));
+    m->Set(S8("addr"),S8("0"));
+    m->Set(S8("wdata"),S8("0"));
+    
+    m->EndTask();
+  }
+
+  if(containsDatabus){
+    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,S8("databus_addr_0"));
+    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,S8("databus_wdata_0"));
+    Opt<VerilogPortSpec> lenSpec = GetPortSpecByName(allPorts,S8("databus_len_0"));
+
+    String dataW = PushRepresentation(dataSpec.value().size,temp);
+    String addrW = PushRepresentation(addressSpec.value().size,temp);
+    String lenW = PushRepresentation(lenSpec.value().size,temp);
+
+    m->Reg("insertValue",1);
+    m->Reg("addrToInsert",addrW);
+    m->Reg("valueToInsert",dataW);
+
+    m->StartInstance(S8("SimHelper_DatabusMem"),"DatabusMem");
+    m->InstanceParam("DATA_W",CS(dataW));
+
+    m->InstanceParam("ADDR_W",CS(addrW));
+
+    m->InstanceParam("LEN_W",CS(lenW));
+    
+    m->PortConnect(INT_IOb,S8("_0"));
+    m->PortConnect(S8("insertValue"),S8("insertValue"));
+    m->PortConnect(S8("addrToInsert"),S8("addrToInsert"));
+    m->PortConnect(S8("valueToInsert"),S8("valueToInsert"));
+    m->PortConnect(S8("clk"),S8("clk"));
+    m->PortConnect(S8("rst"),S8("rst"));
+    
+    m->EndInstance();
+
+    m->Task(S8("WriteMemory"));
+    
+    m->Input("addr_i",CS(addrW));
+    m->Input("data_i",CS(dataW));
+
+    m->Set(S8("insertValue"),S8("1"));
+    m->Set(S8("addrToInsert"),S8("addr_i"));
+    m->Set(S8("valueToInsert"),S8("data_i"));
+
+    AdvanceClock();
+
+    m->Set(S8("insertValue"),S8("0"));
+    m->Set(S8("addrToInsert"),S8("0"));
+    m->Set(S8("valueToInsert"),S8("0"));
+
+    AdvanceClock();
+    
+    m->EndTask();
+  }
+
+  if(containsMemories){
+    for(int i = 0; i <  decl->externalMemory.size; i++){
+      ExternalMemoryInterface ext  =  decl->externalMemory[i];
+      FULL_SWITCH(ext.type){
+      case ExternalMemoryType_DP: {
+        m->StartInstance("my_dp_asym_ram",SF("ext_dp_%d",i));
+
+        m->InstanceParam("A_DATA_W",ext.dp[0].dataSizeOut);
+        m->InstanceParam("B_DATA_W",ext.dp[1].dataSizeOut);
+        m->InstanceParam("ADDR_W",ext.dp[0].bitSize);
+
+        m->PortConnect("dinA_i",SF("ext_dp_out_%d_port_0",i));
+        m->PortConnect("addrA_i",SF("ext_dp_addr_%d_port_0",i));
+        m->PortConnect("enA_i",SF("ext_dp_enable_%d_port_0",i));
+        m->PortConnect("weA_i",SF("ext_dp_write_%d_port_0",i));
+        m->PortConnect("doutA_o",SF("ext_dp_in_%d_port_0",i));
+
+        m->PortConnect("dinB_i",SF("ext_dp_out_%d_port_1",i));
+        m->PortConnect("addrB_i",SF("ext_dp_addr_%d_port_1",i));
+        m->PortConnect("enB_i",SF("ext_dp_enable_%d_port_1",i));
+        m->PortConnect("weB_i",SF("ext_dp_write_%d_port_1",i));
+        m->PortConnect("doutB_o",SF("ext_dp_in_%d_port_1",i));
+
+        m->PortConnect("clk_i","clk");
+        
+        m->EndInstance();
+      } break;
+      case ExternalMemoryType_2P: {
+        m->StartInstance("my_2p_asym_ram",SF("ext_2p_%d",i));
+        {
+          m->InstanceParam("W_DATA_W",ext.tp.dataSizeOut);
+          m->InstanceParam("R_DATA_W",ext.tp.dataSizeIn);
+          m->InstanceParam("ADDR_W",ext.tp.bitSizeIn);
+
+          m->PortConnect("w_en_i",SF("ext_2p_write_%d",i));
+          m->PortConnect("w_addr_i",SF("ext_2p_addr_out_%d",i));
+          m->PortConnect("w_data_i",SF("ext_2p_data_out_%d",i));
+
+          m->PortConnect("r_en_i",SF("ext_2p_read_%d",i));
+          m->PortConnect("r_addr_i",SF("ext_2p_addr_in_%d",i));
+          m->PortConnect("r_data_o",SF("ext_2p_data_in_%d",i));
+
+          m->PortConnect("clk_i","clk");
+        }
+        m->EndInstance();
+      } break;
+    }
+    }
+  }
+  
+  m->Task(S8("RunAccelerator"));
+
+  m->Set("run","1");
+
+  AdvanceClock();
+
+  m->Set("run","0");
+  m->Set("running","1");
+
+  AdvanceClock();
+  
+  m->Loop("","done","");
+  AdvanceClock();
+  m->EndLoop();
+
+  m->Set("running","0");
+  
+  m->EndTask();
+  
+  m->InitialBlock();
+
+  m->RawStatement(S8("`ifdef VCD"));
+  m->RawStatement(S8("$dumpfile(\"uut.vcd\")"));
+  m->RawStatement(S8("$dumpvars()"));
+  m->RawStatement(S8("`endif // VCD"));
+  
+  for(VerilogPortSpec port : processedPorts){
+    if(port.dir == WireDir_INPUT){
+      m->Set(port.name,S8("0"));
+    }
+  }
+  if(containsDatabus){
+    m->Set("insertValue",0);
+    m->Set("addrToInsert",0);
+    m->Set("valueToInsert",0);
+  }
+  
+  AdvanceClock();
+  m->Set(resetWire,S8("1"));
+  AdvanceClock();
+  m->Set(resetWire,S8("0"));
+  AdvanceClock();
+  m->RawStatement(S8("$finish()"));
+
+  m->EndBlock();
   
   m->EndModule();
 
+  DEBUG_BREAK();
+  
   VAST* ast = EndVCode(m);
 
   auto* builder = StartString(temp);

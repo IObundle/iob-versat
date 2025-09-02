@@ -54,7 +54,7 @@ module iob_fifo_sync #(
 
    //write address
    wire [W_ADDR_W-1:0] w_addr;
-   iob_counter #(
+   versat_counter #(
       .DATA_W (W_ADDR_W),
       .RST_VAL({W_ADDR_W{1'd0}})
    ) w_addr_cnt0 (
@@ -72,7 +72,7 @@ module iob_fifo_sync #(
 
    //read address
    wire [R_ADDR_W-1:0] r_addr;
-   iob_counter #(
+   versat_counter #(
       .DATA_W (R_ADDR_W),
       .RST_VAL({R_ADDR_W{1'd0}})
    ) r_addr_cnt0 (

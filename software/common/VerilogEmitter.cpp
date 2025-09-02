@@ -1,5 +1,238 @@
 #include "VerilogEmitter.hpp"
+#include "symbolic.hpp"
 #include "utilsCore.hpp"
+
+// ============================================================================
+// Verilog module interface manipulation
+
+void VerilogModuleBuilder::StartGroup(const char* name){
+  Assert(currentPorts == nullptr);
+
+  if(name != nullptr){
+    currentPortGroupName = PushString(arena,"%s",name);
+  }
+  currentPorts = PushArenaList<VerilogPortSpec>(arena);
+}
+
+void VerilogModuleBuilder::EndGroup(bool preserveEmptyGroup){
+  if(preserveEmptyGroup || Size(this->currentPorts) > 0){
+    VerilogPortGroup* group = this->groups->PushElem();
+
+    group->name = this->currentPortGroupName;
+    group->ports = PushArrayFromList(arena,this->currentPorts);
+  }
+    
+  this->currentPortGroupName = {};
+  this->currentPorts = nullptr;
+}
+
+void VerilogModuleBuilder::AddPort(const char* name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props){
+  bool endGroup = false;
+  if(!this->currentPorts){
+    StartGroup(nullptr);
+    endGroup = true;
+  }
+  
+  VerilogPortSpec* spec = this->currentPorts->PushElem();
+
+  spec->name = PushString(arena,"%s",name);
+  spec->size = expr;
+  spec->dir = dir;
+  spec->props = props;
+
+  if(endGroup){
+    EndGroup();
+  }
+}
+
+void VerilogModuleBuilder::AddPortIndexed(const char* name,int index,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props){
+  bool endGroup = false;
+  if(!this->currentPorts){
+    StartGroup(nullptr);
+    endGroup = true;
+  }
+
+  VerilogPortSpec* spec = this->currentPorts->PushElem();
+
+  spec->name = PushString(arena,name,index);
+  spec->size = expr;
+  spec->dir = dir;
+  spec->props = props;
+
+  if(endGroup){
+    EndGroup();
+  }
+}
+
+void VerilogModuleBuilder::AddInterface(Array<VerilogPortSpec> interface,String prefix){
+  for(VerilogPortSpec spec : interface){
+    char* name = CS(spec.name);
+    if(!Empty(prefix)){
+      name = SF("%.*s_%.*s",UN(prefix),UN(spec.name));
+    }
+    
+    AddPort(name,spec.size,spec.dir,spec.props);
+  }
+}
+
+void VerilogModuleBuilder::AddInterfaceIndexed(Array<VerilogPortSpec> interfaceFormat,int index,String prefix){
+  for(VerilogPortSpec spec : interfaceFormat){
+    char* name = CS(spec.name);
+    if(!Empty(prefix)){
+      name = SF("%.*s_%.*s",UN(prefix),UN(spec.name));
+    }
+
+    AddPortIndexed(name,index,spec.size,spec.dir,spec.props);
+  }
+}
+
+VerilogModuleBuilder* StartVerilogModuleInterface(Arena* arena){
+  VerilogModuleBuilder* builder = PushStruct<VerilogModuleBuilder>(arena);
+  builder->arena = arena;
+  builder->groups = PushArenaList<VerilogPortGroup>(arena);
+  
+  return builder;
+}
+
+VerilogPortSpec Copy(VerilogPortSpec in,Arena* out){
+  VerilogPortSpec res = in;
+  res.name = PushString(out,in.name);
+  res.size = SymbolicDeepCopy(in.size,out);
+  return res;
+}
+
+VerilogPortGroup Copy(VerilogPortGroup in,Arena* out){
+  VerilogPortGroup res = {};
+  res.name = PushString(out,in.name);
+  res.ports = PushArray<VerilogPortSpec>(out,in.ports.size);
+  for(int i = 0; i < in.ports.size; i++){
+    res.ports[i] = Copy(in.ports[i],out);
+  }
+  return res;
+}
+
+VerilogModuleInterface* Copy(VerilogModuleInterface* interface,Arena* out){
+  VerilogModuleInterface* res = PushStruct<VerilogModuleInterface>(out);
+  
+  res->portGroups = PushArray<VerilogPortGroup>(out,interface->portGroups.size);
+  for(int i = 0; i < interface->portGroups.size; i++){
+    res->portGroups[i] = Copy(interface->portGroups[i],out);
+  }
+
+  return res;
+}
+
+VerilogModuleInterface* End(VerilogModuleBuilder* builder,Arena* out){
+  VerilogModuleInterface* res = PushStruct<VerilogModuleInterface>(out);
+
+  res->portGroups = PushArray<VerilogPortGroup>(out,Size(builder->groups));
+  int index = 0;
+  for(VerilogPortGroup group : builder->groups){
+    res->portGroups[index++] = Copy(group,out);
+  }
+
+  return res;
+}
+
+// ======================================
+// Verilog interface manipulation
+
+Array<VerilogPortSpec>  AppendSuffix(Array<VerilogPortSpec> in,String suffix,Arena* out){
+  Array<VerilogPortSpec> res = PushArray<VerilogPortSpec>(out,in.size);
+  for(int i = 0; i < in.size; i++){
+    res[i] = in[i];
+
+    res[i].size = SymbolicDeepCopy(in[i].size,out);
+    res[i].name = PushString(out,"%.*s%.*s",UN(in[i].name),UN(suffix));
+  }
+
+  return res;
+}
+
+Array<VerilogPortSpec>  ReverseInterfaceDirection(Array<VerilogPortSpec> in,Arena* out){
+  Array<VerilogPortSpec> res = PushArray<VerilogPortSpec>(out,in.size);
+  for(int i = 0; i < in.size; i++){
+    res[i] = Copy(in[i],out);
+
+    res[i].dir = ReverseDir(in[i].dir);
+  }
+
+  return res;
+}
+
+Array<VerilogPortSpec> AddDirectionToName(Array<VerilogPortSpec> in,Arena* out){
+  Array<VerilogPortSpec> res = PushArray<VerilogPortSpec>(out,in.size);
+  for(int i = 0; i < in.size; i++){
+    res[i] = in[i];
+
+    String directionAsName = S8("i");
+    if(in[i].dir == WireDir_OUTPUT){
+      directionAsName = S8("o");
+    }
+    
+    res[i].size = SymbolicDeepCopy(in[i].size,out);
+    res[i].name = PushString(out,"%.*s_%.*s",UN(in[i].name),UN(directionAsName));
+  }
+
+  return res;
+}
+
+Array<VerilogPortSpec> ExtractAllPorts(VerilogModuleInterface* interface,Arena* out){
+  TEMP_REGION(temp,out);
+
+  auto list = PushArenaList<VerilogPortSpec>(temp);
+  for(VerilogPortGroup group : interface->portGroups){
+    for(VerilogPortSpec spec : group.ports){
+      *list->PushElem() = spec;
+    }
+  }
+
+  Array<VerilogPortSpec> res = PushArrayFromList(out,list);
+  return res;
+}
+
+Array<VerilogPortSpec> ObtainGroupByName(VerilogModuleInterface* interface,String name){
+  for(VerilogPortGroup group : interface->portGroups){
+    if(CompareString(group.name,name)){
+      return group.ports;
+    }
+  }
+
+  return {};
+}
+
+bool RemoveGroupInPlace(VerilogModuleInterface* interface,String name){
+  for(int i = 0; i < interface->portGroups.size; i++){
+    if(CompareString(interface->portGroups[i].name,name)){
+      interface->portGroups = RemoveElement(interface->portGroups,i);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+Opt<VerilogPortSpec> GetPortSpecByName(Array<VerilogPortSpec> array,String name){
+  for(VerilogPortSpec spec : array){
+    if(CompareString(spec.name,name)){
+      return spec;
+    }
+  }
+  return {};
+}
+
+bool ContainsGroup(VerilogModuleInterface* interface,String name){
+  for(VerilogPortGroup group : interface->portGroups){
+    if(CompareString(name,group.name)){
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ============================================================================
+// Emitter
 
 String Repr(VASTType type){
   return {};
@@ -26,7 +259,9 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
 
     FULL_SWITCH(type){
     case VASTType_VAR_DECL:
+    case VASTType_INTERFACE_DECL:
     case VASTType_INTEGER_DECL:
+    case VASTType_LOCAL_PARAM:
     case VASTType_SET:
     case VASTType_EXPR:
     case VASTType_PORT_CONNECT:
@@ -35,6 +270,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_BLANK:
     case VASTType_PORT_GROUP:
     case VASTType_COMMENT:
+    case VASTType_RAW_STATEMENT:
     case VASTType_PORT_DECL: continue;
 
     case VASTType_WIRE_ASSIGN_BLOCK:{
@@ -58,11 +294,21 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
       return;
     } break;
       
-    case VASTType_ALWAYS_DECL: {
+    case VASTType_ALWAYS_BLOCK: {
       *cast->alwaysBlock.declarations->PushElem() = declarationAST;
       return;
     } break;
 
+    case VASTType_INITIAL_BLOCK: {
+      *cast->initialBlock.declarations->PushElem() = declarationAST;
+      return; 
+    } break;
+
+    case VASTType_TASK_DECL:{
+      *cast->task.declarations->PushElem() = declarationAST;
+      return; 
+    } break;
+      
     case VASTType_MODULE_DECL: {
       *cast->module.declarations->PushElem() = declarationAST;
       return; 
@@ -88,21 +334,30 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
     case VASTType_SET:
+    case VASTType_LOCAL_PARAM:
+    case VASTType_INTERFACE_DECL:
     case VASTType_EXPR:
     case VASTType_ASSIGN_DECL:
     case VASTType_INSTANCE:;
     case VASTType_PORT_CONNECT:
     case VASTType_BLANK:
-    case VASTType_ALWAYS_DECL:
+    case VASTType_ALWAYS_BLOCK:
+    case VASTType_INITIAL_BLOCK:
     case VASTType_IF:
     case VASTType_LOOP:
     case VASTType_COMMENT:
+    case VASTType_RAW_STATEMENT:
     case VASTType_WIRE_ASSIGN_BLOCK:
     case VASTType_PORT_DECL: continue;
 
     case VASTType_PORT_GROUP: {
       *cast->portGroup.portDeclarations->PushElem() = portAST;
       return;
+    } break;
+
+    case VASTType_TASK_DECL:{
+      *cast->task.portDeclarations->PushElem() = portAST;
+      return; 
     } break;
       
     case VASTType_MODULE_DECL: {
@@ -129,15 +384,19 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     FULL_SWITCH(type){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
+    case VASTType_INTERFACE_DECL:
+    case VASTType_LOCAL_PARAM:
     case VASTType_SET:
     case VASTType_EXPR:
     case VASTType_ASSIGN_DECL:
     case VASTType_BLANK:
-    case VASTType_ALWAYS_DECL:
+    case VASTType_ALWAYS_BLOCK:
     case VASTType_PORT_CONNECT:
     case VASTType_IF:
+    case VASTType_INITIAL_BLOCK:
     case VASTType_LOOP:
     case VASTType_PORT_GROUP:
+    case VASTType_RAW_STATEMENT:
     case VASTType_WIRE_ASSIGN_BLOCK:
     case VASTType_COMMENT:
     case VASTType_PORT_DECL: continue;
@@ -147,6 +406,11 @@ void VEmitter::InsertPortConnect(VAST* portAST){
       return;
     } break;
 
+    case VASTType_TASK_DECL:{
+      Assert(false);
+      return; 
+    } break;
+      
     case VASTType_MODULE_DECL: {
       Assert(false);
       return; 
@@ -189,7 +453,6 @@ void VEmitter::Include(const char* name){
   *topLevel->top.includes->PushElem() = PushString(arena,"%s",name);
 }
 
-  // Module definition
 void VEmitter::Module(String name){
   VAST* decl = PushVAST(VASTType_MODULE_DECL,arena);
 
@@ -220,6 +483,24 @@ void VEmitter::ModuleParam(const char* name,String value){
 
 void VEmitter::EndModule(){
   while(buffer[top-1]->type != VASTType_MODULE_DECL){
+    PopLevel();
+  }
+  PopLevel();
+}
+
+void VEmitter::Task(String name){
+  VAST* decl = PushVAST(VASTType_TASK_DECL,arena);
+
+  decl->task.name = PushString(arena,name);
+  decl->task.portDeclarations = PushArenaList<VAST*>(arena);
+  decl->task.declarations = PushArenaList<VAST*>(arena);
+  
+  InsertDeclaration(decl);
+  PushLevel(decl);
+}
+
+void VEmitter::EndTask(){
+  while(buffer[top-1]->type != VASTType_TASK_DECL){
     PopLevel();
   }
   PopLevel();
@@ -258,6 +539,13 @@ void VEmitter::Input(const char* name,const char* expr){
   decl->portDecl.isInput = true;
 
   InsertPortDeclaration(decl);
+}
+
+void VEmitter::Input(const char* name,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+
+  String repr = PushRepresentation(expr,temp);
+  Input(name,CS(repr));
 }
 
 void VEmitter::InputIndexed(const char* format,int index,int bitsize){
@@ -427,6 +715,24 @@ void VEmitter::Integer(const char* name){
   InsertDeclaration(decl);
 }
 
+void VEmitter::LocalParam(String name,String defaultValue){
+  VAST* decl = PushVAST(VASTType_LOCAL_PARAM,arena);
+
+  decl->localParam.name = PushString(arena,name);
+  decl->localParam.defaultValue = PushString(arena,defaultValue);
+  
+  InsertDeclaration(decl);
+}
+
+void VEmitter::DeclareInterface(VerilogModuleInterface* interface,String prefix){
+  VAST* decl = PushVAST(VASTType_INTERFACE_DECL,arena);
+
+  decl->interfaceDecl.interface = Copy(interface,arena);
+  decl->interfaceDecl.prefix = PushString(arena,prefix);
+
+  InsertDeclaration(decl);
+}
+
 void VEmitter::Blank(){
   VAST* blank = PushVAST(VASTType_BLANK,arena);
   InsertDeclaration(blank);
@@ -447,8 +753,16 @@ void VEmitter::Expression(const char* expr){
   *assignBlock->wireAssignBlock.expressions->PushElem() = exprDecl;
 }
 
+void VEmitter::RawStatement(String stmt){
+  VAST* stmtDecl = PushVAST(VASTType_RAW_STATEMENT,arena);
+  
+  stmtDecl->rawStatement = PushString(arena,stmt);
+
+  InsertDeclaration(stmtDecl);
+}
+
 void VEmitter::AlwaysBlock(const char* posedge1,const char* posedge2){
-  VAST* combDecl = PushVAST(VASTType_ALWAYS_DECL,arena);
+  VAST* combDecl = PushVAST(VASTType_ALWAYS_BLOCK,arena);
 
   combDecl->alwaysBlock.sensitivity = PushArray<String>(arena,2);
   combDecl->alwaysBlock.sensitivity[0] = PushString(arena,"%s",posedge1);
@@ -460,8 +774,17 @@ void VEmitter::AlwaysBlock(const char* posedge1,const char* posedge2){
   PushLevel(combDecl);
 }
 
+void VEmitter::InitialBlock(){
+  VAST* initialDecl = PushVAST(VASTType_INITIAL_BLOCK,arena);
+
+  initialDecl->initialBlock.declarations = PushArenaList<VAST*>(arena);
+  
+  InsertDeclaration(initialDecl);
+  PushLevel(initialDecl);
+}
+
 void VEmitter::CombBlock(){
-  VAST* combDecl = PushVAST(VASTType_ALWAYS_DECL,arena);
+  VAST* combDecl = PushVAST(VASTType_ALWAYS_BLOCK,arena);
 
   combDecl->alwaysBlock.sensitivity = {};
   combDecl->alwaysBlock.declarations = PushArenaList<VAST*>(arena);
@@ -653,6 +976,44 @@ void VEmitter::PortConnectIndexed(const char* portFormat,int index,String connec
   InsertPortConnect(portInfo);
 }
 
+void VEmitter::PortConnectInterface(VerilogModuleInterface* interface,String interfaceWirePrefix){
+  TEMP_REGION(temp,arena);
+
+  StartPortGroup();
+  
+  for(VerilogPortGroup group : interface->portGroups){
+    for(VerilogPortSpec spec : group.ports){
+      String connExpression = spec.name;
+      if(!Empty(interfaceWirePrefix)){
+        connExpression = PushString(temp,"%.*s_%.*s",UN(interfaceWirePrefix),UN(spec.name));
+      }
+
+      PortConnect(spec.name,connExpression);
+    }
+  }
+
+  EndPortGroup();
+}
+
+void VEmitter::PortConnect(Array<VerilogPortSpec> specs,String sufix){
+  TEMP_REGION(temp,arena);
+
+  StartPortGroup();
+  
+  for(VerilogPortSpec spec : specs){
+    String connExpression = spec.name;
+
+    if(!Empty(sufix)){
+      connExpression = PushString(temp,"%.*s%.*s",UN(spec.name),UN(sufix));
+    }
+    
+    PortConnect(spec.name,connExpression);
+  }
+
+  EndPortGroup();
+
+}
+
 void VEmitter::EndInstance(){
   Assert(buffer[top-1]->type == VASTType_INSTANCE);
   PopLevel();
@@ -698,6 +1059,8 @@ static void EmitStatementList(StringBuilder* b,ArenaList<VAST*>* statements,VSta
 }
 
 void Repr(VAST* top,StringBuilder* b,VState* state,int level){
+  TEMP_REGION(temp,b->arena);
+
   FULL_SWITCH(top->type){
   case VASTType_TOP_LEVEL:{
     if(!Empty(top->top.timescaleExpression)){
@@ -786,6 +1149,38 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
     b->PushString("\nendmodule");
   } break;
+
+  case VASTType_TASK_DECL: {
+    b->PushSpaces(level * 2);
+
+    if(Empty(top->task.portDeclarations)){
+      b->PushString("task %.*s;\n",UNPACK_SS(top->task.name));
+    } else {
+      b->PushString("task %.*s (",UNPACK_SS(top->task.name));
+
+      bool first = true;
+      for(VAST* ast : top->task.portDeclarations){
+        if(!first){
+          b->PushString(",");
+        }
+
+        Repr(ast,b,state,0);
+        first = false;
+      }
+      b->PushString(");\n");
+    }
+    
+    b->PushSpaces(level * 2);
+    b->PushString("begin\n");
+    
+    EmitStatementList(b,top->task.declarations,state,level + 1);
+
+    b->PushSpaces(level * 2);
+    b->PushString("end\n");
+
+    b->PushSpaces(level * 2);
+    b->PushString("endtask\n");
+  } break;
   
   case VASTType_INSTANCE:{
     b->PushSpaces(level * 2);
@@ -844,6 +1239,16 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushString("integer %.*s;",UN(top->name));
   } break;
 
+  case VASTType_LOCAL_PARAM: {
+    b->PushSpaces(level * 2);
+    
+    if(Empty(top->localParam.defaultValue)){
+      b->PushString("localparam %.*s;",UN(top->localParam.name));
+    } else {
+      b->PushString("localparam %.*s = %.*s;",UN(top->localParam.name),UN(top->localParam.defaultValue));
+    }
+  } break;
+
   case VASTType_VAR_DECL:{
     b->PushSpaces(level * 2);
     if(top->varDecl.isWire){
@@ -860,6 +1265,37 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       b->PushString("[%.*s]",UNPACK_SS(top->varDecl.arrayDim));
     }
     b->PushString(";");
+  } break;
+
+  case VASTType_INTERFACE_DECL:{
+    VerilogModuleInterface* inter = top->interfaceDecl.interface;
+    String prefix = top->interfaceDecl.prefix;
+
+    for(VerilogPortGroup group : inter->portGroups){
+      b->PushSpaces(level * 2);
+      b->PushString("// %.*s\n",UN(group.name));
+      for(VerilogPortSpec spec : group.ports){
+        b->PushSpaces(level * 2);
+
+        String repr = PushRepresentation(spec.size,temp);
+
+        if(spec.dir == WireDir_INPUT){
+          b->PushString("reg ");
+        } else {
+          Assert(spec.dir == WireDir_OUTPUT);
+          b->PushString("wire ");
+        }
+        
+        b->PushString("[(%.*s)-1:0] ",UN(repr));
+
+        if(Empty(prefix)){
+          b->PushString("%.*s;\n",UN(spec.name));
+        } else {
+          b->PushString("%.*s_%.*s;\n",UN(prefix),UN(spec.name));
+        }
+      }
+    }
+    
   } break;
   
   case VASTType_WIRE_ASSIGN_BLOCK:{
@@ -930,8 +1366,12 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
   case VASTType_LOOP:{
     b->PushSpaces(level * 2);
-    
-    b->PushString("for(%.*s;%.*s;%.*s) begin\n",UN(top->loopExpr.initExpr),UN(top->loopExpr.loopExpr),UN(top->loopExpr.incrExpr));
+
+    if(Empty(top->loopExpr.initExpr) && Empty(top->loopExpr.incrExpr)){
+      b->PushString("while(%.*s) begin\n",UN(top->loopExpr.loopExpr));
+    } else {
+      b->PushString("for(%.*s ; %.*s ; %.*s) begin\n",UN(top->loopExpr.initExpr),UN(top->loopExpr.loopExpr),UN(top->loopExpr.incrExpr));
+    }
 
     EmitStatementList(b,top->loopExpr.statements,state,level + 1);
     
@@ -960,8 +1400,13 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   case VASTType_EXPR:{
     b->PushString("%.*s",UNPACK_SS(top->expr.content));
   } break;
+
+  case VASTType_RAW_STATEMENT: {
+    b->PushSpaces(level * 2);
+    b->PushString("%.*s;",UNPACK_SS(top->rawStatement));
+  } break;
   
-  case VASTType_ALWAYS_DECL:{
+  case VASTType_ALWAYS_BLOCK:{
     bool oldIsComb = state->isComb;
 
     b->PushSpaces(level * 2);
@@ -986,6 +1431,20 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     state->isComb = oldIsComb;
   } break;
 
+  case VASTType_INITIAL_BLOCK:{
+    b->PushSpaces(level * 2);
+
+    b->PushString("initial begin\n");
+
+    bool oldIsComb = state->isComb;
+    state->isComb = true;
+    EmitStatementList(b,top->initialBlock.declarations,state,level + 1);
+    state->isComb = oldIsComb;
+    
+    b->PushSpaces(level * 2);
+    b->PushString("end\n");
+  } break;
+  
   } END_SWITCH();
 }
 

@@ -68,7 +68,7 @@ module SuperAddress #(
    // Only address databus values. Read vs Write implemented outside of thies unit.
    input                          databus_ready,
    output                         databus_valid,
-   output reg [  AXI_ADDR_W-1:0]  databus_addr,
+   output     [  AXI_ADDR_W-1:0]  databus_addr,
    output     [       LEN_W-1:0]  databus_len,
    input                          databus_last
 );

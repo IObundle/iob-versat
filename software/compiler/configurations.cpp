@@ -1052,7 +1052,9 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
       info->externalMemoryInterfaces += type->externalMemory.size;
     }
 
-    info->signalLoop |= type->signalLoop;
+    if(type->singleInterfaces & SingleInterfaces_SIGNAL_LOOP){
+      info->signalLoop |= true;
+    }
     if(ptr->declaration->singleInterfaces & SingleInterfaces_DONE){
       nDones += 1;
     }

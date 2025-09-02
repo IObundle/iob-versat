@@ -1,24 +1,141 @@
 #pragma once
 
 #include "utils.hpp"
+//#include "verilogParsing.hpp"
 
-// TODO: Because the way verilog tools work and how certain linters expect code to follow a certain format, try to abstract the rules on this level and inside the Repr function. This means that, if, for example, linter demands that a signal is cleared in a certain way, then implement a Clear function that makes sure that we always clear the signal that way, instead of pushing the logic outwards. Try to consolidate as much of verilog logic on this Emitter as much as possible and abstract the actual Verilog generation from the rest of the code.
+struct SymbolicExpression;
+
+// ============================================================================
+// Verilog interface manipulation
+
+enum WireDir{
+  WireDir_INPUT,
+  WireDir_OUTPUT,
+  WireDir_INOUT // We do not actually support this, but still need to represent it so that later we can report this as error
+};
+
+static inline WireDir ReverseDir(WireDir dir){
+  FULL_SWITCH(dir){
+  case WireDir_INPUT: return WireDir_OUTPUT;
+  case WireDir_OUTPUT: return WireDir_INPUT;
+  case WireDir_INOUT: return WireDir_INOUT;
+  }
+
+  NOT_POSSIBLE();
+}
+
+enum SpecialPortProperties{
+  SpecialPortProperties_None     = 0,
+  SpecialPortProperties_IsShared = (1 << 0), // For unpacking, shared wires are replicated accross every interface (think rdata and the like)
+  SpecialPortProperties_IsClock  = (1 << 1),
+  SpecialPortProperties_IsReset  = (1 << 2)
+};
+
+struct VerilogPortSpec{
+  String name;
+  SymbolicExpression* size;
+  WireDir dir;
+  SpecialPortProperties props;
+};
+
+struct VerilogPortGroup{
+  String name;
+  Array<VerilogPortSpec> ports;
+};
+
+struct VerilogModuleInterface{
+  Array<VerilogPortGroup> portGroups;
+};
+
+// ======================================
+// Verilog interface builder
+
+struct VerilogModuleBuilder{
+  Arena* arena;
+
+  String currentPortGroupName;
+  
+  ArenaList<VerilogPortSpec>* currentPorts;
+  ArenaList<VerilogPortGroup>* groups;
+
+  // TODO: Is it worth it to encode the groups as an enum instead of names? 
+  void StartGroup(const char* name);
+  void EndGroup(bool preserveEmptyGroup = false);
+
+  // If called without group, creates a single wire group.
+  void AddPort(const char* name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
+  void AddPortIndexed(const char* name,int index,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
+
+  // Acts as a bunch of AddPort calls
+  void AddInterface(Array<VerilogPortSpec> interface,String prefix);
+  void AddInterfaceIndexed(Array<VerilogPortSpec> interfaceFormat,int index,String prefix);
+};
+
+VerilogModuleBuilder*   StartVerilogModuleInterface(Arena* arena);
+VerilogModuleInterface* End(VerilogModuleBuilder*,Arena* out);
+
+// ======================================
+// Verilog interface manipulation
+
+Array<VerilogPortSpec> AppendSuffix(Array<VerilogPortSpec> in,String suffix,Arena* out);
+Array<VerilogPortSpec> ReverseInterfaceDirection(Array<VerilogPortSpec> in,Arena* out);
+Array<VerilogPortSpec> AddDirectionToName(Array<VerilogPortSpec> in,Arena* out);
+
+Array<VerilogPortSpec> ExtractAllPorts(VerilogModuleInterface* interface,Arena* out);
+Array<VerilogPortSpec> ObtainGroupByName(VerilogModuleInterface* interface,String name);
+
+// True if group was found and removed
+bool RemoveGroupInPlace(VerilogModuleInterface* interface,String name);
+
+Opt<VerilogPortSpec>   GetPortSpecByName(Array<VerilogPortSpec> array,String name);
+
+// TODO: We might eventually change from using strings to using an enum for group type.
+bool ContainsGroup(VerilogModuleInterface* interface,String name);
+
+// ============================================================================
+// Emitter
+
+// TODO: Because the way verilog tools work and how certain linters
+// expect code to follow a certain format, try to abstract the rules
+// on this level and inside the Repr function. This means that if, for
+// example, linter demands that a signal is cleared in a certain way,
+// then implement a Clear function that makes sure that we always
+// clear the signal that way, instead of pushing the logic
+// outwards. Try to consolidate as much of verilog logic on this
+// Emitter as much as possible and abstract the actual Verilog
+// generation from the rest of the code. Basically, we do not actually
+// care if the "VAST" actually corresponds to a Verilog AST node or if
+// it corresponds to a higher order node that does not match a single
+// verilog construct.
+// NOTE: Of course we do this as the need arises. Need to see in what
+// ways the linters/tools complain before figuring out how to do this
+// NOTE2: If needed, we can also change this into a two step approach,
+// where the first step is in a higher level and the bottom step is
+// what we currently have somewhat. The higher level generates the
+// lower level AST which then generates verilog.  If we end up wanting
+// to support VHDL, we would have the higher level generate the AST
+// for VHDL that way.
 
 enum VASTType{
   VASTType_TOP_LEVEL,
   VASTType_MODULE_DECL,
+  VASTType_TASK_DECL,
   VASTType_PORT_DECL,
   VASTType_PORT_GROUP,
   VASTType_VAR_DECL,
   VASTType_INTEGER_DECL,
+  VASTType_LOCAL_PARAM,
   VASTType_WIRE_ASSIGN_BLOCK,
   VASTType_ASSIGN_DECL,
   VASTType_PORT_CONNECT,
+  VASTType_RAW_STATEMENT,
+  VASTType_INTERFACE_DECL, // Similar to var decl but with interfaces 
   VASTType_IF,
   VASTType_LOOP,
   VASTType_SET,
   VASTType_EXPR,
-  VASTType_ALWAYS_DECL,
+  VASTType_ALWAYS_BLOCK,
+  VASTType_INITIAL_BLOCK,
   VASTType_COMMENT,
   VASTType_INSTANCE,
   VASTType_BLANK
@@ -40,6 +157,7 @@ struct VAST{
   union{
     String comment;
     String name;
+    String rawStatement;
     
     struct{
       String timescaleExpression;
@@ -54,6 +172,11 @@ struct VAST{
       bool isInput; // We only support input or output, no inout.
     } portDecl;
 
+    struct {
+      String name;
+      String defaultValue;
+    } localParam;
+    
     struct{
       String name;
       String arrayDim;
@@ -62,6 +185,11 @@ struct VAST{
     } varDecl; // Wires and regs 
 
     struct {
+      VerilogModuleInterface* interface;
+      String prefix;
+    } interfaceDecl;
+    
+    struct {
       String content;
     } expr;
 
@@ -69,6 +197,10 @@ struct VAST{
       Array<String> sensitivity;
       ArenaList<VAST*>* declarations;
     } alwaysBlock;
+
+    struct {
+      ArenaList<VAST*>* declarations;
+    } initialBlock;
 
     struct {
       String portName;
@@ -109,7 +241,13 @@ struct VAST{
       ArenaList<VAST*>* portDeclarations;
       ArenaList<VAST*>* declarations;
     } module;
-    
+
+    struct{
+      String name;
+      ArenaList<VAST*>* portDeclarations;
+      ArenaList<VAST*>* declarations;
+    } task;
+
     struct {
       String moduleName;
       String name;
@@ -125,7 +263,7 @@ struct VEmitter{
   Array<VAST*> buffer;
   int top;  
   
-  // Helper functions, do not use unless needed
+  // Helper functions
   void PushLevel(VAST* level);
   void PopLevel();
   void InsertDeclaration(VAST* decl);
@@ -142,12 +280,18 @@ struct VEmitter{
   void ModuleParam(const char* name,String value);
   void EndModule();
 
+  void Task(String name);
+  void EndTask();
+  
   void StartPortGroup();
   void EndPortGroup();
+
+  // TODO: We probably want to change all the bitsize to accept a SymbolicExpression
   
   void Input(const char* name,int bitsize = 1);
   void Input(String name,int bitsize = 1);
   void Input(const char* name,const char* expr);
+  void Input(const char* name,SymbolicExpression* expr);
   void InputIndexed(const char* format,int index,int bitsize = 1);
   void InputIndexed(const char* format,int index,const char* expression);
 
@@ -169,15 +313,19 @@ struct VEmitter{
   void Assign(const char* name,const char* expr);
   void Assign(String name,String expr);
   void Integer(const char* name);
+  void LocalParam(String name,String defaultValue = {});
+  
+  void DeclareInterface(VerilogModuleInterface* interface,String prefix);
   
   void Blank();
   void Comment(const char* expr);
   void Expression(const char* expr);
+  void RawStatement(String stmt);
   
-  // Kinda hardcoded for now, we mostly only care about clk and rst signals.
-  void AlwaysBlock(const char* posedge1,const char* posedge2);
-
+  void AlwaysBlock(const char* posedge1,const char* posedge2); // We only care about clk and rst so max of two allowed
+  void InitialBlock();
   void CombBlock();
+
   void Set(const char* identifier,int val);
   void Set(const char* identifier,const char* expr);
   void Set(String identifier,String expr);
@@ -191,7 +339,7 @@ struct VEmitter{
   void EndLoop();
   
   void EndBlock();
-  
+
   // Instantiating
   void StartInstance(const char* moduleName,const char* instanceName);
   void StartInstance(String moduleName,const char* instanceName);
@@ -202,7 +350,13 @@ struct VEmitter{
   void PortConnectIndexed(const char* portFormat,int index,const char* connectionExpr);
   void PortConnectIndexed(const char* portFormat,int index,const char* connectFormat,int connectIndex);
   void PortConnectIndexed(const char* portFormat,int index,String connectionExpr);
+
+  void PortConnectInterface(VerilogModuleInterface* interface,String interfaceWirePrefix);
+
+  void PortConnect(Array<VerilogPortSpec> specs,String sufix);
+
   void EndInstance();
+
 };
 
 VAST* PushVAST(VASTType type,Arena* out);

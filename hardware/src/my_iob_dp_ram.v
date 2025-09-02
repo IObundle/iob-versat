@@ -44,7 +44,7 @@ module my_iob_dp_ram #(
            end
 `endif
       end
-   end;
+   end
 
    always @(posedge clk_i) begin  // Port A
       if (enA_i) begin
