@@ -330,7 +330,7 @@ String GetName(Array<Partition> partitions,Arena* out){
 // This function cannot return an array for merge units because we do not have the merged units info in this level.
 // This function only works for modules and for recursing the merged info to upper modules.
 // The info needed by merge must be stored by the merge function.
-Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions){
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions,bool calculateOrder){
   TEMP_REGION(temp,out);
   // Only for basic units on the top level of accel
   // The subunits are basically copied from the sub declarations.
@@ -443,20 +443,24 @@ Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Ar
     info->inputs = PushArrayFromList(out,list);
   }
 
-  DAGOrderNodes order = CalculateDAGOrder(accel,temp);
-  {
-    for(int index = 0; index < res.size; index++){
-      InstanceInfo* info = &res[index];
+#if 1
+  if(calculateOrder){
+    DAGOrderNodes order = CalculateDAGOrder(accel,temp);
+    {
+      for(int index = 0; index < res.size; index++){
+        InstanceInfo* info = &res[index];
 
-      FUInstance* inst = info->inst;
-      for(int i = 0; i < order.instances.size; i++){
-        if(order.instances[i] == inst){
-          info->localOrder = i;
-          break;
+        FUInstance* inst = info->inst;
+        for(int i = 0; i < order.instances.size; i++){
+          if(order.instances[i] == inst){
+            info->localOrder = i;
+            break;
+          }
         }
       }
     }
   }
+#endif
   
   return res;
 }
@@ -1169,7 +1173,7 @@ Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out){
   return {};
 };
 
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out){
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,bool calculateOrder){
   TEMP_REGION(temp,out);
   AccelInfo result = {};
 
@@ -1193,7 +1197,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
       iter.SetMergeIndex(i);
 
       // We do need partitions here, I think
-      result.infos[i].info = GenerateInitialInstanceInfo(accel,out,partitions);
+      result.infos[i].info = GenerateInitialInstanceInfo(accel,out,partitions,calculateOrder);
 
       FillInstanceInfo(iter,out);
 
@@ -1205,7 +1209,7 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out)
     }
   } else {
     iter.SetMergeIndex(0);
-    result.infos[0].info = GenerateInitialInstanceInfo(accel,out,{});
+    result.infos[0].info = GenerateInitialInstanceInfo(accel,out,{},calculateOrder);
     FillInstanceInfo(iter,out);
 
     result.infos[0].inputDelays = ExtractInputDelays(iter,out);

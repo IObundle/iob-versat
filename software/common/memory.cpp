@@ -47,7 +47,7 @@ static void InitMemoryDebug(){
   init = true;
 
   debugMemoryArena = InitArena(Megabyte(16));
-  debugArenaStack = PushArray<ArenaInfo>(&debugMemoryArena,100); // NOTE: 50 shoud be enough
+  debugArenaStack = PushArray<ArenaInfo>(&debugMemoryArena,100);
   debugArenaIndex = 0;
 
   debugInfo = PushArenaList<FunctionAllocationInfo>(&debugMemoryArena);
