@@ -755,7 +755,7 @@ int main(int argc,char* argv[]){
     }
   }
 
-  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp);
+  AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,true);
   FillStaticInfo(&info);
   
   VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);

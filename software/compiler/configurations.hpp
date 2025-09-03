@@ -189,14 +189,14 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
 Array<InstanceInfo*> GetAllSameLevelUnits(AccelInfo* info,int level,int mergeIndex,Arena* out);
 
 // TODO: mergeIndex seems to be the wrong approach. Check the correct approach when trying to simplify merge.
-Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions);
+Array<InstanceInfo> GenerateInitialInstanceInfo(Accelerator* accel,Arena* out,Array<Partition> partitions,bool calculateOrder = true);
 Array<Partition> GenerateInitialPartitions(Accelerator* accel,Arena* out);
 
 void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out);
 void FillStaticInfo(AccelInfo* info);
 
 // This function does not perform calculations that are only relevant to the top accelerator (like static units configs and such).
-AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out);
+AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,bool calculateOrder = true);
 
 Array<int> ExtractInputDelays(AccelInfoIterator top,Arena* out);
 Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);

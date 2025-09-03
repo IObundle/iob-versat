@@ -181,7 +181,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   return res;
 }
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out){
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out,bool calculateOrder){
   TEMP_REGION(temp,out);
   TEMP_REGION(temp2,temp);
 
@@ -190,7 +190,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   //       (If after merge puts the correct values inside the accelInfo struct, if we can just call this function to compute the remaining data that needs to be computed).
   //       We can also move some of this computation to the accelInfo struct. Just see how things play out.
   
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,out);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,out,calculateOrder);
   decl->info = val;
  
   decl->nIOs = val.nIOs;
