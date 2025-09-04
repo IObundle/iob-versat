@@ -135,6 +135,21 @@ String GenerateDotGraph(GraphPrintingContent content,Arena* out){
   return EndString(out,result);
 }
 
+void OutputDebugDotGraph(Accelerator* accel,String folder,String fileName){
+  TEMP_REGION(temp,nullptr);
+
+  if(!globalOptions.debug){
+    return;
+  }
+
+  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
+  String filePath = PushDebugPath(temp,folder,trueFileName);
+      
+  GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp);
+  String result = GenerateDotGraph(content,temp);
+  OutputContentToFile(filePath,result);
+}
+
 void OutputDebugDotGraph(Accelerator* accel,String fileName){
   TEMP_REGION(temp,nullptr);
 

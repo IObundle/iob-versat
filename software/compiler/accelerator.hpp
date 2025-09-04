@@ -23,7 +23,7 @@ enum Direction{
 struct PortInstance{
   FUInstance* inst;
   int port;
-  Direction dir;
+  Direction dir; // NOTE: At the moment a Direction_NONE is most likely an error. 
 };
 
 static inline PortInstance MakePortOut(FUInstance* inst,int port){
@@ -33,7 +33,6 @@ static inline PortInstance MakePortOut(FUInstance* inst,int port){
   res.dir = Direction_OUTPUT;
   return res;
 }
-
 static inline PortInstance MakePortIn(FUInstance* inst,int port){
   PortInstance res = {};
   res.inst = inst;
@@ -409,7 +408,6 @@ Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
 // If we have A:X -> B:Y and we give this function B:Y, it returns A:X
 PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
-
 
 //
 // Graph fixes and operations

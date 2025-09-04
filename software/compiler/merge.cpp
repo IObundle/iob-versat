@@ -1588,6 +1588,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
+  Merge2(types,name,specifics,modifier,strat);
+  
   Assert(types.size >= 2);
 
   strat = MergingStrategy::CONSOLIDATION_GRAPH;
@@ -1676,7 +1678,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(int i = 0; i < size; i++){
     mapMultipleInputsToSubgraphs[i] = PushHashmap<FUInstance*,FUInstance*>(temp,numberOfMultipleInputs);
 
-    for(auto pair : flattenToMergedAccel[i]->inputMap){ // NOTE: Is InputMap different than OutputMap?
+    for(auto pair : flattenToMergedAccel[i]->inputMap){
       if(pair.second.inst->multipleSamePortInputs){
         mapMultipleInputsToSubgraphs[i]->Insert(pair.second.inst,pair.first.inst);
       }
@@ -1714,7 +1716,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   // After merging everything into a single graph we fix the datapaths by inserting muxs
   // At this point we do not preserve info from the lower types.
   // We do not know which type a mux input port belongs too.
-  // Specially because at the end, we might have multiple types and subtypes reclaiming the same input port of a merge.
+  // Especially because at the end, we might have multiple types and subtypes reclaiming the same input port of a merge.
   // We solve this later by reconstituting the base types into the merged path created here
   // I kinda wonder if it is possible to preserve info instead of having to reconstitute later.
   // The problem is we first must find all the lower types and everytime we add something to the graph we also add the same to the recon graphs.
@@ -2430,6 +2432,7 @@ MergeAndRecons* StartMerge(int amountOfRecons,Array<Accelerator*> inputs){
   result->mergedGraph = CreateAccelerator(S8("Merged"),AcceleratorPurpose_MERGE);
   result->recons = PushArray<Accelerator*>(result->arena,amountOfRecons);
   result->reconToMerged = PushArray<AcceleratorMapping*>(result->arena,amountOfRecons);
+  result->inputToRecon = PushArray<AcceleratorMapping*>(result->arena,amountOfRecons);
 
   for(int i = 0; i < amountOfRecons; i++){
     result->recons[i] = CreateAccelerator(PushString(temp,"Recon%d",i),AcceleratorPurpose_RECON);
@@ -2440,30 +2443,44 @@ MergeAndRecons* StartMerge(int amountOfRecons,Array<Accelerator*> inputs){
   return result;
 }
 
-void DebugOutputGraphs(MergeAndRecons* recons,String folderName){
-  TEMP_REGION(temp,recons->arena);
+FUInstance* MapOrCreateNode(Accelerator* accel,AcceleratorMapping* map,FUInstance* inst){
+  FUInstance* mapped = MappingMapNode(map,inst);;
 
-  {
-    String mergedPath = PushDebugPath(temp,folderName,recons->mergedGraph->name);
-    OutputDebugDotGraph(recons->mergedGraph,mergedPath);
-  }
+  // TODO: All this is extra logic because we still did not change Mapping to support the Direction present on a PortInstance. For now we carry on since we want to finish the recon stuff first.
   
-  for(Accelerator* recon : recons->recons){
-    String reconPath = PushDebugPath(temp,folderName,recon->name);
-    OutputDebugDotGraph(recons->mergedGraph,reconPath);
+  if(!mapped){
+    mapped = CopyInstance(accel,inst,false,inst->name);
+    MappingInsertEqualNode(map,inst,mapped);
   }
+
+  return mapped;
 }
 
 PortInstance MapOrCreateNode(Accelerator* accel,AcceleratorMapping* map,PortInstance node){
   FUInstance* inst = node.inst;
 
-  FUInstance* mapped = MappingMapNode(map,inst);
+  FUInstance* mapped = nullptr;
+
+  // TODO: All this is extra logic because we still did not change Mapping to support the Direction present on a PortInstance. For now we carry on since we want to finish the recon stuff first.
+  if(node.dir == Direction_INPUT){
+    PortInstance mappedInst = MappingMapInput(map,node);
+    mapped = mappedInst.inst;
+  }
+  if(node.dir == Direction_OUTPUT){
+    PortInstance mappedInst = MappingMapOutput(map,node);
+    mapped = mappedInst.inst;
+  }
+  
   if(!mapped){
-    
+    mapped = CopyInstance(accel,inst,false,inst->name);
+    MappingInsertEqualNode(map,inst,mapped);
   }
 
-  NOT_IMPLEMENTED();
-  return {};
+  if(node.dir == Direction_INPUT){
+    return MakePortIn(mapped,node.port);
+  } else {
+    return MakePortOut(mapped,node.port);
+  }
 }
 
 void AddEdgeSingle(MergeAndRecons* recons,Edge inputEdge,int reconBase){
@@ -2480,8 +2497,18 @@ void AddEdgeSingle(MergeAndRecons* recons,Edge inputEdge,int reconBase){
   PortInstance mergedOut = MapOrCreateNode(merged,reconToMerged,reconOut);
   PortInstance mergedIn  = MapOrCreateNode(merged,reconToMerged,reconIn);
 
-  ConnectUnits(reconOut,reconIn,delay);
-  ConnectUnits(mergedOut,mergedIn,delay);
+  ConnectUnitsIfNotConnected(reconOut.inst,reconOut.port,reconIn.inst,reconIn.port,delay);
+  ConnectUnitsIfNotConnected(mergedOut.inst,mergedOut.port,mergedIn.inst,mergedIn.port,delay);
+}
+
+void DebugOutputGraphs(MergeAndRecons* recons,String folderName){
+  TEMP_REGION(temp,recons->arena);
+
+  OutputDebugDotGraph(recons->mergedGraph,folderName,recons->mergedGraph->name);
+  
+  for(Accelerator* recon : recons->recons){
+    OutputDebugDotGraph(recon,folderName,recon->name);
+  }
 }
 
 #if 1
@@ -2510,8 +2537,12 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
 #endif
   
   MergeAndRecons* merged = StartMerge(size,flatten);
+  Accelerator* mergedGraph = merged->mergedGraph;
   
-#if 0
+#if 1
+  // ======================================
+  // Build the merged graph and the recons from the input graphs
+
   // First recon and original graph
   EdgeIterator iter = IterateEdges(flatten[0]); 
 
@@ -2523,19 +2554,137 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   
   for(int i = 1; i < size; i++){
     String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
+
+    // Maps from flatten to mergedGraph
     GraphMapping map = CalculateMergeMapping(merged->mergedGraph,flatten[i],{},strat,folderName,temp);
 
+    Accelerator* recon = merged->recons[i];
+    AcceleratorMapping* inputToRecon = merged->inputToRecon[i];
+    AcceleratorMapping* reconToMerged = merged->reconToMerged[i];
+
+    // Insert the mapping for the recons
+    for(Pair<FUInstance*,FUInstance**> mapped : map.instanceMap){
+      FUInstance* flattenInst = mapped.first;
+      FUInstance* mergedInst = *mapped.second;
+
+      FUInstance* reconInst = MapOrCreateNode(recon,inputToRecon,flattenInst);
+
+      MappingInsertEqualNode(reconToMerged,reconInst,mergedInst);
+    }
+    
     EdgeIterator iter = IterateEdges(flatten[i]);
     while(iter.HasNext()){
       Edge edge = iter.Next();
 
-      AddEdgeMappingSingle(merged,edge,&map,i);
+      AddEdgeSingle(merged,edge,i);
     }
   }
 #endif
-  
-  DebugOutputGraphs(merged,S8("MergeTest"));
 
+  Array<AcceleratorMapping*> mergedToRecon = PushArray<AcceleratorMapping*>(temp,size);
+  for(int i = 0; i < size; i++){
+    mergedToRecon[i] = MappingInvert(merged->reconToMerged[i],temp);
+  }
+  
+  // It feels like I need to preserve mapping from flattened modules that contain merge units in order to properly implement the hierarchical merge.
+
+  // For now I'm going to ignore hierarchical merge and solve simple merge
+
+  // TODO: We have the full information needed to only use the minimum amount of ports needed.
+  //       We are not forced to use a fixed amount of ports.
+  FUDeclaration* muxType = GetTypeByName(STRING("CombMux8"));
+  
+  // At this point we need to add the multiplexers
+  // Also assuming that we already removed all the superflouos edges (same node and input connected to same node and input edges can just be collapsed into one)
+  for(FUInstance* inst : merged->mergedGraph->allocated){
+    if(inst->multipleSamePortInputs){
+      for(int port = 0; port < inst->declaration->NumberInputs(); port++){
+        Array<PortInstance> portInstancesConnectSameInput = PushArray<PortInstance>(temp,size);
+        Array<int> edgeDelays = PushArray<int>(temp,size);
+        int inputCount = 0;
+        FOREACH_LIST(ConnectionNode*,node,inst->allInputs){
+          if(node->port == port){
+            portInstancesConnectSameInput[inputCount] = node->instConnectedTo;
+            edgeDelays[inputCount] = node->edgeDelay;
+            inputCount += 1;
+          }
+        }
+        portInstancesConnectSameInput.size = inputCount;
+
+        PortInstance inputPort = MakePortIn(inst,port);
+
+        DEBUG_BREAK();
+        // We remove every connection here 
+        for(PortInstance output : portInstancesConnectSameInput){
+          RemoveConnection(mergedGraph,output.inst,output.port,inputPort.inst,inputPort.port);
+        }
+        
+        if(inputCount > 1){
+          String uniqueName = GetFreeMergeMultiplexerName(mergedGraph,globalPermanent);
+          FUInstance* multiplexer = CreateFUInstance(mergedGraph,muxType,uniqueName);
+
+          ConnectUnits(MakePortOut(multiplexer,0),MakePortIn(inst,port),0);
+
+          // NOTE: Because units can be merged and recon graphs might contain more muxes that there are conflicts (because the input node is shared between recons) then we need to make sure that we do not map more 
+          Hashmap<PortInstance,int>* portsMapped = PushHashmap<PortInstance,int>(temp,size);
+
+          int multiplexerInputPortUsed = 0;
+
+          // NOTE: By going with recon order, we are "allocating" stuff in order (graph 0 will take port 0, graph 1 will take port 1 or 0 and so on. Care that we still want code to be generic and to not assume that 0 belongs to graph 0 and the likes).
+          for(int reconIndex = 0; reconIndex < size; reconIndex++){
+            AcceleratorMapping* map = mergedToRecon[reconIndex];
+            Accelerator* recon = merged->recons[reconIndex];
+
+            PortInstance mappedReconInput  = MappingMapInput(map,inputPort);
+
+            if(!mappedReconInput.inst){
+              continue;
+            }
+            
+            for(int i = 0; i <  portInstancesConnectSameInput.size; i++){
+              PortInstance outputPort  =  portInstancesConnectSameInput[i];
+              int edgeDelay = edgeDelays[i];
+              
+              PortInstance mappedReconOutput = MappingMapOutput(map,outputPort);
+              if(mappedReconOutput.inst){
+                int mergeGraphInputPort = -1;
+                if(portsMapped->Exists(outputPort)){
+                  // Only add multiplexer to recon graph
+                  mergeGraphInputPort = portsMapped->GetOrFail(outputPort);
+                  
+                } else {
+                  mergeGraphInputPort = multiplexerInputPortUsed++;
+                  portsMapped->Insert(outputPort,mergeGraphInputPort);
+
+                  // Also adds connection to merged graph multiplexer
+                  ConnectUnits(outputPort,MakePortIn(multiplexer,mergeGraphInputPort),edgeDelay);
+                }
+                Assert(mergeGraphInputPort >= 0);
+                
+                // Add multiplexer to recon graph
+                FUInstance* reconMux = CreateFUInstance(recon,muxType,uniqueName);
+
+                InsertUnit(recon,mappedReconOutput,mappedReconInput,MakePortOut(reconMux,0),MakePortIn(reconMux,mergeGraphInputPort));
+                
+                MappingInsertEqualNode(merged->reconToMerged[reconIndex],reconMux,multiplexer);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  DebugOutputGraphs(merged,S8("MergeTest"));
+  
+  //DebugOutputGraphs(merged,S8("MergeTest"));
+
+  // TODO: Because we added the muxes we calculate the inversion again to update stuff.
+  //       This is wasteful and the better approach would be to implement a bimap.
+  for(int i = 0; i < size; i++){
+    mergedToRecon[i] = MappingInvert(merged->reconToMerged[i],temp);
+  }
+  
 #if 0
   for(int i = 1; i < size; i++){
     String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);

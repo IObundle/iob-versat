@@ -217,6 +217,10 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
                      MergeModifier = MergeModifier_NO_UNIT_MERGED,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 
 
+FUDeclaration* Merge2(Array<FUDeclaration*> types,
+                     String name,Array<SpecificMergeNode> specifics,
+                      MergeModifier modifier,MergingStrategy strat);
+
 /*
 
 How merge works currently.

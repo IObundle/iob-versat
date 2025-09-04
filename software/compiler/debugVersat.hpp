@@ -66,6 +66,7 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
 
 String GenerateDotGraph(GraphPrintingContent content,Arena* out);
 
+void OutputDebugDotGraph(Accelerator* accel,String folder,String fileName);
 void OutputDebugDotGraph(Accelerator* accel,String fileName);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight);
