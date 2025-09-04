@@ -5,6 +5,7 @@
 #include "declaration.hpp"
 #include "textualRepresentation.hpp"
 #include "symbolic.hpp"
+#include "utilsCore.hpp"
 
 bool NodeConflict(FUInstance* inst){
   // For now, do not even try to map nodes that contain any config modifiers.
@@ -1156,7 +1157,7 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
   seen->Insert(outInst);
 #endif
   
-  Edge edge = {.out = outInst,.in = end};
+  Edge edge = MakeEdge(outInst,end);
     
   if(outInst == start){
     Edge* edgePtr = PushStruct<Edge>(out);
@@ -1167,11 +1168,10 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
     
     return result;
   }
-  
-  
+
   ArenaList<Edge*>* allPaths = PushArenaList<Edge*>(temp);
   for(int outPort = 0; outPort < outInst.inst->inputs.size; outPort++){
-    PortInstance outInputSide = {.inst = outInst.inst,.port = outPort};
+    PortInstance outInputSide = MakePortIn(outInst.inst,outPort);
     
     Array<Edge*> subPaths = GetAllPaths(accel,start,outInputSide,seen,out);
 
@@ -1250,7 +1250,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
 
     seen->map->Clear();
     Array<Edge*> allPaths = GetAllPaths(merged,start,end,seen,temp);
-
+    
     auto allValidPathsDyn = StartArray<Edge*>(temp);
     for(Edge* p : allPaths){
       //PrintPath(p);
@@ -1386,7 +1386,7 @@ AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl
             FUInstance* endInst = GetInstanceByName(end,fullName);
             
             if(startInst != nullptr && endInst != nullptr){
-              MappingInsertInput(mapping,{startInst,port},{endInst,mappedToPort});
+              MappingInsertInput(mapping,MakePortIn(startInst,port),MakePortIn(endInst,mappedToPort));
             }
           }
         } else {
@@ -1420,7 +1420,7 @@ AcceleratorMapping* MapFlattenedGraphs(Accelerator* start,FUDeclaration* endDecl
             if(startInst->declaration->type == FUDeclarationType_SPECIAL){
               // Need port of the actual units.
 
-              MappingInsertOutput(mapping,{startInst,0},{endInst,mappedToPort});
+              MappingInsertOutput(mapping,MakePortOut(startInst,0),MakePortOut(endInst,mappedToPort));
             } else {
               Assert(endInst->declaration->type != FUDeclarationType_SPECIAL);
               MappingInsertEqualNode(mapping,startInst,endInst);
@@ -1738,7 +1738,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
           if(con->port == port){
             Edge node = {};
             node.units[0] = con->instConnectedTo;
-            node.units[1] = {ptr,con->port};
+            node.units[1] = MakePortIn(ptr,con->port);
             node.delay = con->edgeDelay;
             problematicEdgesInFinalGraph[index++] = node;
           }
@@ -1797,15 +1797,15 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
             // Port N is used to select dataflow graph N.
             int graphIndex = ii;
 
-            PortInstance portInst = {.inst = multiplexer,.port = graphIndex};
+            PortInstance portInst = MakePortIn(multiplexer,graphIndex);
             mergeMultiplexers[graphIndex]->Insert(portInst);
             
             RemoveConnection(mergedAccel,node.units[0].inst,node.units[0].port,node.units[1].inst,node.units[1].port);
-            ConnectUnits(node.units[0],{multiplexer,graphIndex},node.delay);
+            ConnectUnits(node.units[0],MakePortIn(multiplexer,graphIndex),node.delay);
           }
         }
 
-        ConnectUnits((PortInstance){multiplexer,0},{ptr,port},0);
+        ConnectUnits(MakePortOut(multiplexer,0),MakePortIn(ptr,port),0);
       }
     }
   }
@@ -2031,7 +2031,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         SetStatic(mergedAccel,buffer);
        
         // TODO: After changing mapping, do not know if we keep reconEdge port or not. 
-        InsertUnit(mergedAccel,{n0.inst,reconEdge.units[0].port},PortInstance{n1.inst,reconEdge.units[1].port},PortInstance{buffer,0});
+        InsertUnit(mergedAccel,MakePortOut(n0.inst,reconEdge.units[0].port),MakePortIn(n1.inst,reconEdge.units[1].port),MakePortOut(buffer,0),MakePortIn(buffer,0));
       }
 
       if(delaysToAdd.size > 0){
@@ -2461,6 +2461,9 @@ PortInstance MapOrCreateNode(Accelerator* accel,AcceleratorMapping* map,PortInst
   if(!mapped){
     
   }
+
+  NOT_IMPLEMENTED();
+  return {};
 }
 
 void AddEdgeSingle(MergeAndRecons* recons,Edge inputEdge,int reconBase){

@@ -447,6 +447,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   return res;
 }
 
+#if 0
 struct Connection{
   FUInstance* input;
   FUInstance* mux;
@@ -605,6 +606,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   return registeredType;
 }
+#endif
 
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
   for(FUInstance* ptr : accel->allocated){

@@ -14,13 +14,36 @@ struct AccelInfo;
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
 
+enum Direction{
+  Direction_NONE,
+  Direction_OUTPUT,
+  Direction_INPUT
+};
+
 struct PortInstance{
   FUInstance* inst;
   int port;
+  Direction dir;
 };
 
+static inline PortInstance MakePortOut(FUInstance* inst,int port){
+  PortInstance res = {};
+  res.inst = inst;
+  res.port = port;
+  res.dir = Direction_OUTPUT;
+  return res;
+}
+
+static inline PortInstance MakePortIn(FUInstance* inst,int port){
+  PortInstance res = {};
+  res.inst = inst;
+  res.port = port;
+  res.dir = Direction_INPUT;
+  return res;
+}
+
 inline bool operator==(const PortInstance& p1,const PortInstance& p2){
-  bool res = (p1.inst == p2.inst && p1.port == p2.port);
+  bool res = (p1.inst == p2.inst && p1.port == p2.port && p1.dir == p2.dir);
   return res;
 }
 
@@ -33,8 +56,9 @@ template<> class std::hash<PortInstance>{
 public:
   std::size_t operator()(PortInstance const& s) const noexcept{
     std::size_t res = std::hash<FUInstance*>()(s.inst);
+    res *= ((int) s.dir) + 1;
     res += s.port;
-
+    
     return res;
   }
 };
@@ -51,6 +75,31 @@ struct Edge{ // A edge in a graph
   int delay;
   Edge* next;
 };
+
+static inline Edge MakeEdge(FUInstance* out,int outPort,FUInstance* in,int inPort,int delay = 0){
+  Edge edge = {};
+  edge.out.inst = out;
+  edge.out.port = outPort;
+  edge.out.dir = Direction_OUTPUT;
+  edge.in.inst = in;
+  edge.in.port = inPort;
+  edge.in.dir = Direction_INPUT;
+  edge.delay = delay;
+  
+  return edge;
+}
+
+static inline Edge MakeEdge(PortInstance out,PortInstance in,int delay = 0){
+  Assert(out.dir == Direction_OUTPUT);
+  Assert(in.dir == Direction_INPUT);
+
+  Edge edge = {};
+  edge.out = out;
+  edge.in = in;
+  edge.delay = delay;
+
+  return edge;
+}
 
 bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1);
 
@@ -214,6 +263,7 @@ struct AcceleratorMapping{
   int firstId;
   int secondId;
 
+  // After port instance change, do not need two maps for input/output differences. Should be able to only use 1.
   TrieMap<PortInstance,PortInstance>* inputMap;
   TrieMap<PortInstance,PortInstance>* outputMap;
 };
@@ -348,7 +398,7 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay);
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnitOutput,PortInstance newUnitInput);
 
 //
 // Graph info and connection calculations

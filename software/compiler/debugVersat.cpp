@@ -137,7 +137,6 @@ String GenerateDotGraph(GraphPrintingContent content,Arena* out){
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName){
   TEMP_REGION(temp,nullptr);
-  TEMP_REGION(temp2,temp);
 
   if(!globalOptions.debug){
     return;
@@ -154,7 +153,6 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName){
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight){
   TEMP_REGION(temp,nullptr);
-  TEMP_REGION(temp2,temp);
 
   if(!globalOptions.debug){
     return;
@@ -181,7 +179,6 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highligh
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight){
   TEMP_REGION(temp,nullptr);
-  TEMP_REGION(temp2,temp);
 
   if(!globalOptions.debug){
     return;
@@ -204,83 +201,6 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* hi
   GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp);
   String result = GenerateDotGraph(content,temp);
   OutputContentToFile(filePath,result);
-}
-
-static void OutputGraphDotFile_(Accelerator* accel,bool collapseSameEdges,Set<FUInstance*>* highlighInstance,FILE* outputFile){
-  TEMP_REGION(temp,nullptr);
-
-  fprintf(outputFile,"digraph accel {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* inst = ptr;
-    String id = UniqueRepr(inst,temp);
-    String name = Repr(inst,globalDebug.dotFormat,temp);
-
-    String color = STRING("darkblue");
-    int delay = 0;
-    
-    if(ptr->type == NodeType_SOURCE || ptr->type == NodeType_SOURCE_AND_SINK){
-      color = STRING("darkgreen");
-      delay = 0; //TODO: Broken //inst->baseDelay;
-    } else if(ptr->type == NodeType_SINK){
-      color = STRING("dark");
-    }
-
-    bool doHighligh = (highlighInstance ? highlighInstance->Exists(inst) : false);
-
-    if(doHighligh){
-      fprintf(outputFile,"\t\"%.*s\" [color=darkred,label=\"%.*s-%d\"];\n",UNPACK_SS(id),UNPACK_SS(name),delay);
-    } else {
-      fprintf(outputFile,"\t\"%.*s\" [color=%.*s label=\"%.*s-%d\"];\n",UNPACK_SS(id),UNPACK_SS(color),UNPACK_SS(name),delay);
-    }
-  }
-
-  int size = 9999; // Size(accel->edges);
-  Hashmap<Pair<FUInstance*,FUInstance*>,int>* seen = PushHashmap<Pair<FUInstance*,FUInstance*>,int>(temp,size);
-
-  // TODO: Consider adding a true same edge counter, that collects edges with equal delay and then represents them on the graph as a pair, using [portStart-portEnd]
-  for(FUInstance* ptr : accel->allocated){
-    FUInstance* out = ptr;
-
-    FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      FUInstance* in = con->instConnectedTo.inst;
-
-      if(collapseSameEdges){
-        Pair<FUInstance*,FUInstance*> nodeEdge = {};
-        nodeEdge.first = ptr;
-        nodeEdge.second = con->instConnectedTo.inst;
-
-        GetOrAllocateResult<int> res = seen->GetOrAllocate(nodeEdge);
-        if(res.alreadyExisted){
-          continue;
-        }
-      }
-
-      int inPort = con->instConnectedTo.port;
-      int outPort = con->port;
-
-      String first = UniqueRepr(out,temp);
-      String second = UniqueRepr(in,temp);
-      PortInstance start = {out,outPort};
-      PortInstance end = {in,inPort};
-      String label = Repr(&start,&end,globalDebug.dotFormat,temp);
-      int calculatedDelay = con->delay.value ? *con->delay.value : 0;
-
-      bool highlighStart = (highlighInstance ? highlighInstance->Exists(start.inst) : false);
-      bool highlighEnd = (highlighInstance ? highlighInstance->Exists(end.inst) : false);
-
-      bool highlight = highlighStart && highlighEnd;
-
-      fprintf(outputFile,"\t\"%.*s\" -> ",UNPACK_SS(first));
-      fprintf(outputFile,"\"%.*s\"",UNPACK_SS(second));
-
-      if(highlight){
-        fprintf(outputFile,"[color=darkred,label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
-      } else {
-        fprintf(outputFile,"[label=\"%.*s\\n[%d:%d]\"];\n",UNPACK_SS(label),con->edgeDelay,calculatedDelay);
-      }
-    }
-  }
-  fprintf(outputFile,"}\n");
 }
 
 void OutputContentToFile(String filepath,String content){
@@ -357,8 +277,8 @@ void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* hi
 
     String first = UniqueRepr(out,temp);
     String second = UniqueRepr(in,temp);
-    PortInstance start = {out,outPort};
-    PortInstance end = {in,inPort};
+    PortInstance start = MakePortOut(out,outPort);
+    PortInstance end = MakePortIn(in,inPort);
     String label = Repr(&start,&end,globalDebug.dotFormat,temp);
 
     int calculatedDelay = delays.edgesDelay->GetOrFail(edge).value;

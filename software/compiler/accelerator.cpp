@@ -241,7 +241,7 @@ Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays
   if(outputNode){
     FOREACH_LIST(ConnectionNode*,ptr,outputNode->allInputs){
       int port = ptr->port;
-      PortInstance end = {.inst = outputNode,.port = port};
+      PortInstance end = MakePortIn(outputNode,port);
 
       outputLatencies[port] = delays.portDelay->GetOrFail(end).value;
     }
@@ -449,7 +449,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
       SetStatic(accel,buffer);
     }
 
-    InsertUnit(accel,edge.units[0],edge.units[1],PortInstance{buffer,0});
+    InsertUnit(accel,edge.units[0],edge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
 
     OutputDebugDotGraph(accel,STRING(StaticFormat("fixDelay_%d.dot",buffersInserted)),buffer);
 
@@ -484,10 +484,7 @@ PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex){
 
   for(ConnectionNode* ptr = outInst->allOutputs; ptr; ptr = ptr->next){
     if(ptr->instConnectedTo.inst == unit && ptr->instConnectedTo.port == portIndex && ptr->port == inPort.port){
-      PortInstance res = {};
-      res.inst = outInst;
-      res.port = ptr->port;
-
+      PortInstance res = MakePortOut(outInst,ptr->port);
       return res;
     }
   }
@@ -802,12 +799,7 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out){
   auto arr = StartArray<Edge>(out);
   for(FUInstance* ptr : accel->allocated){
     FOREACH_LIST(ConnectionNode*,con,ptr->allOutputs){
-      Edge edge = {};
-      edge.out.inst = ptr;
-      edge.out.port = con->port;
-      edge.in.inst = con->instConnectedTo.inst;
-      edge.in.port = con->instConnectedTo.port;
-      edge.delay = con->edgeDelay;
+      Edge edge = MakeEdge(ptr,con->port,con->instConnectedTo.inst,con->instConnectedTo.port,con->edgeDelay);
       *arr.PushElem() = edge;
     }
   }
@@ -860,12 +852,7 @@ Edge EdgeIterator::Next(){
     return {};
   }
 
-  Edge edge = {};
-  edge.out.inst = *currentNode;
-  edge.out.port = currentPort->port;
-  edge.in.inst = currentPort->instConnectedTo.inst;
-  edge.in.port = currentPort->instConnectedTo.port;
-  edge.delay = currentPort->edgeDelay;
+  Edge edge = MakeEdge(*currentNode,currentPort->port,currentPort->instConnectedTo.inst,currentPort->instConnectedTo.port,currentPort->edgeDelay);
 
   currentPort = currentPort->next;
   AdvanceUntilValid(this);
@@ -956,7 +943,9 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
   Assert(out.inst->accel == in.inst->accel);
   Assert(in.port < inDecl->NumberInputs());
   Assert(out.port < outDecl->NumberOutputs());
-
+  Assert(out.dir == Direction_OUTPUT);
+  Assert(in.dir == Direction_INPUT);
+  
   Accelerator* accel = out.inst->accel;
 
   // Update graph data.
@@ -969,9 +958,8 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
     ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
     con->edgeDelay = delay;
     con->port = out.port;
-    con->instConnectedTo.inst = inputNode;
-    con->instConnectedTo.port = in.port;
-
+    con->instConnectedTo = MakePortIn(inputNode,in.port);
+    
     outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
     outputNode->outputs[out.port] = true;
   }
@@ -981,8 +969,7 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
     ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
     con->edgeDelay = delay;
     con->port = in.port;
-    con->instConnectedTo.inst = outputNode;
-    con->instConnectedTo.port = out.port;
+    con->instConnectedTo = MakePortOut(outputNode,out.port);
 
     inputNode->allInputs = ListInsert(inputNode->allInputs,con);
 
@@ -990,8 +977,7 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
       inputNode->multipleSamePortInputs = true;
     }
 
-    inputNode->inputs[in.port].inst = outputNode;
-    inputNode->inputs[in.port].port = out.port;
+    inputNode->inputs[in.port] = MakePortOut(outputNode,out.port);
   }
 
   CalculateNodeType(inputNode);
@@ -1025,8 +1011,7 @@ void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex
     ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
     con->edgeDelay = delay;
     con->port = outIndex;
-    con->instConnectedTo.inst = inputNode;
-    con->instConnectedTo.port = inIndex;
+    con->instConnectedTo = MakePortIn(inputNode,inIndex);
 
     outputNode->allOutputs = ListInsert(outputNode->allOutputs,con);
     outputNode->outputs[outIndex] = true;
@@ -1037,8 +1022,7 @@ void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex
     ConnectionNode* con = PushStruct<ConnectionNode>(accel->accelMemory);
     con->edgeDelay = delay;
     con->port = inIndex;
-    con->instConnectedTo.inst = outputNode;
-    con->instConnectedTo.port = outIndex;
+    con->instConnectedTo = MakePortOut(outputNode,outIndex);
 
     inputNode->allInputs = ListInsert(inputNode->allInputs,con);
 
@@ -1046,8 +1030,7 @@ void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex
       inputNode->multipleSamePortInputs = true;
     }
 
-    inputNode->inputs[inIndex].inst = outputNode;
-    inputNode->inputs[inIndex].port = outIndex;
+    inputNode->inputs[inIndex] = MakePortOut(outputNode,outIndex);
   }
 
   CalculateNodeType(inputNode);
@@ -1161,10 +1144,11 @@ FUInstance* RemoveUnit(FUInstance* nodes,FUInstance* unit){
 }
 #endif
 
-void InsertUnit(Accelerator* accel,PortInstance before,PortInstance after,PortInstance newUnit){
+void InsertUnit(Accelerator* accel,PortInstance before,PortInstance after,PortInstance newUnitOutput,PortInstance newUnitInput){
   RemoveConnection(accel,before.inst,before.port,after.inst,after.port);
-  ConnectUnits(newUnit,after,0);
-  ConnectUnits(before,newUnit,0);
+
+  ConnectUnits(newUnitOutput,after,0);
+  ConnectUnits(before,newUnitInput,0);
 }
 
 ConnectionNode* GetConnectionNode(ConnectionNode* head,int port,PortInstance other){
@@ -1187,6 +1171,9 @@ void MappingCheck(AcceleratorMapping* map){
     PortInstance f = p.first;
     PortInstance s = p.second;
 
+    Assert(f.dir == Direction_INPUT);
+    Assert(s.dir == Direction_INPUT);
+    
     Assert(idToCheckFirst == f.inst->accel->id);
     Assert(idToCheckSecond == s.inst->accel->id);
   }
@@ -1194,6 +1181,9 @@ void MappingCheck(AcceleratorMapping* map){
   for(auto p : map->outputMap){
     PortInstance f = p.first;
     PortInstance s = p.second;
+
+    Assert(f.dir == Direction_OUTPUT);
+    Assert(s.dir == Direction_OUTPUT);
 
     Assert(idToCheckFirst == f.inst->accel->id);
     Assert(idToCheckSecond == s.inst->accel->id);
@@ -1325,11 +1315,11 @@ void MappingInsertEqualNode(AcceleratorMapping* mapping,FUInstance* first,FUInst
   int nOutputs = decl->NumberOutputs();
   
   for(int i = 0; i < nInputs; i++){
-    mapping->inputMap->Insert({first,i},{second,i});
+    mapping->inputMap->Insert(MakePortIn(first,i),MakePortIn(second,i));
   }
 
   for(int i = 0; i < nOutputs; i++){
-    mapping->outputMap->Insert({first,i},{second,i});
+    mapping->outputMap->Insert(MakePortOut(first,i),MakePortOut(second,i));
   }
 }
 
@@ -1337,12 +1327,18 @@ void MappingInsertInput(AcceleratorMapping* mapping,PortInstance first,PortInsta
   Assert(mapping->firstId == first.inst->accel->id);
   Assert(mapping->secondId == second.inst->accel->id);
 
+  Assert(first.dir == Direction_INPUT);
+  Assert(second.dir == Direction_INPUT);
+  
   mapping->inputMap->Insert(first,second);
 }
 
 void MappingInsertOutput(AcceleratorMapping* mapping,PortInstance first,PortInstance second){
   Assert(mapping->firstId == first.inst->accel->id);
   Assert(mapping->secondId == second.inst->accel->id);
+
+  Assert(first.dir == Direction_OUTPUT);
+  Assert(second.dir == Direction_OUTPUT);
 
   mapping->outputMap->Insert(first,second);
 }
@@ -1375,7 +1371,7 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst){
 
   FUInstance* toCheck = nullptr;
   for(int i = 0; i < nInputs; i++){
-    PortInstance* optPort = mapping->inputMap->Get({inst,i});
+    PortInstance* optPort = mapping->inputMap->Get(MakePortIn(inst,i));
 
     if(optPort == nullptr){
       continue;
@@ -1389,7 +1385,7 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst){
   }
 
   for(int i = 0; i < nOutputs; i++){
-    PortInstance* optPort = mapping->outputMap->Get({inst,i});
+    PortInstance* optPort = mapping->outputMap->Get(MakePortOut(inst,i));
 
     if(optPort == nullptr){
       continue;

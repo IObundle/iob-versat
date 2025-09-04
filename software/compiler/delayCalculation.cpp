@@ -443,11 +443,10 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
   for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),index += 1){
     SimpleEdge simple = Get(iter);
 
-    Edge edge = {};
-    edge.out.port = simple.outPort;
-    edge.out.inst = top.GetUnit(simple.outIndex)->inst;
-    edge.in.port = simple.inPort;
-    edge.in.inst = top.GetUnit(simple.inIndex)->inst;
+    FUInstance* out = top.GetUnit(simple.outIndex)->inst;
+    FUInstance* in  = top.GetUnit(simple.inIndex)->inst;
+
+    Edge edge = MakeEdge(out,simple.outPort,in,simple.inPort);
 
     edgeToDelay->Insert(edge,delays.edgesExtraDelay[index]);
   }
@@ -460,10 +459,7 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
 
     Array<DelayInfo> portDelayInfo = delays.inputPortBaseLatencyByOrder[order];
     for(int i = 0; i < iter.CurrentUnit()->inputs.size; i++){
-      PortInstance p = {};
-      p.inst = node;
-      p.port = i;
-
+      PortInstance p = MakePortIn(node,i);
       portDelay->Insert(p,portDelayInfo[i]);
     }
   }
