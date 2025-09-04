@@ -43,6 +43,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   Array<Wire> configs = PushArray<Wire>(perm,info->configs.size);
   Array<Wire> states = PushArray<Wire>(perm,info->states.size);
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(perm,info->externalInterfaces.size);
+  Array<ExternalMemorySymbolic> extSym = PushArray<ExternalMemorySymbolic>(perm,info->externalInterfaces.size);
   
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
@@ -102,6 +103,9 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     external[i].interface = expr.interface;
     external[i].type = expr.type;
 
+    extSym[i].interface = expr.interface;
+    extSym[i].type = expr.type;
+    
     switch(expr.type){
     case ExternalMemoryType::ExternalMemoryType_2P:{
       external[i].tp.bitSizeIn = EvalRange(expr.tp.bitSizeIn,instantiated);
@@ -117,6 +121,22 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
       }
     }break;
     }
+
+    switch(expr.type){
+    case ExternalMemoryType::ExternalMemoryType_2P:{
+      extSym[i].tp.bitSizeIn = SymbolicExpressionFromVerilog(expr.tp.bitSizeIn,out);
+      extSym[i].tp.bitSizeOut = SymbolicExpressionFromVerilog(expr.tp.bitSizeOut,out);
+      extSym[i].tp.dataSizeIn = SymbolicExpressionFromVerilog(expr.tp.dataSizeIn,out);
+      extSym[i].tp.dataSizeOut = SymbolicExpressionFromVerilog(expr.tp.dataSizeOut,out);
+    }break;
+    case ExternalMemoryType::ExternalMemoryType_DP:{
+      for(int ii = 0; ii < 2; ii++){
+        extSym[i].dp[ii].bitSize = SymbolicExpressionFromVerilog(expr.dp[ii].bitSize,out);
+        extSym[i].dp[ii].dataSizeIn = SymbolicExpressionFromVerilog(expr.dp[ii].dataSizeIn,out);
+        extSym[i].dp[ii].dataSizeOut = SymbolicExpressionFromVerilog(expr.dp[ii].dataSizeOut,out);
+      }
+    }break;
+    }
   }
   
   decl.name = info->name;
@@ -128,6 +148,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   decl.configs = configs;
   decl.states = states;
   decl.externalMemory = external;
+  decl.externalMemorySymbol = extSym;
   decl.numberDelays = info->nDelays;
   decl.nIOs = info->nIO;
 
@@ -198,7 +219,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
-#if 1
   // All the single interfaces are simple of propagating. We can just do an OR of everything.
   for(FUInstance* ptr : accel->allocated){
     decl->singleInterfaces |= ptr->declaration->singleInterfaces;
@@ -210,7 +230,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   decl->singleInterfaces |= SingleInterfaces_RUNNING;
   decl->singleInterfaces |= SingleInterfaces_CLK;
   decl->singleInterfaces |= SingleInterfaces_RESET;
-#endif
   
   decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int externalIndex = 0;

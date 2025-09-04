@@ -431,7 +431,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
   
   if(compiled.size > 3){
     // TODO: Proper error reporting requires us to lift the data up.
-    printf("[ERROR] Address gen contains more loops than the unit is capable of handling\n");
+    printf("[ERROR] Address gen contains %d loops but unit can only handle a maximum of 3\n",compiled.size);
     exit(-1);
   }
   

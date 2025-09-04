@@ -161,6 +161,25 @@ enum MergingStrategy{
   FIRST_FIT
 };
 
+struct MergeAndRecons{
+  Arena arenaInst;
+  Arena* arena;
+  
+  Accelerator* mergedGraph;
+  Array<Accelerator*> recons;
+  Array<AcceleratorMapping*> reconToMerged;
+  Array<AcceleratorMapping*> inputToRecon;
+};
+
+// ============================================================================
+// Merge and recons simultaneous handling
+
+MergeAndRecons* StartMerge(int amountOfRecons,Array<Accelerator*> inputs);
+void DebugOutputGraphs(MergeAndRecons* recons,String folderName);
+
+void AddEdgeSingle(MergeAndRecons* recons,Edge inputEdge,int reconBase);
+void AddEdgeMappingSingle(MergeAndRecons* recons,Edge inputEdge,GraphMapping* map,int reconBase);
+
 bool EqualPortMapping(PortInstance p1,PortInstance p2);
 
 void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,String moduleName,String fileName);
@@ -197,3 +216,55 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
                      MergeModifier = MergeModifier_NO_UNIT_MERGED,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 
+
+/*
+
+How merge works currently.
+
+First we flatten all the accelerators into the most basic components.
+
+We start with a copy of the first graph as the merged graph.
+We iteratively calculate the mapping from the input graphs with the merged graph and then merge them.
+We also store the mappings that map the other graph to the units on the merged graph.
+We also calculate inverse mappings (from merged to inputs).
+We calculate nodes that contain multiple inputs (candidates for multiplexers).
+For each node with multiple inputs, we create a CombMux and use the maps to find the input port of the connection.
+- Input graph 2 connects to port 2 of the CombMux.
+
+At this point the merged graph is free of multiple inputs. It contains CombMuxes to resolve any input problem.
+
+At this point we start calculating the configuration info.
+In order to calculate this info and in order to correctly pass information from the input graphs to the merged configs, we first calculate a recon graph for each input graph that contains the new added CombMuxes (it's a reconstitution but if a mux was added to a path then that recon graph will contain the mux as well).
+
+We also calculate all sorts of mappings. In the end, we have a bunch of recon graphs that map between input graphs to merged graph but also contain the extra units added.
+
+- Because we want to support hiearchical merge, this stuff becomes more complicated although not sure how yet.
+
+At the same time, after calculating all the recons, we try to fix graph delays by calculating delays in the recons and adding a variable buffer on the merged graph if a delay is needed. If so, we recalculate everything, including the recons graphs again to also include the delays added.
+
+At this point, after calculating all the recons and the graphs having the buffers inserted, we can calculate and try to match the data from the recons and store it into the configuration info.
+
+What data is mostly stored that depends on the input graphs?
+- The original node name. (Merged nodes will have multiple names, one for each merged unit).
+- Wether the node belongs or not to that configuration.
+- Misc data like the addressGensUsed by that unit and whether the unit is being debugged or not.
+- For muxes we need to store which input is associated to that configuration. (Depends on input graphs because the port is equal to the index of the input graph).
+
+Generally, I do want to be able to store data inside the configuration info that depends on the input configuration info. Having this mapping is good, it means that we associate extra data to the input graphs and the merged graph is capable of processing it.
+
+OK, so what is it that I want?
+
+I want to merge the accelerators and have mappings from the merged accelerator to the input graphs.
+
+The two extra units that can be added are the muxes and the variable buffers.
+The problem with the buffers is that by adding them we are potentially changing the delay calculations of other graphs.
+- Adding multiplexers is easy. Can be done in a single "round".
+- Adding buffers is hard. Because buffers can change the time properties of other graphs we need to make sure that when we add buffers we also add them to the other recons 
+
+As long as I can create the recons and stuff I think that I can do the rest of the code.
+
+The problem is the interaction between hierarchical merge stuff. Need to figure out what is the biggest change between the ReconstituteGraphFromStruct and ReconstituteGraph are.
+
+
+
+*/

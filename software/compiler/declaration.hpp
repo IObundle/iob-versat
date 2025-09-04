@@ -23,22 +23,6 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
-/*
-// TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
-// NOTE: Inputs and outputs should also be parameterizable. Think multiplexers and stuff.
-  struct FUType{
-  String name;
-
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
-
-  Array<WireExpression> configs;
-  Array<WireExpression> states;
-
-  Array<ExternalMemoryInterfaceExpression> externalMemory;
-  }
-*/
-
 enum FUDeclarationType{
   FUDeclarationType_SINGLE,
   FUDeclarationType_COMPOSITE,
@@ -56,6 +40,8 @@ struct Parameter{
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
+// NOTE: A FUDeclaration represents a concrete type, although the size of stuff might depend on parameters.
+//       The general structure is fixed (amount of inputs/outputs and so on) but the size is not.
 struct FUDeclaration{
   String name;
 
@@ -72,11 +58,13 @@ struct FUDeclaration{
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
 
+  // TODO: Eventually remove external expression and external memory and only keep externalMemorySymbol
   Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
-
+  Array<ExternalMemorySymbolic> externalMemorySymbol;
+  
   // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
-  Accelerator* baseCircuit;
+  Accelerator* baseCircuit; // For merge, baseCircuit contains muxes but not buffers.
   Accelerator* fixedDelayCircuit;
   Accelerator* flattenedBaseCircuit;
   
@@ -127,6 +115,7 @@ struct FUDeclaration{
   };
 
   // TODO: Probably better to see all the outputs and all the infos, at the very least in Debug mode.
+  // NOTE: This only works because operations only have one output.
   bool IsCombinatorialOperation(){
     bool res = (isOperation && info.infos[0].outputLatencies[0] == 0);
     return res;

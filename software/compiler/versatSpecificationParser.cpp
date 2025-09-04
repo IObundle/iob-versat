@@ -1596,7 +1596,7 @@ Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
   }
 
   if(anyError){
-    printf("Error parsing versat spec\n");
+    // NOTE: Error messages have already been printed at this point. Just terminate the program 
     exit(-1);
   }
 

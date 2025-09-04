@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VerilogEmitter.hpp"
 #include "utils.hpp"
 #include "memory.hpp"
 #include "verilogParsing.hpp"
@@ -313,9 +314,8 @@ public:
 
 typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
 
-//
+// ============================================================================
 // Accelerator creation
-//
 
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
 Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds);

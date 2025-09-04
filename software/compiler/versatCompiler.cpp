@@ -396,6 +396,7 @@ int main(int argc,char* argv[]){
     return -1;
   }
 
+  // TODO: The testbench logic is kinda addhoc right now. Need to join together the other logic and them create a proper switch between these two.
   if(globalOptions.opMode == VersatOperationMode_GENERATE_TESTBENCH){
     String topLevelUnit = globalOptions.topName;
 
@@ -884,9 +885,23 @@ int main(int argc,char* argv[]){
   return 0;
 }
 
-/*
+/* ============================================================================
+// Major todo:
 
-// ============================================================================
+1. Need to change memories to keep a symbolic expression. Remove the
+uglyness that is present in the memories, the memory template and the
+different memory structs for int and range and whatnot. Just use
+symbolic expressions. We might still want to have the expression range
+in the parser, but we convert to a symbolic expression when
+registering the module.
+
+2. The merge stuff is causing troubles and we need to cleanup that part of the code. Also need to make the code robust and clean enough so that we can implement some optimizations, like not using a different multiplexer port for every merge type (reusing merge ports if possible) and maybe some other optimizations related to the insertion of buffers and the likes.
+
+2.1 - I remember that we never found a good proper way of doing the recon stuff. Since we have more tests and a fast way of testing stuff out, we might be able to change this stuff very fast.
+
+*/
+
+/* ============================================================================
 // Major changes
 
 Overall of versat spec usability and accelerator programming.
@@ -1135,7 +1150,6 @@ Generated code does not take into account parameters when it should.
 */
 
 /*
-
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 

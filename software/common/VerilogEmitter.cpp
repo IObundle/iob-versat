@@ -935,7 +935,14 @@ void VEmitter::InstanceParam(const char* paramName,const char* paramValue){
   p->first = PushString(arena,"%s",paramName);
   p->second = PushString(arena,"%s",paramValue);
 }
-  
+
+void VEmitter::InstanceParam(const char* paramName,SymbolicExpression* sym){
+  TEMP_REGION(temp,arena);
+
+  String repr = PushRepresentation(sym,temp);
+  InstanceParam(paramName,CS(repr));
+}
+    
 void VEmitter::PortConnect(const char* portName,const char* connectionExpr){
   VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
   portInfo->portConnect.portName = PushString(arena,"%s",portName);

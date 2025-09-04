@@ -62,7 +62,7 @@ enum ExternalMemoryType {
 }; 
 
 // TODO: Because we changed memories to be byte space instead of symbol space, maybe it would be best to change how the address bit size is stored. These structures are supposed to be clean, and so the parser should identify any differences in address size and report an error. These structures should only have one address if we keep going with the byte space memories idea and the data size is used to calculate the bitSize for each respective port
-// NOTE: Although we should do this after parsing everything. Parse first, check errors later.
+// NOTE: Do error checking after parsing everything. Parse first, check errors later.
 template<typename T>
 struct ExternalMemoryTwoPortsTemplate{ // tp
   T bitSizeIn;
@@ -107,6 +107,7 @@ struct ExternalMemoryInterfaceTemplate : public ExternalMemoryTemplate<T>{
 
 typedef ExternalMemoryInterfaceTemplate<int> ExternalMemoryInterface;
 typedef ExternalMemoryInterfaceTemplate<ExpressionRange> ExternalMemoryInterfaceExpression;
+typedef ExternalMemoryInterfaceTemplate<SymbolicExpression*> ExternalMemorySymbolic;
 
 struct ExternalMemoryID{
   int interface;

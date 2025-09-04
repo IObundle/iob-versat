@@ -1729,9 +1729,9 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
   TEMP_REGION(temp,out);
   switch(expr->type){
   case SymbolicExpressionType_FUNC:{
-    //WARN_CODE();
-
-    return PushLiteral(out,0); // Treating this as a literal.
+    // TODO: This is being hit. Versat is working but need to check this more thoroughly
+    // WARN_CODE(); // Functions are a very special case that we insert ourselves and derivate is only used to transform the initial expression into multiple individual loops so we should never reach this point. If this triggers, do a more careful analysis to what is happening.
+    return PushLiteral(out,0); // Treating all functions as a literal.
   } break;
   case SymbolicExpressionType_LITERAL:
     return PushLiteral(out,0);
@@ -1779,13 +1779,12 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
       SymbolicExpression* addExpr = PushAddBase(out);
       addExpr->terms = addTerms;
 
-      //Print(addExpr);
       return addExpr;
     }
   } break;
   case SymbolicExpressionType_DIV:{
+    // Assuming that divisions are only done by constants. Address gen cannot handle otherwise.
     return PushLiteral(out,0);
-    //NOT_IMPLEMENTED("yet"); // Only care about divisions by constants, since other divisions we probably cannot handle in the address gen.
   } break;
   }
 

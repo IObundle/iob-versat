@@ -1,6 +1,7 @@
 #include "merge.hpp"
 
 #include "accelerator.hpp"
+#include "debug.hpp"
 #include "declaration.hpp"
 #include "textualRepresentation.hpp"
 #include "symbolic.hpp"
@@ -1148,10 +1149,12 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
     return {};
   }
 
+#if 0
   if(seen->Exists(outInst)){
     return {};
   }
   seen->Insert(outInst);
+#endif
   
   Edge edge = {.out = outInst,.in = end};
     
@@ -1502,6 +1505,8 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out){
 
   merge X | Y == X_A | X_B | X_C | Y_D | Y_E | Y_F;
 
+  Merge of merged units adds the possibilities. 
+
   if we have a module Z = X x,Y y then we have
 
   AD_AE_AF_BD_BE_BF_CD_CE_CF = 9 options.
@@ -1510,9 +1515,56 @@ Array<GraphAndMapping> GetAllBaseMergeTypes(FUDeclaration* decl,Arena* out){
 
   Module Y with X x,Const b.
 
-  merge Y | X == Y_X_A | Y_X_B | X_A | X_B;  
+  module Y contains two types, Y_X_A and Y_X_B.
 
-  So merges add, modules multiply.
+  merge Y | X == Y_X_A | Y_X_B | X_A | X_B;
+
+  So merges add, modules multiply (because modules basically make the product).
+
+  Is there a point in doing a recon of a merged graph?
+
+  Imagine that we have merged graph X = A | B;
+  What is the recon of A and B? Is the nodes that only A and that only B care about.
+
+  If we make a merge of Y | X, what is the point of doing recon of A?
+
+  We probably would like to be able to access the nodes that only matter for A.
+
+  Now the question is do we store the recon of A and recon of B or do we just store the mapping from the flattened graph to the nodes that belong to A and the nodes that belong to B?
+
+  Imagine that we are doing a merge of a merge and that we use the approach where the recons are built as the merged graph is built. Do we care about using the flattened graph or the recon graph? We probably only care about the flattened graph. We do not care about matching the previous merge with the actual merge of a given type.
+
+  The question is how to store this and how to propagate it.
+
+  First simple case of a simple merge.
+
+  We use the merged accelerator and recon same time building process to keep the recon graphs in sync.
+  We use the flattened graphs meaning that we can always map from the flattened graphs to the recon to the merged accelerator and vice versa.
+
+  At the end we have a merged accelerator that is flattened and we can map the flattened inputs to it and to the recon graphs.
+
+  What about merged with a module? When we create a module with merge units the declaration will have the accel info that will contain multiple merge partitions. 
+
+  When we flatten a module with merge units we probably gonna need to map the flattened merge units from the merge units.
+  If a module contains merged unit X = A | B and merged unit Y = I | J we probably gonna need a mapping from
+  X_A to flatten, X_B to flatten, Y_I to flatten and Y_J to flatten.
+  We can also only have X to flatten (and then only need a A to X and B to X to work).
+
+  Regardless of being a merged or a module, we need a mapping from each possible merged type to the flattened graph.
+
+  The reason we end up on that recursive structure is because we wanted to have the recon of the lowest possible types.
+  So, in the example of tryint to merge X | Y, we first need to make the recon of X and then the recon of Y and only then we can make the recon of X_A and X_B and so on.
+
+  Because merge is already "recursive" by nature, the fact that we need to go to the lowest levels seems off. What is the point of doing the merge of the lower levels if we just end up not using the data?. Or not using the data correctly?
+
+  Merge should compose nicely. Since merge fills accel info and since we fetch data from accel info, then technically we can compose things nicely.
+  
+  THAT IS IT. We do not need to make the recon in steps, we can just recon the graphs that we are merging. A true recursive approach.
+
+  The only thing that is missing is that we need to store the accelerator before adding the delays but after adding the multiplexers. This should be the "base" circuit 
+
+    
+
 */
 
 ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortInstance>* mergedMultiplexers,Accelerator* base,String name,AcceleratorMapping* baseToMerged,FUDeclaration* parentType,Arena* out);
@@ -1549,7 +1601,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(FUDeclaration* decl : types){
     mergedAmount += decl->MergePartitionSize();
   }
-
+  
+  printf("%.*s %d\n",UN(name),mergedAmount);
+  
   for(int i = 0; i < size; i++){
     flatten[i] = types[i]->flattenedBaseCircuit;
   }
@@ -1785,7 +1839,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   int actualMergedAmount = mergedAmount;
   mergedAmount = size; // TODO: FOR NOW
 
-
   auto Recurse = [](auto Recurse,Accelerator* accel) -> int{
     int amount = 0;
     
@@ -1914,7 +1967,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         
           for(PortInstance p : mergeMultiplexers[i]){
             trueMergeMultiplexers->Insert(MappingMapInput(result.accelToRecon,p));
-          }
+           }
           
           mergedAccelerators[toWrite] = result.accel;
           mergedMultiplexers[toWrite] = trueMergeMultiplexers;
@@ -1993,12 +2046,17 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
   
   size = recon.size;
+
+  printf("%.*s ReconSize: %d\n",UN(name),size);
   
   declInst.fixedDelayCircuit = mergedAccel;
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent,false);
+  // MARK: Causes MERGE_TwoLevels to fail if false
+  bool oldDelayCalc = true;
+  
+  FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent,oldDelayCalc);
   FillDeclarationWithDelayType(decl);
 
   decl->type = FUDeclarationType_MERGED;
@@ -2056,7 +2114,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
     decl->info.infos[i].name = EndString(globalPermanent,builder);
     
-    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,{},false);
+    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,{},oldDelayCalc);
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.SetMergeIndex(i);
     iter.accelName = decl->info.infos[i].name;
@@ -2174,13 +2232,11 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
   }
   }
-    
+
   decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
 
   FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
 
-  DEBUG_BREAK();
-  
   return decl;
 }
 
@@ -2333,3 +2389,171 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
   
   return result;
 }
+
+// ============================================================================
+// Second merge that tries to fix the problems of merge 1.
+// Need to do a proper recon from initial graphs and have a truly recursive
+// merge operation that can take merge graphs and complex modules and work
+// without recursing below the proper type.
+// Check the comment above merge.
+
+// Basically we do not recurse below the types provided.
+// We create recon and merged graph at the same time.
+// Use recons to obtain data from instance info which contains everything needed (do not need to recurse below).
+// Merge adds merged types meaning that no need to "multiple" configs. That is modules.
+
+// Problem: One reason why we care about the lower level recon graphs is because we want to be able to do delay calculations on the graphs and use those delays to affect the merged graph. If we only go to the level of the inputs then we cannot guarantee that we can do delay calculation on the recon graphs.
+
+// We can always solve this problem by keeping mappings along the declaration info chain that always map to the lowest graph.
+
+// Lets start by solving the problem of the recons and the merged graph and work from there.
+
+AcceleratorMapping* CreateMapping(int inputId,int outputId,Arena* out){
+  AcceleratorMapping* mapping = PushStruct<AcceleratorMapping>(out);
+
+  mapping->firstId = inputId;
+  mapping->secondId = outputId;
+  mapping->inputMap = PushTrieMap<PortInstance,PortInstance>(out);
+  mapping->outputMap = PushTrieMap<PortInstance,PortInstance>(out);
+
+  return mapping;
+}
+
+MergeAndRecons* StartMerge(int amountOfRecons,Array<Accelerator*> inputs){
+  Arena arenaInst = InitArena(Megabyte(32));
+
+  TEMP_REGION(temp,&arenaInst);
+  MergeAndRecons* result = PushStruct<MergeAndRecons>(&arenaInst);
+
+  result->arenaInst = arenaInst;
+  result->arena = &result->arenaInst;
+  result->mergedGraph = CreateAccelerator(S8("Merged"),AcceleratorPurpose_MERGE);
+  result->recons = PushArray<Accelerator*>(result->arena,amountOfRecons);
+  result->reconToMerged = PushArray<AcceleratorMapping*>(result->arena,amountOfRecons);
+
+  for(int i = 0; i < amountOfRecons; i++){
+    result->recons[i] = CreateAccelerator(PushString(temp,"Recon%d",i),AcceleratorPurpose_RECON);
+    result->reconToMerged[i] = CreateMapping(result->recons[i]->id,result->mergedGraph->id,result->arena);
+    result->inputToRecon[i] = CreateMapping(inputs[i]->id,result->recons[i]->id,result->arena);
+  }
+
+  return result;
+}
+
+void DebugOutputGraphs(MergeAndRecons* recons,String folderName){
+  TEMP_REGION(temp,recons->arena);
+
+  {
+    String mergedPath = PushDebugPath(temp,folderName,recons->mergedGraph->name);
+    OutputDebugDotGraph(recons->mergedGraph,mergedPath);
+  }
+  
+  for(Accelerator* recon : recons->recons){
+    String reconPath = PushDebugPath(temp,folderName,recon->name);
+    OutputDebugDotGraph(recons->mergedGraph,reconPath);
+  }
+}
+
+PortInstance MapOrCreateNode(Accelerator* accel,AcceleratorMapping* map,PortInstance node){
+  FUInstance* inst = node.inst;
+
+  FUInstance* mapped = MappingMapNode(map,inst);
+  if(!mapped){
+    
+  }
+}
+
+void AddEdgeSingle(MergeAndRecons* recons,Edge inputEdge,int reconBase){
+  Accelerator* recon = recons->recons[reconBase];
+  Accelerator* merged = recons->mergedGraph;
+  AcceleratorMapping* reconToMerged = recons->reconToMerged[reconBase];
+  AcceleratorMapping* inputToRecon  = recons->inputToRecon[reconBase];
+
+  int delay = inputEdge.delay;
+  
+  PortInstance reconOut  = MapOrCreateNode(recon,inputToRecon,inputEdge.out);
+  PortInstance reconIn   = MapOrCreateNode(recon,inputToRecon,inputEdge.in);
+
+  PortInstance mergedOut = MapOrCreateNode(merged,reconToMerged,reconOut);
+  PortInstance mergedIn  = MapOrCreateNode(merged,reconToMerged,reconIn);
+
+  ConnectUnits(reconOut,reconIn,delay);
+  ConnectUnits(mergedOut,mergedIn,delay);
+}
+
+#if 1
+FUDeclaration* Merge2(Array<FUDeclaration*> types,
+                     String name,Array<SpecificMergeNode> specifics,
+                     MergeModifier modifier,MergingStrategy strat){
+  
+  TEMP_REGION(temp,nullptr);
+  TEMP_REGION(temp2,temp);
+
+  Assert(types.size >= 2);
+
+  strat = MergingStrategy::CONSOLIDATION_GRAPH;
+
+  int size = types.size;
+  Array<Accelerator*> flatten = PushArray<Accelerator*>(temp,size);
+  for(int i = 0; i < size; i++){
+    flatten[i] = types[i]->flattenedBaseCircuit;
+  }
+
+#if 0
+  int mergedAmount = 0;
+  for(FUDeclaration* decl : types){
+    mergedAmount += decl->MergePartitionSize();
+  }
+#endif
+  
+  MergeAndRecons* merged = StartMerge(size,flatten);
+  
+#if 0
+  // First recon and original graph
+  EdgeIterator iter = IterateEdges(flatten[0]); 
+
+  while(iter.HasNext()){
+    Edge edge = iter.Next();
+
+    AddEdgeSingle(merged,edge,0);
+  }
+  
+  for(int i = 1; i < size; i++){
+    String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
+    GraphMapping map = CalculateMergeMapping(merged->mergedGraph,flatten[i],{},strat,folderName,temp);
+
+    EdgeIterator iter = IterateEdges(flatten[i]);
+    while(iter.HasNext()){
+      Edge edge = iter.Next();
+
+      AddEdgeMappingSingle(merged,edge,&map,i);
+    }
+  }
+#endif
+  
+  DebugOutputGraphs(merged,S8("MergeTest"));
+
+#if 0
+  for(int i = 1; i < size; i++){
+    String folderName = PushString(temp,"%.*s/Merge_%d",UNPACK_SS(name),i);
+    
+    GraphMapping map = {};
+
+    if(modifier & MergeModifier_NO_UNIT_MERGED){
+      map = InitGraphMapping(temp); // Empty map
+    } else { 
+      map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp2);
+    }
+    
+    MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,folderName,temp2);
+
+    OutputDebugDotGraph(res.result,STRING(StaticFormat("result%d.dot",i)));
+
+    flattenToMergedAccel[i] = res.map2;
+    mergedAccel = res.result;
+  }
+
+#endif
+}
+
+#endif

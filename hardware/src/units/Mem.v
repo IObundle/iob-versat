@@ -111,6 +111,7 @@
    assign out1 = (running & (|testDelay1) == 0) ? outB_reg : 0;
 
    // Delay done by 3 cycles so that pc-emul matches simulation
+   // since pc-emul external memories stop working when the accelerator stops running in pc-emul.
    reg doneA_1,doneB_1;
    reg doneA_2,doneB_2;
    reg doneA_3,doneB_3;

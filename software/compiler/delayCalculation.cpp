@@ -508,8 +508,8 @@ GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> or
       edgeArray[edgeIndex].color = Color_BLACK;
     }
     edgeArray[edgeIndex].content = PushString(out,"%d",edgeLatency.value);
-    edgeArray[edgeIndex].first = nodeArray[top.GetUnit(edge.outIndex)->localOrder].name;
-    edgeArray[edgeIndex].second = nodeArray[top.GetUnit(edge.inIndex)->localOrder].name;
+    edgeArray[edgeIndex].firstNode = nodeArray[top.GetUnit(edge.outIndex)->localOrder].name;
+    edgeArray[edgeIndex].secondNode = nodeArray[top.GetUnit(edge.inIndex)->localOrder].name;
   }
     
   GraphPrintingContent result = {};

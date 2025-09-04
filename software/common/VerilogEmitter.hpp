@@ -345,6 +345,7 @@ struct VEmitter{
   void StartInstance(String moduleName,const char* instanceName);
   void InstanceParam(const char* paramName,int paramValue);
   void InstanceParam(const char* paramName,const char* paramValue);
+  void InstanceParam(const char* paramName,SymbolicExpression* sym);
   void PortConnect(const char* portName,const char* connectionExpr);
   void PortConnect(String portName,String connectionExpr);
   void PortConnectIndexed(const char* portFormat,int index,const char* connectionExpr);

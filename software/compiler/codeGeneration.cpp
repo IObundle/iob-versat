@@ -901,15 +901,32 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   }
   
   // TODO: We cannot do this as the parameters must depend on the specific unit.
-#if 0
+#if 1
   m->StartGroup("ExternalMemory");
-  for(int i = 0; i <  decl->externalMemory.size; i++){
-    ExternalMemoryInterface ext = decl->externalMemory[i];
-    if(ext.type == ExternalMemoryType::ExternalMemoryType_DP){
-      m->AddInterfaceIndexed(INT_DPFormat,i,S8("ext_dp"));
-    } else {
-      m->AddInterfaceIndexed(INT_TPFormat,i,S8("ext_2p"));
-    }
+  for(int i = 0; i <  decl->externalMemorySymbol.size; i++){
+    ExternalMemorySymbolic ext = decl->externalMemorySymbol[i];
+    FULL_SWITCH(ext.type){
+    case ExternalMemoryType_DP: {
+      m->AddPortIndexed("addr_%d_port_0",i,ext.dp[0].bitSize,WireDir_OUTPUT);
+      m->AddPortIndexed("out_%d_port_0",i,ext.dp[0].dataSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("in_%d_port_0",i,ext.dp[0].dataSizeIn,WireDir_INPUT);
+      m->AddPortIndexed("enable_%d_port_0",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("write_%d_port_0",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("addr_%d_port_1",i,ext.dp[1].bitSize,WireDir_OUTPUT);
+      m->AddPortIndexed("out_%d_port_1",i,ext.dp[1].dataSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("in_%d_port_1",i,ext.dp[1].dataSizeIn,WireDir_INPUT);
+      m->AddPortIndexed("enable_%d_port_1",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("write_%d_port_1",i,SYM_one,WireDir_OUTPUT);
+    } break;
+    case ExternalMemoryType_2P: {
+      m->AddPortIndexed("addr_out_%d",i,ext.tp.bitSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("addr_in_%d",i,ext.tp.bitSizeIn,WireDir_OUTPUT);
+      m->AddPortIndexed("write_%d",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("read_%d",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("data_in_%d",i,ext.tp.dataSizeIn,WireDir_INPUT);
+      m->AddPortIndexed("data_out_%d",i,ext.tp.dataSizeOut,WireDir_OUTPUT);
+    } break;
+  }
   }
   m->EndGroup();
 #endif
@@ -2786,9 +2803,9 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         
         String typeName = unit->structInfo->name;
 
-        // TODO: We need to do this check beforehand. At this point we should already guarantee that everything is possible.
+        // TODO: We need to do this check beforehand. Backend code should assume that everything is working correctly and that the data is all good.
         if((int) unit->decl->supportedAddressGenType == 0){
-          printf("[USER_ERROR] Unit '%.*s' does not support address gen\n",UNPACK_SS(unit->decl->name));
+          printf("[USER_ERROR] Unit '%.*s' does not support address gen '%.*s'\n",UN(unit->decl->name),UN(addressGenName));
           exit(-1);
         }
 
@@ -4303,7 +4320,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
 
   if(containsMemories){
     for(int i = 0; i <  decl->externalMemory.size; i++){
-      ExternalMemoryInterface ext  =  decl->externalMemory[i];
+      ExternalMemorySymbolic ext  =  decl->externalMemorySymbol[i];
       FULL_SWITCH(ext.type){
       case ExternalMemoryType_DP: {
         m->StartInstance("my_dp_asym_ram",SF("ext_dp_%d",i));
