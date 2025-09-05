@@ -175,7 +175,7 @@ struct MergeAndRecons{
 // Merge and recons simultaneous handling
 
 MergeAndRecons* StartMerge(int amountOfRecons,Array<Accelerator*> inputs);
-void DebugOutputGraphs(MergeAndRecons* recons,String folderName);
+void DebugOutputGraphs(MergeAndRecons* recons,String stageName);
 
 void AddEdgeSingle(MergeAndRecons* recons,Edge inputEdge,int reconBase);
 void AddEdgeMappingSingle(MergeAndRecons* recons,Edge inputEdge,GraphMapping* map,int reconBase);
@@ -214,12 +214,11 @@ FUDeclaration* MergeAccelerators(FUDeclaration* accel1,FUDeclaration* accel2,Str
 
 FUDeclaration* Merge(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                     MergeModifier = MergeModifier_NO_UNIT_MERGED,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
-
+                     MergeModifier modifier = MergeModifier_NONE,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 
 FUDeclaration* Merge2(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
-                      MergeModifier modifier,MergingStrategy strat);
+                      MergeModifier modifier = MergeModifier_NONE,MergingStrategy strat = MergingStrategy::CONSOLIDATION_GRAPH);
 
 /*
 

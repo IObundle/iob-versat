@@ -4,7 +4,7 @@
 
 String UniqueRepr(FUInstance* inst,Arena* out){
   FUDeclaration* decl = inst->declaration;
-  String str = PushString(out,"%.*s_%.*s_%d",UNPACK_SS(decl->name),UNPACK_SS(inst->name),inst->id);
+  String str = PushString(out,"%.*s_%.*s_%d",UN(decl->name),UN(inst->name),inst->id);
   return str;
 }
 
@@ -26,13 +26,13 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
     builder->PushString("Name:");
   }
   if(name){
-    builder->PushString("%.*s",UNPACK_SS(inst->name));
+    builder->PushString("%.*s",UN(inst->name));
   }
   if(expl && type){
     builder->PushString("\\nType:");
   }
   if(type){
-    builder->PushString("%.*s",UNPACK_SS(inst->declaration->name));
+    builder->PushString("%.*s",UN(inst->declaration->name));
   }
   if(expl && id){
     builder->PushString("\\nId:");
@@ -63,7 +63,7 @@ String Repr(FUDeclaration* decl,Arena* out){
   if(decl == nullptr){
     return PushString(out,"(null)");
   }
-  String res = PushString(out,"%.*s",UNPACK_SS(decl->name));
+  String res = PushString(out,"%.*s",UN(decl->name));
   return res;
 }
 

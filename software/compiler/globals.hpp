@@ -40,7 +40,6 @@ struct Options{
   bool architectureHasDatabus;
   bool useFixedBuffers;
   bool generateFSTFormat;
-  bool disableDelayPropagation;
   bool useDMA;
   bool exportInternalMemories;
   
@@ -98,6 +97,8 @@ extern SymbolicExpression* SYM_dataStrobeW;
 //       important this is. Memory interfaces are kinda limitted, right?
 extern Array<VerilogPortSpec> INT_IOb;
 extern Array<VerilogPortSpec> INT_IObFormat;
+
+// NOTE: We cannot have generic interfaces for this because the size of wires can change
 //extern Array<VerilogPortSpec> INT_DPFormat;
 //extern Array<VerilogPortSpec> INT_TPFormat;
 

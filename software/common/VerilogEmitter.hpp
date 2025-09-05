@@ -271,13 +271,14 @@ struct VEmitter{
   void InsertPortConnect(VAST* decl);
   VAST* FindFirstVASTType(VASTType type,bool errorIfNotFound = true);
 
-  void Timescale(const char* timeUnit,const char* timePrecision);
-  void Include(const char* name);
+  //void Timescale(const char* timeUnit,const char* timePrecision);
+  void Timescale(String timeUnit,String timePrecision);
+  void Include(String name);
   
   // Module definition
   void Module(String name);
-  void ModuleParam(const char* name,int value); // A global param of a module
-  void ModuleParam(const char* name,String value);
+  void ModuleParam(String name,int value); // A global param of a module
+  void ModuleParam(String name,String value);
   void EndModule();
 
   void Task(String name);
@@ -287,23 +288,21 @@ struct VEmitter{
   void EndPortGroup();
 
   // TODO: We probably want to change all the bitsize to accept a SymbolicExpression
-  
-  void Input(const char* name,int bitsize = 1);
+  // TODO: We also want to remove all the const char* and only use String
   void Input(String name,int bitsize = 1);
-  void Input(const char* name,const char* expr);
-  void Input(const char* name,SymbolicExpression* expr);
+  void Input(String name,String expr);
+  void Input(String name,SymbolicExpression* expr);
   void InputIndexed(const char* format,int index,int bitsize = 1);
   void InputIndexed(const char* format,int index,const char* expression);
 
-  void Output(const char* name,int bitsize = 1);
-  void Output(const char* name,const char* expr);
   void Output(String name,int bitsize = 1);
+  void Output(String name,String expr);
   void OutputIndexed(const char* format,int index,int bitsize = 1);
   void OutputIndexed(const char* format,int index,const char* expression);
 
   // Module declarations
-  void Wire(const char* name,int bitsize = 1);
-  void Wire(const char* name,const char* bitsizeExpr);
+  void Wire(String name,int bitsize = 1);
+  void Wire(String name,String bitsizeExpr);
   void WireArray(const char* name,int count,int bitsize = 1);
   void WireArray(const char* name,int count,const char* bitsizeExpr);
   void WireAndAssignJoinBlock(const char* name,const char* joinElem,int bitsize = 1);

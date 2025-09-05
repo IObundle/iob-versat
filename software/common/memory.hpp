@@ -7,6 +7,19 @@
 
 #include "utilsCore.hpp"
 
+#if defined(__SANITIZE_ADDRESS__)
+#include <sanitizer/asan_interface.h>
+#define ASAN_POISON_MEMORY_REGION(addr, size) \
+  __asan_poison_memory_region((addr), (size))
+#define ASAN_UNPOISON_MEMORY_REGION(addr, size) \
+  __asan_unpoison_memory_region((addr), (size))
+#else
+#define ASAN_POISON_MEMORY_REGION(addr, size) \
+  ((void)(addr), (void)(size))
+#define ASAN_UNPOISON_MEMORY_REGION(addr, size) \
+  ((void)(addr), (void)(size))
+#endif 
+
 struct Arena;
 extern Arena* contextArenas[2];
 // Pass nullptr to get one arena, pass an arena to get a guaranteed different arena to the one passed
@@ -14,6 +27,7 @@ extern Arena* contextArenas[2];
 // Check the TEMP_REGION macros and their usage to better understand how to use this approach for memory management.
 // Credit to Ryan Fleury for this technique.
 Arena* GetArena(Arena* diff);
+Arena* GetArena2(Arena* diff,Arena* diff2);
 
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
@@ -42,8 +56,6 @@ struct Arena{
 Arena InitArena_(size_t size,const char* file,int line);
 
 void AlignArena(Arena* arena,int alignment);
-Arena SubArena(Arena* arena,size_t size);
-void PopToSubArena(Arena* top,Arena subArena);
 void Reset(Arena* arena);
 void Free(Arena* arena);
 size_t MemoryUsage(Arena* arena);
@@ -103,7 +115,11 @@ struct ArenaMarker{
 #define TEMP_REGION(NAME,OUT_ARENA) \
   Arena* NAME = GetArena(OUT_ARENA); \
   BLOCK_REGION(NAME)
- 
+
+#define TEMP_REGION2(NAME,OUT_ARENA,OUT_ARENA2) \
+  Arena* NAME = GetArena2(OUT_ARENA,OUT_ARENA2); \
+  BLOCK_REGION(NAME)
+
 // For now let PushArray also zero out
 template<typename T>
 Array<T> PushArray(Arena* arena,int size){AlignArena(arena,alignof(T)); Array<T> res = {}; res.size = size; res.data = (T*) PushBytes(arena,sizeof(T) * size); Memset(res,(T){}); return res;};

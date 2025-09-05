@@ -58,7 +58,7 @@ bool CurrentlyDebugging(){
 
   buf[amount] = '\0';
 
-  Tokenizer tok(STRING(buf,amount),":",{});
+  Tokenizer tok(String(buf,amount),":",{});
   while(!tok.Done()){
     Token val = tok.NextToken();
 
@@ -167,9 +167,7 @@ static Addr2LineConnection StartAddr2Line(){
 }
 
 // Note: We cannot use Assert here otherwise we might enter a infinite loop. Only the C assert (and we should make it debug only, all this code must be signal safe.)
-static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
-  BLOCK_REGION(temp);
-
+static Array<Location> CollectStackTrace(Arena* out){
   void* addrBuffer[100];
   
   Addr2LineConnection connection = StartAddr2Line();
@@ -182,7 +180,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   }
   defer{ free(strings); };
   
-  Array<size_t> fileAddresses = PushArray<size_t>(temp,lines);
+  Array<size_t> fileAddresses = PushArray<size_t>(out,lines);
   
   for(int i = 0; i < lines; i++){
     Dl_info info;
@@ -194,7 +192,7 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
   
   //printf("Lines: %d\n",lines);
   for(int i = 0; i < lines; i++){
-    String line = STRING(strings[i]);
+    String line = strings[i];
     Tokenizer tok(line,"()",{});
     String first = tok.NextFindUntil("(").value();
 
@@ -202,9 +200,9 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
       continue;
     }
     
-    region(temp){
-      String toWrite = PushString(temp,"%lx\n",fileAddresses[i]);
-      //printf("%.*s\n",UNPACK_SS(toWrite));
+    region(out){
+      String toWrite = PushString(out,"%lx\n",fileAddresses[i]);
+      //printf("%.*s\n",UN(toWrite));
       int written = write(con->writePipe,toWrite.data,toWrite.size);
       if(written != toWrite.size){
         fprintf(stderr,"Failed to write: (%d/%d)\n",written,toWrite.size);
@@ -284,19 +282,16 @@ static Array<Location> CollectStackTrace(Arena* out,Arena* temp){
 }
 
 void PrintStacktrace(){
-  const String rootPath = STRING(ROOT_PATH); // ROOT_PATH must have the pathname to the top of the source code folder (the largest subpath common to all code files)
+  const String rootPath = ROOT_PATH; // ROOT_PATH must have the pathname to the top of the source code folder (the largest subpath common to all code files)
 
   BLOCK_REGION(debugArena);
-
-  Arena tempInst = SubArena(debugArena,Kilobyte(128));
-  Arena* temp = &tempInst;
   
-  Array<Location> traces = CollectStackTrace(debugArena,temp);
+  Array<Location> traces = CollectStackTrace(debugArena);
   int size = traces.size;
   
-  Array<String> canonical = PushArray<String>(temp,size);
+  Array<String> canonical = PushArray<String>(debugArena,size);
   for(int i = 0; i < size; i++){
-    canonical[i] = GetAbsolutePath(traces[i].fileName,temp);
+    canonical[i] = GetAbsolutePath(traces[i].fileName,debugArena);
   }
 
 #if 1
@@ -312,19 +307,19 @@ void PrintStacktrace(){
     }
     maxSize = std::max(maxSize,str.size);
 
-    //printf("%.*s\n",UNPACK_SS(str));
+    //printf("%.*s\n",UN(str));
   }
 #endif
 
   for(int i = 0; i < size; i++){
     String str = canonical[i];
-    fprintf(stderr,"#%-2d %.*s",i,UNPACK_SS(str));
+    fprintf(stderr,"#%-2d %.*s",i,UN(str));
 
     for(int j = 0; j < maxSize - str.size; j++){
       fprintf(stderr," ");
     }
 
-    fprintf(stderr," %.*s",UNPACK_SS(traces[i].functionName));
+    fprintf(stderr," %.*s",UN(traces[i].functionName));
     fprintf(stderr,":%d\n",traces[i].line);
   }
 }

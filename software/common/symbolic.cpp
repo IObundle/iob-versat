@@ -157,7 +157,7 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
   //bind = true;
   switch(expr->type){
   case SymbolicExpressionType_FUNC: {
-    builder->PushString("%.*s(",UNPACK_SS(expr->name));
+    builder->PushString("%.*s(",UN(expr->name));
 
     bool first = true;
     for(SymbolicExpression* terms : expr->terms){
@@ -171,7 +171,7 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
     builder->PushString(")");
   } break;
   case SymbolicExpressionType_VARIABLE: {
-    builder->PushString("%.*s",UNPACK_SS(expr->variable));
+    builder->PushString("%.*s",UN(expr->variable));
   } break;
   case SymbolicExpressionType_LITERAL: {
     builder->PushString("%d",expr->literal);
@@ -241,7 +241,7 @@ void Print(SymbolicExpression* expr,bool printNewLine){
   TEMP_REGION(temp,nullptr);
   
   String res = PushRepresentation(expr,temp);
-  printf("%.*s",UNPACK_SS(res));
+  printf("%.*s",UN(res));
 
   if(printNewLine){
     printf("\n");
@@ -274,10 +274,10 @@ static void PrintAST(SymbolicExpression* expr,int level = 0){
     printf("LIT: %d",expr->literal);
   } break;
   case SymbolicExpressionType_VARIABLE: {
-    printf("VAR: %.*s",UNPACK_SS(expr->variable));
+    printf("VAR: %.*s",UN(expr->variable));
   } break;
   case SymbolicExpressionType_FUNC: {
-    printf("FUNC: %.*s {\n",UNPACK_SS(expr->name));
+    printf("FUNC: %.*s {\n",UN(expr->name));
     for(SymbolicExpression* child : expr->terms){
       PrintAST(child,level + 1);
       printf("\n");
@@ -2161,24 +2161,24 @@ void TestSymbolic(){
   TEMP_REGION(temp,nullptr);
 
   TestCase cases[] = {
-    {STRING("a+b+c+d"),STRING("a+b+c+d")},
-    {STRING("a-a-b-b-2*c-c"),STRING("-(2*b)-(3*c)")},
-    {STRING("a+a+b+b+2*c+c"),STRING("2*a+2*b+3*c")},
-    {STRING("a*b + a * b"),STRING("2*a*b")},
-    {STRING("-a * b - a * b"),STRING("-(2*a*b)")},
-    {STRING("-((1*x)*(3-1))+1*y"),STRING("-(2*x)+y")},
-    {STRING("-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))"),STRING("-(a)-(b)")},
-    {STRING("(a-b)*(a-b)"),STRING("a*a-(2*a*b)+b*b")},
-    {STRING("a*b + a*b + 2*a*b"),STRING("4*a*b")},
-    {STRING("1+2+3+1*20*30"),STRING("606")},
-    {STRING("a * (x + y)"),STRING("a*x+a*y")},
-    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-(y)")},
-    {STRING("-6*(4-1)+5"),STRING("-13")},
-    {STRING("-(1*(x-1))+0"),STRING("-(x)+1")},
-    {STRING("ALIGN(1,2)"),STRING("ALIGN(1,2)")},
-    {STRING("1/x * y"),STRING("y/x")},
-    {STRING("x/x"),STRING("1")},
-    {STRING("(x*y)/x"),STRING("y")},
+    {"a+b+c+d","a+b+c+d"},
+    {"a-a-b-b-2*c-c","-(2*b-(3*c))"},
+    {"a+a+b+b+2*c+c","2*a+2*b+3*c"},
+    {"a*b + a * b","2*a*b"},
+    {"-a * b - a * b","-(2*a*b)"},
+    {"-((1*x)*(3-1))+1*y","-(2*x+y)"},
+    {"-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))","-(a)-(b)"},
+    {"(a-b)*(a-b)","a*a-(2*a*b)+b*b"},
+    {"a*b + a*b + 2*a*b","4*a*b"},
+    {"1+2+3+1*20*30","606"},
+    {"a * (x + y)","a*x+a*y"},
+    {"(0+2*x)+(2*a-1)*y","2*x+2*a*y-(y)"},
+    {"-6*(4-1)+5","-13"},
+    {"-(1*(x-1))+0","-(x)+1"},
+    {"ALIGN(1,2)","ALIGN(1,2)"},
+    {"1/x * y","y/x"},
+    {"x/x","1"},
+    {"(x*y)/x","y"},
   };
 
   bool printNormalizeProcess = true;
@@ -2202,7 +2202,7 @@ void TestSymbolic(){
       Print(normalized);
 
 #if 1
-      printf("\nExpec:%.*s\n",UNPACK_SS(c.expectedNormalized));
+      printf("\nExpec:%.*s\n",UN(c.expectedNormalized));
       PrintAST(normalized);
 
       if(printNormalizeProcess){
@@ -2461,7 +2461,7 @@ void Print(LoopLinearSum* sum,bool printNewLine){
   int size = sum->terms.size;
 
   for(int i = size - 1; i >= 0; i--){
-    printf("for %.*s ",UNPACK_SS(sum->terms[i].var));
+    printf("for %.*s ",UN(sum->terms[i].var));
     Print(sum->terms[i].loopStart);
     printf("..");
     Print(sum->terms[i].loopEnd);
@@ -2482,7 +2482,7 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum){
   int size = sum->terms.size;
 
   for(int i = size - 1; i >= 0; i--){
-    builder->PushString("for %.*s ",UNPACK_SS(sum->terms[i].var));
+    builder->PushString("for %.*s ",UN(sum->terms[i].var));
     Repr(builder,sum->terms[i].loopStart);
     builder->PushString("..");
     Repr(builder,sum->terms[i].loopEnd);

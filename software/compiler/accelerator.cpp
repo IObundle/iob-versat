@@ -439,7 +439,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
       buffer = CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
       String bufferAmountString = PushString(globalPermanent,"%d",buffer->bufferAmount);
-      SetParameter(buffer,STRING("AMOUNT"),bufferAmountString);
+      SetParameter(buffer,"AMOUNT",bufferAmountString);
     } else {
       String bufferName = PushString(globalPermanent,"buffer%d",buffersInserted);
 
@@ -451,7 +451,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
 
     InsertUnit(accel,edge.units[0],edge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
 
-    OutputDebugDotGraph(accel,STRING(StaticFormat("fixDelay_%d.dot",buffersInserted)),buffer);
+    OutputDebugDotGraph(accel,SF("fixDelay_%d.dot",buffersInserted),buffer);
 
     buffersInserted += 1;
   }
@@ -697,7 +697,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
   res.delayBitsStart = staticBitsStart + staticBits;
 
   SymbolicExpression* total = SymbolicAdd(configExpr,staticSize,temp);
-  total = SymbolicAdd(total,SymbolicMult(PushLiteral(temp,res.nDelays),PushVariable(temp,S8("DELAY_W")),temp),temp);
+  total = SymbolicAdd(total,SymbolicMult(PushLiteral(temp,res.nDelays),PushVariable(temp,"DELAY_W"),temp),temp);
   
   res.configurationBitsExpr = Normalize(total,out);
   
@@ -985,7 +985,7 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay){
 }
 
 String GlobalStaticWireName(StaticId id,Wire w,Arena* out){
-  String res = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(id.parent->name),UNPACK_SS(id.name),UNPACK_SS(w.name));
+  String res = PushString(out,"%.*s_%.*s_%.*s",UN(id.parent->name),UN(id.name),UN(w.name));
   return res;
 }
 
@@ -1353,14 +1353,14 @@ void MappingPrintAll(AcceleratorMapping* map){
   
   printf("Input map:\n");
   for(Pair<PortInstance,PortInstance> p : map->inputMap){
-    printf("%.*s:%d(%d) -> %.*s:%d(%d)\n",UNPACK_SS(p.first.inst->name),p.first.port,p.first.inst->id,
-                                         UNPACK_SS(p.second.inst->name),p.second.port,p.second.inst->id);
+    printf("%.*s:%d(%d) -> %.*s:%d(%d)\n",UN(p.first.inst->name),p.first.port,p.first.inst->id,
+                                         UN(p.second.inst->name),p.second.port,p.second.inst->id);
   }
 
   printf("Output map:\n");
   for(Pair<PortInstance,PortInstance> p : map->outputMap){
-    printf("%.*s:%d(%d) -> %.*s:%d(%d)\n",UNPACK_SS(p.first.inst->name),p.first.port,p.first.inst->id,
-                                         UNPACK_SS(p.second.inst->name),p.second.port,p.second.inst->id);
+    printf("%.*s:%d(%d) -> %.*s:%d(%d)\n",UN(p.first.inst->name),p.first.port,p.first.inst->id,
+                                         UN(p.second.inst->name),p.second.port,p.second.inst->id);
   }
 }
 
@@ -1480,7 +1480,7 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
           continue;
         }
 
-        String newName = PushString(globalPermanent,"%.*s_%.*s",UNPACK_SS(inst->name),UNPACK_SS(circuitInst->name));
+        String newName = PushString(globalPermanent,"%.*s_%.*s",UN(inst->name),UN(circuitInst->name));
 
         // We are copying the instance but some differences are gonna happen in relation to static and config sharing. 
         FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
@@ -1686,7 +1686,7 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
     compositeInstances.Clear();
   }
 
-  OutputDebugDotGraph(newAccel,STRING("flatten.dot"));
+  OutputDebugDotGraph(newAccel,"flatten.dot");
   
   toRemove.Clear(true);
   compositeInstances.Clear(true);
@@ -1700,9 +1700,9 @@ void PrintSubMappingInfo(SubMap* info){
   for(Pair<SubMappingInfo,PortInstance> f : info){
     SubMappingInfo map = f.first;
     PortInstance inst = f.second;
-    printf("%.*s",UNPACK_SS(map.subDeclaration->name));
-    printf("::%.*s:%d %s\n",UNPACK_SS(map.higherName),map.subPort,map.isInput ? "in" : "out");
-    printf("%.*s:%d\n",UNPACK_SS(inst.inst->name),inst.port);
+    printf("%.*s",UN(map.subDeclaration->name));
+    printf("::%.*s:%d %s\n",UN(map.higherName),map.subPort,map.isInput ? "in" : "out");
+    printf("%.*s:%d\n",UN(inst.inst->name),inst.port);
     printf("\n");
   }
 }

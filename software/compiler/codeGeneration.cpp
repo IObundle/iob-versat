@@ -25,8 +25,8 @@ namespace fs = std::filesystem;
 
 String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out){
   TEMP_REGION(temp,out);
-  fs::path source(StaticFormat("%.*s",UNPACK_SS(sourcePath)));
-  fs::path target(StaticFormat("%.*s",UNPACK_SS(targetPath)));
+  fs::path source(StaticFormat("%.*s",UN(sourcePath)));
+  fs::path target(StaticFormat("%.*s",UN(targetPath)));
 
   fs::path res = fs::relative(target,source);
 
@@ -157,7 +157,7 @@ String GenerateVerilogParameterization(FUInstance* inst,Arena* out){
     if(insertedOnce){
       builder->PushString(",");
     }
-    builder->PushString(".%.*s(%.*s)",UNPACK_SS(parameter.name),UNPACK_SS(v.val));
+    builder->PushString(".%.*s(%.*s)",UN(parameter.name),UN(v.val));
     insertedOnce = true;
   }
   builder->PushString(")");
@@ -388,10 +388,10 @@ static String OutputName(Pool<FUInstance>& instances,PortInstance node,Arena* ou
     return PushString(out,"in%d",inst->portIndex);
   }
   if(decl->IsCombinatorialOperation()){
-    return PushString(out,"comb_%.*s_%d",UNPACK_SS(inst->name),inst->id);
+    return PushString(out,"comb_%.*s_%d",UN(inst->name),inst->id);
   }
   if(decl->IsSequentialOperation()){
-    return PushString(out,"seq_%.*s_%d",UNPACK_SS(inst->name),inst->id);
+    return PushString(out,"seq_%.*s_%d",UN(inst->name),inst->id);
   }
     
   return PushString(out,"output_%d_%d",id,node.port);
@@ -400,11 +400,11 @@ static String OutputName(Pool<FUInstance>& instances,PortInstance node,Arena* ou
 void EmitCombOperations(VEmitter* m,Pool<FUInstance> instances){
   TEMP_REGION(temp,m->arena);
 
-  auto Format = [](const char* format,Array<String> args,Arena* out){
+  auto Format = [](String format,Array<String> args,Arena* out){
     TEMP_REGION(temp,out);
     StringBuilder* b = StartString(temp);
     
-    Tokenizer tok(STRING(format),"{}",{});
+    Tokenizer tok(format,"{}",{});
     while(!tok.Done()){
       Opt<Token> simpleText = tok.PeekFindUntil("{");
 
@@ -444,7 +444,7 @@ void EmitCombOperations(VEmitter* m,Pool<FUInstance> instances){
   if(combOps){
     for(FUInstance* node : instances){
       if(node->declaration->IsCombinatorialOperation()){
-        m->Reg(SF("comb_%.*s_%d",UNPACK_SS(node->name),node->id),S8("DATA_W"));
+        m->Reg(SF("comb_%.*s_%d",UN(node->name),node->id),"DATA_W");
       }
     }
 
@@ -453,7 +453,7 @@ void EmitCombOperations(VEmitter* m,Pool<FUInstance> instances){
       for(FUInstance* node : instances){
         if(node->declaration->IsCombinatorialOperation()){
           int size = node->declaration->NumberInputs();
-          String identifier = PushString(temp,"comb_%.*s_%d",UNPACK_SS(node->name),node->id);
+          String identifier = PushString(temp,"comb_%.*s_%d",UN(node->name),node->id);
             
           Array<String> args = PushArray<String>(temp,size);
           for(int i = 0; i < size; i++){
@@ -486,7 +486,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
       continue;
     }
 
-    m->StartInstance(decl->name,SF("%.*s_%d",UNPACK_SS(inst->name),instIndex));
+    m->StartInstance(decl->name,SF("%.*s_%d",UN(inst->name),instIndex));
 
     Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
     for(Pair<String,SymbolicExpression**> p : params){
@@ -497,7 +497,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
     }
     if(decl->memoryMapBits.has_value()){
       SymbolicExpression* expr = PushLiteral(temp,decl->memoryMapBits.value());
-      params->Insert(S8("ADDR_W"),expr);
+      params->Insert("ADDR_W",expr);
     }
     
     for(int i = 0; i < inst->outputs.size; i++){
@@ -520,12 +520,12 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
     // Configs and dealing with static configs if the unit is static
     if(inst->isStatic){
       for(Wire w : decl->configs){
-        m->PortConnect(w.name,PushString(temp,"%.*s_%.*s_%.*s",UNPACK_SS(module->name),UNPACK_SS(inst->name),UNPACK_SS(w.name)));
+        m->PortConnect(w.name,PushString(temp,"%.*s_%.*s_%.*s",UN(module->name),UN(inst->name),UN(w.name)));
       }
     } else {
       Array<int> ind = wireIndexByInstanceGood[instIndex];
       for(int i = 0; i < ind.size; i++){
-        m->PortConnect(PushString(temp,"%.*s",UNPACK_SS(decl->configs[i].name)),configs[ind[i]].name);
+        m->PortConnect(PushString(temp,"%.*s",UN(decl->configs[i].name)),configs[ind[i]].name);
       }
     }
 
@@ -533,7 +533,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
     for(Pair<StaticId,StaticData*> p : decl->staticUnits){
       StaticId id = p.first;
       for(Wire w : p.second->configs){
-        String wireStaticName = PushString(temp,"%.*s_%.*s_%.*s",UNPACK_SS(id.parent->name),UNPACK_SS(id.name),UNPACK_SS(w.name));
+        String wireStaticName = PushString(temp,"%.*s_%.*s_%.*s",UN(id.parent->name),UN(id.name),UN(w.name));
           
         m->PortConnect(wireStaticName,wireStaticName);
       }
@@ -646,7 +646,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
       continue;
     }
 
-    m->StartInstance(decl->name,SF("%.*s_%d",UNPACK_SS(inst->name),instIndex));
+    m->StartInstance(decl->name,SF("%.*s_%d",UN(inst->name),instIndex));
 
     Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
     for(Pair<String,SymbolicExpression**> p : params){
@@ -657,7 +657,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
     }
     if(decl->memoryMapBits.has_value()){
       SymbolicExpression* expr = PushLiteral(temp,decl->memoryMapBits.value());
-      params->Insert(S8("ADDR_W"),expr);
+      params->Insert("ADDR_W",expr);
     }
     
     for(int i = 0; i < inst->outputs.size; i++){
@@ -693,7 +693,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
     for(Pair<StaticId,StaticData*> p : decl->staticUnits){
       StaticId id = p.first;
       for(Wire w : p.second->configs){
-        String wireStaticName = PushString(temp,"%.*s_%.*s_%.*s",UNPACK_SS(id.parent->name),UNPACK_SS(id.name),UNPACK_SS(w.name));
+        String wireStaticName = PushString(temp,"%.*s_%.*s_%.*s",UN(id.parent->name),UN(id.name),UN(w.name));
           
         m->PortConnect(wireStaticName,wireStaticName);
       }
@@ -705,7 +705,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
       String repr = PushRepresentation(delayExpr,temp);
 
       m->PortConnectIndexed("delay%d",i,PushString(temp,"configdata[(%.*s)+:DELAY_W]",UN(repr)));
-      delayExpr = Normalize(SymbolicAdd(delayExpr,PushVariable(temp,S8("DELAY_W")),temp),temp);
+      delayExpr = Normalize(SymbolicAdd(delayExpr,PushVariable(temp,"DELAY_W"),temp),temp);
     }
     
     // State
@@ -882,7 +882,7 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
 
   m->StartGroup("Databus");
   for(int i = 0; i < decl->nIOs; i++){
-    m->AddInterfaceIndexed(INT_IObFormat,i,S8(""));
+    m->AddInterfaceIndexed(INT_IObFormat,i,"");
   }
   m->EndGroup();
 
@@ -1086,7 +1086,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
       for(int i = 0; i <  memoryMasks.size; i++){
         String mask  =  memoryMasks[i];
         if(!Empty(mask)){
-          m->If(SF("addr[(%d-1) -: %d] == %d'b%.*s",module->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask)));
+          m->If(SF("addr[(%d-1) -: %d] == %d'b%.*s",module->memoryMapBits.value(),mask.size,mask.size,UN(mask)));
           m->Set(SF("memoryMappedEnable[%d]",i),"1'b1");
           m->EndIf();
         } else {
@@ -1129,7 +1129,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   Repr(ast,b);
   String content = EndString(temp,b);
 
-  fprintf(file,"%.*s",UNPACK_SS(content));
+  fprintf(file,"%.*s",UN(content));
 }
 
 String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInfo,Arena* out){
@@ -1145,7 +1145,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
 
   m->Include("versat_defs.vh");
 
-  m->Module(STRING("versat_configurations"));
+  m->Module("versat_configurations");
   {
     // TODO: We probably want to generate this from the parameters of the declaration, instead of hardcoded like this.
     m->ModuleParam("ADDR_W",32);
@@ -1200,14 +1200,14 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
     }
 
     // TODO: Need to handle endianess
-    auto EmitStrobe = [](VEmitter* m,const char* strobeWire,const char* leftReg,String leftIndexStart,const char* rightReg,int regSize){
+    auto EmitStrobe = [](VEmitter* m,String strobeWire,const char* leftReg,String leftIndexStart,const char* rightReg,int regSize){
       for(int i = 0; i < regSize; i += 8){
         int left = 8;
         if(i + left > regSize){
           left = regSize % 8;
         }
         
-        m->If(SF("%s[%d]",strobeWire,i/8));
+        m->If(SF("%.*s[%d]",UN(strobeWire),i/8));
         m->Set(SF("%s[(%.*s)+%d+:%d]",leftReg,UN(leftIndexStart),i,left),SF("%s[%d+:%d]",rightReg,i,left));
         m->EndIf();
       }
@@ -1423,8 +1423,8 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
 
     for(int i = 0; i < size; i++){
       entries[i].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-      entries[i].typeAndNames[0].type = STRING("void*");
-      entries[i].typeAndNames[0].name = STRING("addr");
+      entries[i].typeAndNames[0].type = "void*";
+      entries[i].typeAndNames[0].name = "addr";
     }
     return entries;
   }
@@ -1451,7 +1451,7 @@ static Array<TypeStructInfoElement> GenerateAddressStructFromType(FUDeclaration*
     }
 
     entries[index].typeAndNames = PushArray<SingleTypeStructElement>(out,1);
-    entries[index].typeAndNames[0].type = PushString(out,"%.*sAddr",UNPACK_SS(decl->name));
+    entries[index].typeAndNames[0].type = PushString(out,"%.*sAddr",UN(decl->name));
     entries[index].typeAndNames[0].name = node->name;
     index += 1;
   }
@@ -1498,7 +1498,7 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
       }
 
       ArenaList<String>* list = *res.data;
-      String name = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(in.decl->configs[i].name));
+      String name = PushString(out,"%.*s_%.*s",UN(in.fullName),UN(in.decl->configs[i].name));
 
       // Quick and dirty way of skipping same name
       bool skip = false;
@@ -1531,7 +1531,7 @@ Array<TypeStructInfoElement> ExtractStructuredConfigs(Array<InstanceInfo> info,A
     int index = 0;
     for(SingleLink<String>* ptr = list->head; ptr; ptr = ptr->next){
       String elem = ptr->elem;
-      arr[index].type = STRING("iptr");
+      arr[index].type = "iptr";
       arr[index].name = elem;
       
       index += 1;
@@ -1627,7 +1627,7 @@ StructInfo* GenerateStateStruct(AccelInfoIterator iter,Arena* out){
 
   // TODO: HACK
   static StructInfo integer = {};
-  integer.name = STRING("iptr");
+  integer.name = "iptr";
   
   auto list = PushArenaDoubleList<StructElement>(out);
   for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
@@ -1727,7 +1727,7 @@ StructInfo* GenerateConfigStructRecurse(AccelInfoIterator iter,TrieMap<StructInf
 
   // TODO: HACK
   static StructInfo integer = {};
-  integer.name = STRING("iptr");
+  integer.name = "iptr";
   
   // This function returns one struct info.
   auto list = PushArenaDoubleList<StructElement>(out);
@@ -1934,7 +1934,7 @@ Array<StructInfo*> ExtractStructs(StructInfo* structInfo,Arena* out){
       Recurse(Recurse,ptr->elem.childStruct,map);
     }
     // TODO: HACK
-    if(top->name == STRING("iptr")){
+    if(top->name == "iptr"){
       return;
     }
     
@@ -2024,14 +2024,14 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,
       }
       
       // TODO: HACK
-      if(elem.childStruct->name == STRING("iptr")){
+      if(elem.childStruct->name == "iptr"){
         if(useIptr) {
-          type->entries[index].typeAndNames[subIndex].type = STRING("iptr");
+          type->entries[index].typeAndNames[subIndex].type = "iptr";
         } else {
-          type->entries[index].typeAndNames[subIndex].type = STRING("int");
+          type->entries[index].typeAndNames[subIndex].type = "int";
         }
       } else {
-        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*s%.*s",UNPACK_SS(elem.childStruct->name),UNPACK_SS(typeString));
+        type->entries[index].typeAndNames[subIndex].type = PushString(out,"%.*s%.*s",UN(elem.childStruct->name),UN(typeString));
       }
       type->entries[index].typeAndNames[subIndex].arraySize = 0;
 
@@ -2046,9 +2046,9 @@ Array<TypeStructInfo> GenerateStructs(Array<StructInfo*> info,String typeString,
 
         // TODO: HACK
         if(useIptr) {
-          type->entries[pos].typeAndNames[0].type = STRING("iptr");
+          type->entries[pos].typeAndNames[0].type = "iptr";
         } else {
-          type->entries[pos].typeAndNames[0].type = STRING("int");
+          type->entries[pos].typeAndNames[0].type = "int";
         }
         type->entries[pos].typeAndNames[0].name = PushString(out,"padding_%d",paddingAdded++);
       }
@@ -2167,7 +2167,7 @@ static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl,String so
     Array<String> allFilenames = PushArray<String>(temp,globalOptions.verilogFiles.size);
     for(int i = 0; i <  globalOptions.verilogFiles.size; i++){
       String filepath  =  globalOptions.verilogFiles[i];
-      fs::path path(SF("%.*s",UNPACK_SS(filepath)));
+      fs::path path(SF("%.*s",UN(filepath)));
       allFilenames[i] = PushString(temp,"%s",path.filename().c_str());
     }
   
@@ -2177,7 +2177,7 @@ static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl,String so
   
     String simLoopHeader = {};
     if(simulateLoops){
-      simLoopHeader = S8("VSuperAddress.h");
+      simLoopHeader = "VSuperAddress.h";
     }
     TemplateSetString("simLoopHeader",simLoopHeader);
     TemplateSetString("hardwareFolder",generatedUnitsLocation);
@@ -2185,7 +2185,7 @@ static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl,String so
     {
       auto s = StartString(temp);
       for(String name : allFilenames){
-        s->PushString("$(HARDWARE_FOLDER)/%.*s ",UNPACK_SS(name));
+        s->PushString("$(HARDWARE_FOLDER)/%.*s ",UN(name));
       }
 
       TemplateSetString("hardwareUnits",EndString(temp,s));
@@ -2212,9 +2212,9 @@ static void OutputMakefile(String typeName,FUDeclaration* topLevelDecl,String so
 
     String traceType = {};
     if(globalDebug.outputVCD){
-      traceType = S8("--trace");
+      traceType = "--trace";
       if(globalOptions.generateFSTFormat){
-        traceType = S8("--trace-fst");
+        traceType = "--trace-fst";
       }
 
       TemplateSetString("traceType",traceType);
@@ -2239,7 +2239,7 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
 
   VEmitter* m = StartVCode(temp);
     
-  EmitIOUnpacking(m,val.nUnitsIO,INT_IOb,S8("m"));
+  EmitIOUnpacking(m,val.nUnitsIO,INT_IOb,"m");
     
   VAST* ast = EndVCode(m);
 
@@ -2318,7 +2318,7 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
 
   {
     if(globalOptions.useDMA){
-      String content = S8(R"FOO(
+      String content = R"FOO(
 reg [LEN_W-1:0] dma_length;
 reg [ADDR_W-1:0] dma_internal_address_start;
 reg [AXI_ADDR_W-1:0] dma_external_addr_start;
@@ -2387,26 +2387,26 @@ JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
   .s_addr(address),
   .s_wstrb(data_wstrb)
 );
-                           )FOO");
+                           )FOO";
         
       TemplateSetString("dmaInstantiation",content);
 
-      String content2 = S8(R"FOO(
+      String content2 = R"FOO(
          // DMA Read
          if(csr_addr == 4) begin
             if(csr_wstrb == 0) versat_rvalid <= 1'b1;
             versat_rdata <= {31'h0,!dma_running};
          end
-                            )FOO");
+                            )FOO";
 
       TemplateSetString("dmaRead",content2);
     } else {
-      String content = S8(R"FOO(
+      String content = R"FOO(
 assign data_valid = csr_valid;
 assign address = csr_addr;
 assign data_data = csr_wdata;
 assign data_wstrb = csr_wstrb;
-                           )FOO");
+                           )FOO";
         
       TemplateSetString("dmaInstantiation",content);
       TemplateSetString("dmaRead",{});
@@ -2415,7 +2415,7 @@ assign data_wstrb = csr_wstrb;
 
   {
     if(val.memoryMappedBytes == 0){
-      TemplateSetString("memoryConfigDecisionExpr",S8("1'b0"));
+      TemplateSetString("memoryConfigDecisionExpr","1'b0");
     } else {
       String content = PushString(temp,"address[%d]",val.memoryConfigDecisionBit);
       TemplateSetString("memoryConfigDecisionExpr",content);
@@ -2447,7 +2447,7 @@ assign data_wstrb = csr_wstrb;
         for(int i = 0; i <  memoryMasks.size; i++){
            String mask  =  memoryMasks[i];
           if(!Empty(mask)){
-            m->If(SF("csr_addr[(%d-1) -: %d] == %d'b%.*s",topLevelDecl->memoryMapBits.value(),mask.size,mask.size,UNPACK_SS(mask)));
+            m->If(SF("csr_addr[(%d-1) -: %d] == %d'b%.*s",topLevelDecl->memoryMapBits.value(),mask.size,mask.size,UN(mask)));
             m->Set(SF("memoryMappedEnable[%d]",i),"1'b1");
             m->EndIf();
           } else {
@@ -2622,13 +2622,13 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
         // TODO: The fact that we are doing string comparison is kinda bad.
         if(CompareString(possibleDuplicate,name)){
-          allStateStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
+          allStateStructs[i]->name = PushString(temp,"%.*s_%d",UN(possibleDuplicate),indexes[ii]++);
           break;
         }
       }
     }
 
-    stateStructs = GenerateStructs(allStateStructs,STRING("State"),false,temp);
+    stateStructs = GenerateStructs(allStateStructs,"State",false,temp);
   }
 
   // NOTE: This function also fills the instance info member of the acceleratorInfo. This function only fills the first partition, but I think that it is fine because that is the only one we use. We generate the same structs either way.
@@ -2656,13 +2656,13 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
         // TODO: The fact that we are doing string comparison is kinda bad.
         if(CompareString(possibleDuplicate,name)){
-          allStructs[i]->name = PushString(temp,"%.*s_%d",UNPACK_SS(possibleDuplicate),indexes[ii]++);
+          allStructs[i]->name = PushString(temp,"%.*s_%d",UN(possibleDuplicate),indexes[ii]++);
           break;
         }
       }
     }
 
-    structs = GenerateStructs(allStructs,STRING("Config"),true,temp);
+    structs = GenerateStructs(allStructs,"Config",true,temp);
   }
   
   TemplateSetBool("isSimple",isSimple);
@@ -2670,7 +2670,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   if(isSimple){
     FUInstance* inst = nullptr; // TODO: Should probably separate isSimple to a separate function, because otherwise we are recalculating stuff that we already know.
     for(FUInstance* ptr : accel->allocated){
-      if(CompareString(ptr->name,STRING("TOP"))){
+      if(CompareString(ptr->name,"TOP")){
         inst = ptr;
         break;
       }
@@ -2680,7 +2680,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
     Accelerator* accel = inst->declaration->fixedDelayCircuit;
     if(accel){
       for(FUInstance* ptr : accel->allocated){
-        if(CompareString(ptr->name,STRING("simple"))){
+        if(CompareString(ptr->name,"simple")){
           inst = ptr;
           break;
         }
@@ -2713,21 +2713,21 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   {
     CEmitter* m = StartCCode(temp);
-    m->Struct(STRING("AddressVArguments"));
+    m->Struct("AddressVArguments");
     for(String str : META_AddressVParameters_Members){
-      m->Member(STRING("iptr"),str);
+      m->Member("iptr",str);
     }
     m->EndBlock();
 
-    m->Struct(STRING("AddressGenArguments"));
+    m->Struct("AddressGenArguments");
     for(String str : META_AddressGenParameters_Members){
-      m->Member(STRING("iptr"),str);
+      m->Member("iptr",str);
     }
     m->EndBlock();
 
-    m->Struct(STRING("AddressMemArguments"));
+    m->Struct("AddressMemArguments");
     for(String str : META_AddressMemParameters_Members){
-      m->Member(STRING("iptr"),str);
+      m->Member("iptr",str);
     }
     m->EndBlock();
     
@@ -2946,9 +2946,9 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   {
     CEmitter* c = StartCCode(temp);
 
-    c->Struct(S8("AcceleratorState"));
+    c->Struct("AcceleratorState");
     for(String name : allStates){
-      c->Member(S8("int"),name);
+      c->Member("int",name);
     }
     c->EndStruct();
 
@@ -2979,7 +2979,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   {
     CEmitter* c = StartCCode(temp);
-    c->Struct(S8("AcceleratorConfig"));
+    c->Struct("AcceleratorConfig");
 
     for(auto elem : structuredConfigs){
       if(elem.typeAndNames.size > 1){
@@ -3002,10 +3002,10 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
   {
     CEmitter* c = StartCCode(temp);
-    c->Struct(S8("AcceleratorStatic"));
+    c->Struct("AcceleratorStatic");
 
     for(auto elem : allStaticsVerilatorSide){
-      c->Member(S8("iptr"),elem.name);
+      c->Member("iptr",elem.name);
     }
       
     c->EndStruct();
@@ -3015,17 +3015,17 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
     
   {
     CEmitter* c = StartCCode(temp);
-    c->Struct(S8("AcceleratorDelay"));
+    c->Struct("AcceleratorDelay");
     {
       c->Union();
       {
         c->Struct();
         for(int i = 0 ;i < info.delays; i++){
-          c->Member(S8("iptr"),PushString(temp,"TOP_Delay%d",i));
+          c->Member("iptr",PushString(temp,"TOP_Delay%d",i));
         }
         c->EndStruct();
 
-        c->Member(S8("iptr"),S8("delays"),info.delays);
+        c->Member("iptr","delays",info.delays);
       }
       c->EndStruct();
     }
@@ -3077,7 +3077,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
     if(stateStructs.size > 0){
       c->RawLine(PushString(temp,"extern volatile %.*sState* accelState;",UN(typeName)));
     } else {
-      c->RawLine(S8("extern volatile AcceleratorState* accelState;"));
+      c->RawLine("extern volatile AcceleratorState* accelState;");
     };
 
     String content = PushASTRepr(c,temp);
@@ -3099,10 +3099,10 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
     CEmitter* c = StartCCode(temp);
 
     if(isSimple){
-      c->Define(S8("NumberSimpleInputs"),PushString(temp,"%d",simpleInstance->declaration->NumberInputs()));
-      c->Define(S8("NumberSimpleOutputs"),PushString(temp,"%d",simpleInstance->declaration->NumberOutputs()));
-      c->Define(S8("SimpleInputStart"),S8("((iptr*) accelConfig)"));
-      c->Define(S8("SimpleOutputStart"),S8("((int*) accelState)"));
+      c->Define("NumberSimpleInputs",PushString(temp,"%d",simpleInstance->declaration->NumberInputs()));
+      c->Define("NumberSimpleOutputs",PushString(temp,"%d",simpleInstance->declaration->NumberOutputs()));
+      c->Define("SimpleInputStart","((iptr*) accelConfig)");
+      c->Define("SimpleOutputStart","((int*) accelState)");
     }
         
     String content = PushASTRepr(c,temp);
@@ -3133,19 +3133,19 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
       c->EndBlock();
 
       if(muxInfo.size > 0){
-        c->Enum(S8("MergeType"));
+        c->Enum("MergeType");
         for(int i = 0; i <  names.size; i++){
           auto name  =  names[i];
           c->EnumMember(PushString(temp,"MergeType_%.*s",UN(name)),PushString(temp,"%d",i));
         }
         c->EndEnum();
 
-        c->FunctionBlock(S8("static inline void"),S8("ActivateMergedAccelerator"));
-        c->Argument(S8("MergeType"),S8("type"));
+        c->FunctionBlock("static inline void","ActivateMergedAccelerator");
+        c->Argument("MergeType","type");
 
-        c->Assignment(S8("int asInt"),S8("(int) type"));
+        c->Assignment("int asInt","(int) type");
 
-        c->SwitchBlock(S8("type"));
+        c->SwitchBlock("type");
         for(int i = 0 ; i < names.size; i++){
           c->CaseBlock(PushString(temp,"MergeType_%.*s",UN(names[i])));
 
@@ -3156,7 +3156,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         }
         c->EndBlock();
         
-        c->RawLine(S8("VersatLoadDelay(delayBuffers[asInt]);"));
+        c->RawLine("VersatLoadDelay(delayBuffers[asInt]);");
       
         c->EndBlock();
       }
@@ -3191,15 +3191,15 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
     for(Wire config : n->declaration->configs){
       WireExtra* ptr = arr.PushElem();
       *ptr = config;
-      ptr->source = STRING("config->TOP_");
-      ptr->source2 = STRING("config->");
+      ptr->source = "config->TOP_";
+      ptr->source2 = "config->";
     }
   }
   for(Wire& staticWire : allStaticsVerilatorSide){
     WireExtra* ptr = arr.PushElem();
     *ptr = staticWire;
-    ptr->source = STRING("statics->");
-    ptr->source2 = STRING("statics->");
+    ptr->source = "statics->";
+    ptr->source2 = "statics->";
   }
   Array<WireExtra> allConfigsVerilatorSide = EndArray(arr);
 
@@ -3227,21 +3227,21 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
     CEmitter* c = StartCCode(temp);
 
     if(globalDebug.outputVCD){
-      c->Define(S8("TRACE"));
+      c->Define("TRACE");
     }
       
     if(globalOptions.generateFSTFormat){
-      c->Define(S8("TRACE_FST"));
+      c->Define("TRACE_FST");
     } else {
-      c->Define(S8("TRACE_VCD"));
+      c->Define("TRACE_VCD");
     }
 
     if(info.signalLoop){
-      c->Define(S8("SIGNAL_LOOP"));
+      c->Define("SIGNAL_LOOP");
     }
 
     if(true){
-      c->Define(S8("SIMULATE_LOOPS"));
+      c->Define("SIMULATE_LOOPS");
     }
       
     String content = PushASTRepr(c,temp);
@@ -3257,7 +3257,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
       // NOTE: This defines work from values that are extracted directly from the header generated by verilator. This ensures that we match the actual expected size since the accelerator needs to be instantiated at generation time.
       FULL_SWITCH(ext.type){
       case ExternalMemoryType::ExternalMemoryType_DP:{
-        c->Comment(S8("DP"));
+        c->Comment("DP");
 
         c->Define(PushString(temp,"WIRE_SIZE_ext_dp_addr_%d",id),
                   PushString(temp,"(UNIT_MSB_ext_dp_addr_%d_port_0 - UNIT_LSB_ext_dp_addr_%d_port_0 + 1)",id,id));
@@ -3278,7 +3278,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
                   PushString(temp,"(WIRE_SIZE_ext_dp_data_%d_1 / 8)",id));
       } break;
       case ExternalMemoryType::ExternalMemoryType_2P:{
-        c->Comment(S8("2P"));
+        c->Comment("2P");
 
         c->Define(PushString(temp,"WIRE_SIZE_ext_2p_addr_in_%d",id),
                   PushString(temp,"(UNIT_MSB_ext_2p_addr_in_%d - UNIT_LSB_ext_2p_addr_in_%d + 1)",id,id));
@@ -3330,11 +3330,11 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
     String sum = EndString(temp,b);
 
     if(external.size == 0){
-      sum = S8("0");
+      sum = "0";
     }
       
-    c->VarDeclare(S8("static constexpr int"),S8("totalExternalMemory"),sum);
-    c->VarDeclare(S8("static Byte"),S8("externalMemory[totalExternalMemory]"));
+    c->VarDeclare("static constexpr int","totalExternalMemory",sum);
+    c->VarDeclare("static Byte","externalMemory[totalExternalMemory]");
       
     String content = PushASTRepr(c,temp);
     TemplateSetString("declareExternalMemory",content);
@@ -3346,7 +3346,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
     for(int i = 0; i < info.delays; i++){
       c->Assignment(PushString(temp,"self->delay%d",i),PushString(temp,"delayBuffer[%d]",i));
     }
-    c->RawLine(S8("self->eval();"));
+    c->RawLine("self->eval();");
         
     String content = PushASTRepr(c,temp,false,1);
     TemplateSetString("setDelays",content);
@@ -3356,7 +3356,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
     CEmitter* c = StartCCode(temp);
 
     for(int i = 0; i < info.inputs; i++){
-      c->Assignment(PushString(temp,"self->in%d",i),S8("0"));
+      c->Assignment(PushString(temp,"self->in%d",i),"0");
     }
       
     String content = PushASTRepr(c,temp);
@@ -3364,7 +3364,7 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
   }
 
   {
-    String simulateBusTemplate = S8(R"FOO(
+    String simulateBusTemplate = R"FOO(
 if(SimulateDatabus){
    self->databus_ready_@{i} = 0;
    self->databus_last_@{i} = 0;
@@ -3406,12 +3406,12 @@ if(SimulateDatabus){
 
    self->eval();
 }
-                                     )FOO""");
+                                     )FOO""";
 
     auto* s = StartString(temp);
     for(int i = 0; i < info.nIOs; i++){
       Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-      vals->Insert(S8("i"),PushString(temp,"%d",i));
+      vals->Insert("i",PushString(temp,"%d",i));
       TemplateSimpleSubstitute(s,simulateBusTemplate,vals);
     }
     String content = EndString(temp,s);
@@ -3422,9 +3422,9 @@ if(SimulateDatabus){
   {
     CEmitter* c = StartCCode(temp);
 
-    c->Comment(S8("Save external data before updating the rest of the simulation"));
+    c->Comment("Save external data before updating the rest of the simulation");
       
-    String saveExternalDP = S8(R"FOO(
+    String saveExternalDP = R"FOO(
    int saved_dp_enable_@{id}_port_0 = self->ext_dp_enable_@{id}_port_0;
    int saved_dp_write_@{id}_port_0 = self->ext_dp_write_@{id}_port_0;
    int saved_dp_addr_@{id}_port_0 = self->ext_dp_addr_@{id}_port_0;
@@ -3440,9 +3440,9 @@ if(SimulateDatabus){
    memcpy(saved_dp_data_@{id}_port_1,&self->ext_dp_out_@{id}_port_1,BYTE_SIZE_ext_dp_data_@{id}_1);
 
    baseAddress += BYTE_SIZE_ext_dp_@{id};
-                                )FOO");
+                                )FOO";
 
-    String saveExternalTwoP = S8(R"FOO(
+    String saveExternalTwoP = R"FOO(
    uint8_t saved_2p_r_data_@{id}[BYTE_SIZE_ext_2p_data_in_@{id}];
    if(self->ext_2p_read_@{id}){
      int readOffset = self->ext_2p_addr_in_@{id};
@@ -3458,19 +3458,19 @@ if(SimulateDatabus){
 
    uint8_t saved_2p_w_data_@{id}[BYTE_SIZE_ext_2p_data_out_@{id}];
    memcpy(saved_2p_w_data_@{id},&self->ext_2p_data_out_@{id},BYTE_SIZE_ext_2p_data_out_@{id});
-                                  )FOO");
+                                  )FOO";
       
     auto* s = StartString(temp);
     for(auto ext : external){
       FULL_SWITCH(ext.type){
       case ExternalMemoryType::ExternalMemoryType_DP:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-        vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
+        vals->Insert("id",PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,saveExternalDP,vals);
       } break;
       case ExternalMemoryType::ExternalMemoryType_2P:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-        vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
+        vals->Insert("id",PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,saveExternalTwoP,vals);
       } break;
     } END_SWITCH();
@@ -3483,9 +3483,9 @@ if(SimulateDatabus){
   {
     CEmitter* c = StartCCode(temp);
 
-    c->Comment(S8("Read memory"));
+    c->Comment("Read memory");
       
-    String readMemoryDP = S8(R"FOO(
+    String readMemoryDP = R"FOO(
    // DP
    if(saved_dp_enable_@{id}_port_0 && !saved_dp_write_@{id}_port_0){
      int readOffset = saved_dp_addr_@{id}_port_0; // Byte space
@@ -3498,28 +3498,28 @@ if(SimulateDatabus){
      CopyFromMemory(&self->ext_dp_in_@{id}_port_1,&externalMemory[baseAddress],readOffset,BYTE_SIZE_ext_dp_data_@{id}_1);
    }
    baseAddress += BYTE_SIZE_ext_dp_@{id};
-                              )FOO");
+                              )FOO";
 
-    String readMemoryTwoP = S8(R"FOO(
+    String readMemoryTwoP = R"FOO(
    // 2P
    if(saved_2p_r_enable_@{id}){
      int readOffset = saved_2p_r_addr_@{id};
      CopyFromMemory(&self->ext_2p_data_in_@{id},&externalMemory[baseAddress],readOffset,BYTE_SIZE_ext_2p_data_in_@{id});
    }
    baseAddress += BYTE_SIZE_ext_2p_@{id};
-                                )FOO");
+                                )FOO";
       
     auto* s = StartString(temp);
     for(auto ext : external){
       FULL_SWITCH(ext.type){
       case ExternalMemoryType::ExternalMemoryType_DP:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-        vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
+        vals->Insert("id",PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,readMemoryDP,vals);
       } break;
       case ExternalMemoryType::ExternalMemoryType_2P:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-        vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
+        vals->Insert("id",PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,readMemoryTwoP,vals);
       } break;
     } END_SWITCH();
@@ -3532,9 +3532,9 @@ if(SimulateDatabus){
   {
     CEmitter* c = StartCCode(temp);
 
-    c->Comment(S8("Write memory"));
+    c->Comment("Write memory");
       
-    String writeMemoryDP = S8(R"FOO(
+    String writeMemoryDP = R"FOO(
    // DP
    if(saved_dp_enable_@{id}_port_0 && saved_dp_write_@{id}_port_0){
      int writeOffset = saved_dp_addr_@{id}_port_0;
@@ -3547,28 +3547,28 @@ if(SimulateDatabus){
      CopyToMemory(&saved_dp_data_@{id}_port_1,&externalMemory[baseAddress],writeOffset,BYTE_SIZE_ext_dp_data_@{id}_1);
    }
    baseAddress += BYTE_SIZE_ext_dp_@{id};
-                               )FOO");
+                               )FOO";
 
-    String writeMemoryTwoP = S8(R"FOO(
+    String writeMemoryTwoP = R"FOO(
    // 2P
    if(saved_2p_w_enable_@{id}){
      int writeOffset = saved_2p_w_addr_@{id};
      CopyToMemory(saved_2p_w_data_@{id},&externalMemory[baseAddress],writeOffset,BYTE_SIZE_ext_2p_data_out_@{id});
    }
    baseAddress += BYTE_SIZE_ext_2p_@{id};
-                                 )FOO");
+                                 )FOO";
       
     auto* s = StartString(temp);
     for(auto ext : external){
       FULL_SWITCH(ext.type){
       case ExternalMemoryType::ExternalMemoryType_DP:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-        vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
+        vals->Insert("id",PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,writeMemoryDP,vals);
       } break;
       case ExternalMemoryType::ExternalMemoryType_2P:{
         Hashmap<String,String>* vals = PushHashmap<String,String>(temp,1);
-        vals->Insert(S8("id"),PushString(temp,"%d",ext.interface));
+        vals->Insert("id",PushString(temp,"%d",ext.interface));
         TemplateSimpleSubstitute(s,writeMemoryTwoP,vals);
       } break;
     } END_SWITCH();
@@ -3580,10 +3580,10 @@ if(SimulateDatabus){
     
   {
     CEmitter* c = StartCCode(temp);
-    c->Comment(S8("Extract state from model"));
+    c->Comment("Extract state from model");
       
     if(topLevelDecl->states.size){
-      c->RawLine(S8("AcceleratorState* state = &stateBuffer;"));
+      c->RawLine("AcceleratorState* state = &stateBuffer;");
     }
 
     for(int i = 0; i < topLevelDecl->states.size; i++){
@@ -3600,10 +3600,10 @@ if(SimulateDatabus){
     CEmitter* c = StartCCode(temp);
 
     if(allConfigsVerilatorSide.size){
-      c->RawLine(S8(R"FOO(
+      c->RawLine(R"FOO(
   AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
   AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
-                     )FOO"));
+                     )FOO");
 
       for(auto wire : allConfigsVerilatorSide){
         // TODO: Need to fix this. Broken after the change to the parameters
@@ -3630,17 +3630,17 @@ if(SimulateDatabus){
         }
 
         if(wire.stage == VersatStage_COMPUTE){
-          String format = S8(R"FOO(  self->@{0} = COMPUTED_@{0};
-  COMPUTED_@{0} = @{1}@{0};)FOO");
+          String format = R"FOO(  self->@{0} = COMPUTED_@{0};
+  COMPUTED_@{0} = @{1}@{0};)FOO";
           String values[2] = {wire.name,wire.source};
             
           c->RawLine(TemplateSubstitute(format,values,temp));
         }
           
         if(wire.stage == VersatStage_WRITE){
-          String format = S8(R"FOO(  self->@{0} = COMPUTED_@{0};
+          String format = R"FOO(  self->@{0} = COMPUTED_@{0};
   COMPUTED_@{0} = WRITE_@{0};
-  WRITE_@{0} = @{1}@{0};)FOO");
+  WRITE_@{0} = @{1}@{0};)FOO";
           String values[2] = {wire.name,wire.source};
             
           c->RawLine(TemplateSubstitute(format,values,temp));
@@ -3660,25 +3660,25 @@ if(SimulateDatabus){
     CEmitter* c = StartCCode(temp);
     for(auto wire : allConfigsVerilatorSide){
       if(wire.stage == VersatStage_COMPUTE){
-        String format = S8("  COMPUTED_@{0} = 0;");
+        String format = "  COMPUTED_@{0} = 0;";
         String values[2] = {wire.name,wire.source};
             
         c->RawLine(TemplateSubstitute(format,values,temp));
       }
 
         if(wire.stage == VersatStage_WRITE){
-          String format = S8(R"FOO(  COMPUTED_@{0} = 0;
-  WRITE_@{0} = 0;)FOO");
+          String format = R"FOO(  COMPUTED_@{0} = 0;
+  WRITE_@{0} = 0;)FOO";
           String values[2] = {wire.name,wire.source};
             
           c->RawLine(TemplateSubstitute(format,values,temp));
         }
     }
 
-    c->RawLine(S8(R"FOO(
+    c->RawLine(R"FOO(
   AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer;
   AcceleratorStatic* statics = (AcceleratorStatic*) &staticBuffer;
-  memset(config,0,sizeof(AcceleratorConfig));)FOO"));
+  memset(config,0,sizeof(AcceleratorConfig));)FOO");
     
     String content = PushASTRepr(c,temp);
     TemplateSetString("resetExtraConfigs",content);
@@ -3688,15 +3688,15 @@ if(SimulateDatabus){
     CEmitter* c = StartCCode(temp);
     for(auto wire : allConfigsVerilatorSide){
       if(wire.stage == VersatStage_COMPUTE){
-        String format = S8("static iptr COMPUTED_@{0} = 0;");
+        String format = "static iptr COMPUTED_@{0} = 0;";
         String values[2] = {wire.name,wire.source};
             
         c->RawLine(TemplateSubstitute(format,values,temp));
       }
 
         if(wire.stage == VersatStage_WRITE){
-          String format = S8(R"FOO(static iptr COMPUTED_@{0} = 0;
-static iptr WRITE_@{0} = 0;)FOO");
+          String format = R"FOO(static iptr COMPUTED_@{0} = 0;
+static iptr WRITE_@{0} = 0;)FOO";
           String values[2] = {wire.name,wire.source};
             
           c->RawLine(TemplateSubstitute(format,values,temp));
@@ -3711,10 +3711,10 @@ static iptr WRITE_@{0} = 0;)FOO");
     CEmitter* c = StartCCode(temp);
 
     if(topLevelDecl->memoryMapBits.has_value()){
-      c->Define(S8("HAS_MEMORY_MAP"));
+      c->Define("HAS_MEMORY_MAP");
 
       if(topLevelDecl->memoryMapBits.value() != 0){
-        c->Define(S8("MEMORY_MAP_BITS"),PushString(temp,"%d",topLevelDecl->memoryMapBits.value()));
+        c->Define("MEMORY_MAP_BITS",PushString(temp,"%d",topLevelDecl->memoryMapBits.value()));
       }
     }
       
@@ -3726,9 +3726,9 @@ static iptr WRITE_@{0} = 0;)FOO");
   TemplateSetString("typeName",typeName);
     
   if(info.implementsDone){
-    TemplateSetString("done",S8("self->done"));
+    TemplateSetString("done","self->done");
   } else {
-    TemplateSetString("done",S8("true"));
+    TemplateSetString("done","true");
   }
 
   TemplateSetNumber("databusDataSize",globalOptions.databusDataSize);
@@ -3746,8 +3746,8 @@ static iptr WRITE_@{0} = 0;)FOO");
 
     // MergeTypeFromConfig
     if(iter.MergeSize() > 1 && muxInfo.size > 0){
-      c->FunctionBlock(S8("MergeType"),S8("MergeTypeFromConfig"));
-      c->Argument(S8("AcceleratorConfig*"),S8("config"));
+      c->FunctionBlock("MergeType","MergeTypeFromConfig");
+      c->Argument("AcceleratorConfig*","config");
 
       for(int i = 0; i <  muxInfo.size; i++){
         Array<MuxInfo> info = muxInfo[i];
@@ -3771,7 +3771,7 @@ static iptr WRITE_@{0} = 0;)FOO");
       }
 
       c->Else();
-      c->Statement(S8("Assert(false && \"Error recovering MergeType from current configuration\")"));
+      c->Statement("Assert(false && \"Error recovering MergeType from current configuration\")");
       c->EndIf();
       c->EndBlock();
     }
@@ -3780,17 +3780,17 @@ static iptr WRITE_@{0} = 0;)FOO");
     
     bool containsMerge = (iter.MergeSize() > 1 && muxInfo.size > 0);
 
-    c->FunctionBlock(S8("Array<VUnitInfo>"),S8("ExtractVArguments"));
-    c->Argument(S8("AcceleratorConfig*"),S8("config"));
-    c->Argument(S8("int"),S8("mergeIndex"));
-    c->VarDeclare(S8("int"),S8("index"),S8("0"));
+    c->FunctionBlock("Array<VUnitInfo>","ExtractVArguments");
+    c->Argument("AcceleratorConfig*","config");
+    c->Argument("int","mergeIndex");
+    c->VarDeclare("int","index","0");
 
     int maxMergeInfo = 0;
     for(Array<InstanceInfo*> units : unitInfoPerMerge){
       maxMergeInfo = MAX(maxMergeInfo,units.size);
     }
 
-    c->VarDeclare(S8("static VUnitInfo"),PushString(temp,"data[%d]",maxMergeInfo));
+    c->VarDeclare("static VUnitInfo",PushString(temp,"data[%d]",maxMergeInfo));
     
     if(containsMerge){
       for(int i = 0; i <  unitInfoPerMerge.size; i++){
@@ -3802,8 +3802,8 @@ static iptr WRITE_@{0} = 0;)FOO");
           String fullName = unit->fullName;
           String unitName = unit->baseName;
 
-          c->Assignment(S8("data[index].unitName"),PushString(temp,"\"%.*s\"",UN(unitName)));
-          c->Assignment(S8("data[index].mergeIndex"),PushString(temp,"%d",i));
+          c->Assignment("data[index].unitName",PushString(temp,"\"%.*s\"",UN(unitName)));
+          c->Assignment("data[index].mergeIndex",PushString(temp,"%d",i));
         
           for(Wire w : decl->configs){
             String left = PushString(temp,"data[index].%.*s",UN(w.name));
@@ -3812,7 +3812,7 @@ static iptr WRITE_@{0} = 0;)FOO");
             c->Assignment(left,right);
           }
 
-          c->Statement(S8("index += 1"));
+          c->Statement("index += 1");
         }
       }
       c->EndIf();
@@ -3824,8 +3824,8 @@ static iptr WRITE_@{0} = 0;)FOO");
         String fullName = unit->fullName;
         String unitName = unit->baseName;
 
-        c->Assignment(S8("data[0].unitName"),PushString(temp,"\"%.*s\"",UN(unitName)));
-        c->Assignment(S8("data[0].mergeIndex"),S8("0"));
+        c->Assignment("data[0].unitName",PushString(temp,"\"%.*s\"",UN(unitName)));
+        c->Assignment("data[0].mergeIndex","0");
         
         for(Wire w : decl->configs){
           String left = PushString(temp,"data[0].%.*s",UN(w.name));
@@ -3834,26 +3834,26 @@ static iptr WRITE_@{0} = 0;)FOO");
           c->Assignment(left,right);
         }
       }
-      c->Statement(S8("index += 1"));
+      c->Statement("index += 1");
     }
 
-    c->Return(S8("(Array<VUnitInfo>){data,index}"));
+    c->Return("(Array<VUnitInfo>){data,index}");
 
     c->EndBlock();
 
-    c->FunctionBlock(S8("void"),S8("SimulateVUnits"));
-    c->Statement(S8("AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer"));
+    c->FunctionBlock("void","SimulateVUnits");
+    c->Statement("AcceleratorConfig* config = (AcceleratorConfig*) &configBuffer");
 
     if(containsMerge){
-      c->VarDeclare(S8("int"),S8("mergeIndex"),S8("MergeTypeFromConfig(config)"));
+      c->VarDeclare("int","mergeIndex","MergeTypeFromConfig(config)");
     } else {
-      c->VarDeclare(S8("int"),S8("mergeIndex"),S8("0"));
+      c->VarDeclare("int","mergeIndex","0");
     }
 
     for(int i = 0; i <  unitInfoPerMerge.size; i++){
       Array<InstanceInfo*> merge = unitInfoPerMerge[i];
       c->If(PushString(temp,"mergeIndex == %d",i));
-      c->VarDeclare(S8("Array<VUnitInfo>"),S8("data"),S8("ExtractVArguments(config,mergeIndex)"));
+      c->VarDeclare("Array<VUnitInfo>","data","ExtractVArguments(config,mergeIndex)");
 
       for(int k = 0; k <  merge.size; k++){
         {
@@ -3862,8 +3862,8 @@ static iptr WRITE_@{0} = 0;)FOO");
 
           c->If(sim);
 
-          c->VarDeclare(S8("VUnitInfo"),S8("info"),PushString(temp,"data.data[%d]",k));
-          c->VarDeclare(S8("AddressVArguments"),S8("args"),S8("{}"));
+          c->VarDeclare("VUnitInfo","info",PushString(temp,"data.data[%d]",k));
+          c->VarDeclare("AddressVArguments","args","{}");
 
           for(String str : META_AddressVParameters_Members){
             String left = PushString(temp,"args.%.*s",UN(str));
@@ -3871,8 +3871,8 @@ static iptr WRITE_@{0} = 0;)FOO");
             c->Assignment(left,right);
           }
 
-          c->Statement(S8("PRINT(\"Simulating addresses for unit '%s' in merge config: %d\\n\",info.unitName,info.mergeIndex)"));
-          c->Statement(S8("SimulateAndPrintAddressGen(args)"));
+          c->Statement("PRINT(\"Simulating addresses for unit '%s' in merge config: %d\\n\",info.unitName,info.mergeIndex)");
+          c->Statement("SimulateAndPrintAddressGen(args)");
 
           c->EndIf();
         }
@@ -3882,8 +3882,8 @@ static iptr WRITE_@{0} = 0;)FOO");
 
           c->If(sim);
 
-          c->VarDeclare(S8("VUnitInfo"),S8("info"),PushString(temp,"data.data[%d]",k));
-          c->VarDeclare(S8("AddressVArguments"),S8("args"),S8("{}"));
+          c->VarDeclare("VUnitInfo","info",PushString(temp,"data.data[%d]",k));
+          c->VarDeclare("AddressVArguments","args","{}");
 
           for(String str : META_AddressVParameters_Members){
             String left = PushString(temp,"args.%.*s",UN(str));
@@ -3891,9 +3891,9 @@ static iptr WRITE_@{0} = 0;)FOO");
             c->Assignment(left,right);
           }
 
-          c->Statement(S8("SimulateVReadResult sim = SimulateVRead(args)"));
-          c->Statement(S8("float percent = ((float) sim.amountOfInternalValuesUsed) / ((float) sim.amountOfExternalValuesRead)"));
-          c->Statement(S8("PRINT(\"Efficiency: %2f (%d/%d)\\n\",percent,sim.amountOfInternalValuesUsed,sim.amountOfExternalValuesRead)"));
+          c->Statement("SimulateVReadResult sim = SimulateVRead(args)");
+          c->Statement("float percent = ((float) sim.amountOfInternalValuesUsed) / ((float) sim.amountOfExternalValuesRead)");
+          c->Statement("PRINT(\"Efficiency: %2f (%d/%d)\\n\",percent,sim.amountOfInternalValuesUsed,sim.amountOfExternalValuesRead)");
           
           c->EndIf();
         }
@@ -3931,8 +3931,8 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
     }
   }
 
-  String debugVal = debug ? S8("true") : S8("false");
-  c->VarDeclare(S8("bool"),S8("debugging"),debugVal);
+  String debugVal = debug ? "true" : "false";
+  c->VarDeclare("bool","debugging",debugVal);
 
   for(int i = 0; i <  unitInfoPerMerge.size; i++){
     Array<InstanceInfo*> merge  =  unitInfoPerMerge[i];
@@ -3941,10 +3941,10 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
       InstanceInfo* unit =  merge[k];
       String sim = PushString(temp,"SIMULATE_MERGE_%d_%.*s",i,UN(unit->baseName));
 
-      String debugVal = unit->debug ? S8("true") : S8("false");
-      c->VarDeclare(S8("bool"),sim,debugVal);
+      String debugVal = unit->debug ? "true" : "false";
+      c->VarDeclare("bool",sim,debugVal);
       String eff = PushString(temp,"EFFICIENCY_MERGE_%d_%.*s",i,UN(unit->baseName));
-      c->VarDeclare(S8("bool"),eff,S8("false"));
+      c->VarDeclare("bool",eff,"false");
     }
   }
   
@@ -4035,7 +4035,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
       // TODO
     }
     String content = EmitExternalMemoryInstances(external,temp);
-    fprintf(f,"%.*s",UNPACK_SS(content));
+    fprintf(f,"%.*s",UN(content));
     fclose(f);
   }
 
@@ -4046,7 +4046,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
       // TODO
     }
     String content = EmitInternalMemoryWires(external,temp);
-    fprintf(f,"%.*s",UNPACK_SS(content));
+    fprintf(f,"%.*s",UN(content));
     fclose(f);
   }
 
@@ -4057,7 +4057,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
       // TODO
     }
     String content = EmitExternalMemoryPort(external,temp);
-    fprintf(f,"%.*s",UNPACK_SS(content));
+    fprintf(f,"%.*s",UN(content));
     fclose(f);
   }
 
@@ -4068,7 +4068,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
       // TODO
     }
     String content = EmitExternalMemoryInternalPortmap(external,temp);
-    fprintf(f,"%.*s",UNPACK_SS(content));
+    fprintf(f,"%.*s",UN(content));
     fclose(f);
  }
 
@@ -4084,7 +4084,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
     }
 
     String content = EmitConfiguration(val,wireInfo,temp);
-    fprintf(s,"%.*s\n",UNPACK_SS(content));
+    fprintf(s,"%.*s\n",UN(content));
   }
 
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
@@ -4098,7 +4098,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
 
   {
     // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
-    String versatPath = PushString(temp,"%.*s/iob_versat.v",UNPACK_SS(globalOptions.hardwareOutputFilepath));
+    String versatPath = PushString(temp,"%.*s/iob_versat.v",UN(globalOptions.hardwareOutputFilepath));
     FILE* output = OpenFileAndCreateDirectories(versatPath,"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(output);
 
@@ -4107,7 +4107,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
     TemplateSetString("prefix",globalOptions.prefixIObPort);
     
     if(globalOptions.extraIOb){
-      TemplateSetString("extraIob",S8("iob_csrs_iob_rready_i,"));
+      TemplateSetString("extraIob","iob_csrs_iob_rready_i,");
     } else {
       TemplateSetString("extraIob",{});
     }
@@ -4135,7 +4135,7 @@ assign axi_araddr_o = temp_axi_araddr_o;
   
   {
     // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
-    String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UNPACK_SS(globalOptions.softwareOutputFilepath));
+    String getVerilatorScriptPath = PushString(temp,"%.*s/GetVerilatorRoot.sh",UN(globalOptions.softwareOutputFilepath));
     FILE* output = OpenFileAndCreateDirectories(getVerilatorScriptPath,"w",FilePurpose_SCRIPT);
     DEFER_CLOSE_FILE(output);
 
@@ -4145,11 +4145,11 @@ assign axi_araddr_o = temp_axi_araddr_o;
   }
 
   {
-    String extractVerilatedSignalPath = PushString(temp,"%.*s/ExtractVerilatedSignals.py",UNPACK_SS(globalOptions.softwareOutputFilepath));
+    String extractVerilatedSignalPath = PushString(temp,"%.*s/ExtractVerilatedSignals.py",UN(globalOptions.softwareOutputFilepath));
     FILE* output = OpenFileAndCreateDirectories(extractVerilatedSignalPath,"w",FilePurpose_SCRIPT);
     DEFER_CLOSE_FILE(output);
 
-    fprintf(output,"%.*s",UNPACK_SS(META_ExtractVerilatedSignals_Content));
+    fprintf(output,"%.*s",UN(META_ExtractVerilatedSignals_Content));
     fflush(output);
     OS_SetScriptPermissions(output);
   }
@@ -4159,9 +4159,9 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   TEMP_REGION(temp,nullptr);
 
   VerilogModuleInterface* interface = GenerateModuleInterface(decl,temp);
-  Array<VerilogPortSpec> databus = ObtainGroupByName(interface,S8("Databus"));
-  Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,S8("MemoryMapped"));
-  Array<VerilogPortSpec> externalMemory = ObtainGroupByName(interface,S8("ExternalMemory"));
+  Array<VerilogPortSpec> databus = ObtainGroupByName(interface,"Databus");
+  Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,"MemoryMapped");
+  Array<VerilogPortSpec> externalMemory = ObtainGroupByName(interface,"ExternalMemory");
 
   // NOTE: Kinda hacky way of making everything a wire (needed since these connect directly to a module)
   for(VerilogPortSpec& spec : databus){
@@ -4192,7 +4192,8 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   };
   
   int clkPortIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsClock);
-  String clkWire = allPorts[clkPortIndex].name;
+  // TODO: Use this instead of assuming the name
+  //String clkWire = allPorts[clkPortIndex].name;
   allPorts = RemoveElement(allPorts,clkPortIndex,temp);
 
   int resetWireIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsReset);
@@ -4200,7 +4201,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   
   VEmitter* m = StartVCode(temp);
   m->Timescale("1ns","1ps");
-  m->Module(S8("Testbench"));
+  m->Module("Testbench");
 
   for(Parameter p : decl->parameters){
     String repr = PushRepresentation(p.valueExpr,temp);
@@ -4209,19 +4210,19 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     // need severely reduce size otherwise simulation can get stuck
     // and not even a warning is given
     if(CompareString(p.name,"AXI_ADDR_W")){
-      repr = S8("16");
+      repr = "16";
     }
 
     m->LocalParam(p.name,repr);
   }
   
-  m->DeclareInterface(interface,S8(""));
+  m->DeclareInterface(interface,"");
 
-  m->LocalParam(S8("CLOCK_PERIOD"),S8("10"));
+  m->LocalParam("CLOCK_PERIOD","10");
   m->Blank();
-  m->RawStatement(S8("initial clk = 0"));
-  m->RawStatement(S8("always #(CLOCK_PERIOD/2) clk = ~clk"));
-  m->RawStatement(S8("`define ADVANCE @(posedge clk) #(CLOCK_PERIOD/2)"));
+  m->RawStatement("initial clk = 0");
+  m->RawStatement("always #(CLOCK_PERIOD/2) clk = ~clk");
+  m->RawStatement("`define ADVANCE @(posedge clk) #(CLOCK_PERIOD/2)");
   m->Blank();
   
   m->StartInstance(decl->name,"uut");
@@ -4229,50 +4230,50 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     const char* asChar = CS(p.name);
     m->InstanceParam(asChar,asChar);
   }
-  m->PortConnectInterface(interface,S8(""));
+  m->PortConnectInterface(interface,"");
   m->EndInstance();
 
   // NOTE: These interfaces are handled by module instantiation.
-  bool containsDatabus = RemoveGroupInPlace(interface,S8("Databus"));
-  bool containsMemoryMapped = RemoveGroupInPlace(interface,S8("MemoryMapped"));
-  bool containsMemories = RemoveGroupInPlace(interface,S8("ExternalMemory"));
+  bool containsDatabus = RemoveGroupInPlace(interface,"Databus");
+  bool containsMemoryMapped = RemoveGroupInPlace(interface,"MemoryMapped");
+  bool containsMemories = RemoveGroupInPlace(interface,"ExternalMemory");
   
   auto AdvanceClock = [m]() -> void{
     m->Blank();
-    m->RawStatement(S8("`ADVANCE"));
+    m->RawStatement("`ADVANCE");
     m->Blank();
   };
 
   if(containsMemoryMapped){
-    m->Task(S8("Write"));
+    m->Task("Write");
 
-    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,S8("addr"));
-    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,S8("wdata"));
+    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,"addr");
+    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,"wdata");
 
     m->Input("addr_i",addressSpec.value().size);
     m->Input("data_i",dataSpec.value().size);
 
     AdvanceClock();
 
-    m->Set(S8("valid"),S8("1"));
-    m->Set(S8("wstrb"),S8("~0"));
-    m->Set(S8("addr"),S8("addr_i"));
-    m->Set(S8("wdata"),S8("data_i"));
+    m->Set("valid","1");
+    m->Set("wstrb","~0");
+    m->Set("addr","addr_i");
+    m->Set("wdata","data_i");
 
     AdvanceClock();
 
-    m->Set(S8("valid"),S8("0"));
-    m->Set(S8("wstrb"),S8("0"));
-    m->Set(S8("addr"),S8("0"));
-    m->Set(S8("wdata"),S8("0"));
+    m->Set("valid","0");
+    m->Set("wstrb","0");
+    m->Set("addr","0");
+    m->Set("wdata","0");
     
     m->EndTask();
   }
 
   if(containsDatabus){
-    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,S8("databus_addr_0"));
-    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,S8("databus_wdata_0"));
-    Opt<VerilogPortSpec> lenSpec = GetPortSpecByName(allPorts,S8("databus_len_0"));
+    Opt<VerilogPortSpec> addressSpec = GetPortSpecByName(allPorts,"databus_addr_0");
+    Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,"databus_wdata_0");
+    Opt<VerilogPortSpec> lenSpec = GetPortSpecByName(allPorts,"databus_len_0");
 
     String dataW = PushRepresentation(dataSpec.value().size,temp);
     String addrW = PushRepresentation(addressSpec.value().size,temp);
@@ -4282,36 +4283,36 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     m->Reg("addrToInsert",addrW);
     m->Reg("valueToInsert",dataW);
 
-    m->StartInstance(S8("SimHelper_DatabusMem"),"DatabusMem");
+    m->StartInstance("SimHelper_DatabusMem","DatabusMem");
     m->InstanceParam("DATA_W",CS(dataW));
 
     m->InstanceParam("ADDR_W",CS(addrW));
 
     m->InstanceParam("LEN_W",CS(lenW));
     
-    m->PortConnect(INT_IOb,S8("_0"));
-    m->PortConnect(S8("insertValue"),S8("insertValue"));
-    m->PortConnect(S8("addrToInsert"),S8("addrToInsert"));
-    m->PortConnect(S8("valueToInsert"),S8("valueToInsert"));
-    m->PortConnect(S8("clk"),S8("clk"));
-    m->PortConnect(S8("rst"),S8("rst"));
+    m->PortConnect(INT_IOb,"_0");
+    m->PortConnect("insertValue","insertValue");
+    m->PortConnect("addrToInsert","addrToInsert");
+    m->PortConnect("valueToInsert","valueToInsert");
+    m->PortConnect("clk","clk");
+    m->PortConnect("rst","rst");
     
     m->EndInstance();
 
-    m->Task(S8("WriteMemory"));
+    m->Task("WriteMemory");
     
     m->Input("addr_i",CS(addrW));
     m->Input("data_i",CS(dataW));
 
-    m->Set(S8("insertValue"),S8("1"));
-    m->Set(S8("addrToInsert"),S8("addr_i"));
-    m->Set(S8("valueToInsert"),S8("data_i"));
+    m->Set("insertValue","1");
+    m->Set("addrToInsert","addr_i");
+    m->Set("valueToInsert","data_i");
 
     AdvanceClock();
 
-    m->Set(S8("insertValue"),S8("0"));
-    m->Set(S8("addrToInsert"),S8("0"));
-    m->Set(S8("valueToInsert"),S8("0"));
+    m->Set("insertValue","0");
+    m->Set("addrToInsert","0");
+    m->Set("valueToInsert","0");
 
     AdvanceClock();
     
@@ -4368,7 +4369,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     }
   }
   
-  m->Task(S8("RunAccelerator"));
+  m->Task("RunAccelerator");
 
   m->Set("run","1");
 
@@ -4389,14 +4390,14 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   
   m->InitialBlock();
 
-  m->RawStatement(S8("`ifdef VCD"));
-  m->RawStatement(S8("$dumpfile(\"uut.vcd\")"));
-  m->RawStatement(S8("$dumpvars()"));
-  m->RawStatement(S8("`endif // VCD"));
+  m->RawStatement("`ifdef VCD");
+  m->RawStatement("$dumpfile(\"uut.vcd\")");
+  m->RawStatement("$dumpvars()");
+  m->RawStatement("`endif // VCD");
   
   for(VerilogPortSpec port : processedPorts){
     if(port.dir == WireDir_INPUT){
-      m->Set(port.name,S8("0"));
+      m->Set(port.name,"0");
     }
   }
   if(containsDatabus){
@@ -4406,11 +4407,11 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   }
   
   AdvanceClock();
-  m->Set(resetWire,S8("1"));
+  m->Set(resetWire,"1");
   AdvanceClock();
-  m->Set(resetWire,S8("0"));
+  m->Set(resetWire,"0");
   AdvanceClock();
-  m->RawStatement(S8("$finish()"));
+  m->RawStatement("$finish()");
 
   m->EndBlock();
   
@@ -4425,5 +4426,5 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
 
   String content = EndString(temp,builder);
 
-  fprintf(file,"%.*s",UNPACK_SS(content));
+  fprintf(file,"%.*s",UN(content));
 }

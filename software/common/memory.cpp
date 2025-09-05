@@ -14,6 +14,11 @@
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
 
+#if defined(__SANITIZE_ADDRESS__)
+#pragma message "Using address sanitizer"
+const char* __asan_default_options() { return "detect_leaks=0"; }
+#endif
+
 // Arena Usage recording and reporting. Mostly some statistics to figure out how much memory our program is used and if some function is doing something odd
 
 //static Arena debugArena; 
@@ -117,15 +122,32 @@ void DebugEndRegion(Arena* arena,const char* file,const char* function,int line)
 Arena* contextArenas[2];
 
 Arena* GetArena(Arena* diff){
-  if(diff == nullptr){
+  if(contextArenas[0] != diff){
     return contextArenas[0];
-  } else {
-    if(contextArenas[0] == diff){
-      return contextArenas[1];
-    } else {
-      return contextArenas[0];
-    }
   }
+
+  Assert(contextArenas[1] != diff);
+  return contextArenas[1];
+}
+
+Arena* GetArena2(Arena* diff,Arena* diff2){
+  if(diff == diff2){
+    return GetArena(diff);
+  }
+  if(diff == nullptr){
+    return GetArena(diff2);
+  }
+  if(diff2 == nullptr){
+    return GetArena(diff);
+  }
+
+  // At this point diff and diff2 must be different and non null
+  if(contextArenas[0] != diff && contextArenas[0] != diff2){
+    return contextArenas[0];
+  }
+
+  Assert(contextArenas[1] != diff && contextArenas[1] != diff2);
+  return contextArenas[1];
 }
 
 int GetPageSize(){
@@ -191,6 +213,8 @@ Arena InitArena_(size_t size,const char* file,int line){
 
   Assert(IS_ALIGNED_64(arena.mem));
 
+  ASAN_POISON_MEMORY_REGION(arena.mem,arena.totalAllocated);
+  
   return arena;
 }
 
@@ -205,19 +229,15 @@ Arena SubArena(Arena* arena,size_t size){
   return res;
 }
 
-void PopToSubArena(Arena* arena,Arena subArena){
-  Byte* subArenaMemPos = &subArena.mem[subArena.used];
-
-  size_t old = arena->used;
-  arena->used = subArenaMemPos - arena->mem;
-  Assert(old >= arena->used);
-}
-
 void Reset(Arena* arena){
   arena->used = 0;
+
+  ASAN_POISON_MEMORY_REGION(arena->mem,arena->totalAllocated);
 }
 
 void Free(Arena* arena){
+  ASAN_UNPOISON_MEMORY_REGION(arena->mem,arena->totalAllocated);
+
   free(arena->mem);
   arena->totalAllocated = 0;
   arena->used = 0;
@@ -236,7 +256,10 @@ ArenaMark MarkArena(Arena* arena){
 
 void PopMark(ArenaMark mark){
   Arena* arena = mark.arena;
+  int biggerUsed = arena->used;
   arena->used = mark.mark - arena->mem;
+  
+  ASAN_POISON_MEMORY_REGION(&arena->mem[arena->used],biggerUsed - arena->used);
 }
 
 Byte* PushBytes(Arena* arena, size_t size){
@@ -250,6 +273,8 @@ Byte* PushBytes(Arena* arena, size_t size){
   
   arena->used += size;
   arena->maximum = MAX(arena->maximum,arena->used);
+
+  ASAN_UNPOISON_MEMORY_REGION(ptr,size);
   
   return ptr;
 }
@@ -274,7 +299,7 @@ void StringBuilder::PushString(String string){
   StringNode* ptr = this->tail;
 
   if(debugPrint){
-    printf("%.*s",UNPACK_SS(string));
+    printf("%.*s",UN(string));
   }
   
   String str = string;
@@ -372,7 +397,7 @@ String PushFile(Arena* out,FILE* file){
 }
 
 String PushFile(Arena* out,String filepath){
-  return PushFile(out,StaticFormat("%.*s",UNPACK_SS(filepath)));
+  return PushFile(out,StaticFormat("%.*s",UN(filepath)));
 }
 
 //TODO: Replace return with Optional. Handle errors
@@ -409,19 +434,19 @@ String PushString(Arena* arena,String ss){
 }
 
 String vPushString(Arena* arena,const char* format,va_list args){
-  char* buffer = (char*) &arena->mem[arena->used];
-  size_t maximum = arena->totalAllocated - arena->used;
-  int size = vsnprintf(buffer,maximum,format,args);
-
-  int trueSize = size + 1;
-  buffer[size] = '\0';
+  int extraBuffer; // Just to make sure that vsnprintf with 0 size does not cause problems with a nullptr we pass it just a bit of memory.
   
-  Assert(size >= 0);
-  Assert(((size_t) trueSize) < maximum);
+  va_list copy;
+  va_copy(copy,args);
 
-  arena->used += (size_t) (trueSize);
+  int stringSizeWithTerm = vsnprintf((char*) &extraBuffer,0,format,copy);
+  char* buffer = (char*) PushBytes(arena,stringSizeWithTerm + 1);
 
-  String res = STRING(buffer,size);
+  int size = vsnprintf(buffer,stringSizeWithTerm + 1,format,args);
+
+  Assert(size == stringSizeWithTerm);
+
+  String res = String(buffer,size);
 
   return res;
 }
@@ -512,7 +537,7 @@ void Clear(DynamicArena* arena){
 String PushString(DynamicArena* arena,String str){
   Byte* bytes = PushBytes(arena,str.size);
   memcpy((void*) bytes,str.data,str.size);
-  String res = {.data = (char*) bytes,.size = str.size};
+  String res = String((char*) bytes,str.size);
   return res;
 }
 

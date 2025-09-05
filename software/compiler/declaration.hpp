@@ -68,7 +68,7 @@ struct FUDeclaration{
   Accelerator* fixedDelayCircuit;
   Accelerator* flattenedBaseCircuit;
   
-  const char* operation;
+  String operation;
 
   SubMap* flattenMapping;
 

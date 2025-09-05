@@ -1,4 +1,7 @@
-VERSAT_COMMON_FLAGS := -Wall -Wunused-variable -Wno-char-subscripts -Wno-switch-enum -Wno-switch -Wno-unused-function #-fsanitize=address -static-libasan
+VERSAT_COMMON_FLAGS := -Wall -Wunused-variable -Wno-char-subscripts -Wno-switch-enum -Wno-switch -Wno-unused-function 
+
+# Useful to run addressSanitizer often but unless we disable ASLR we are gonna have random segfaults for no reason. Enable every so often to check things out and disable again.
+# VERSAT_COMMON_FLAGS += -fsanitize=address -static-libasan
 
 #VERSAT_COMMON_FLAGS += -ggdb3 # Outputs more debug info but only when debuggin with gdb
 

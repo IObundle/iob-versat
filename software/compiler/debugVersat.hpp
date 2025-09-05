@@ -71,8 +71,6 @@ void OutputDebugDotGraph(Accelerator* accel,String fileName);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight);
 
-void OutputGraphDotFile(Accelerator* accel,bool collapseSameEdges,FUInstance* highlighInstance,CalculateDelayResult delays,String filename);
-
 GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,Arena* out);
 
 void OutputContentToFile(String filepath,String content);
@@ -85,3 +83,17 @@ String PushDebugPath(Arena* out,String folderName,String fileName);
 
 // For this overload, no string can be empty, otherwise error
 String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName);
+
+// ============================================================================
+// Debug path regions - Each region is associated to a folder created on the debug folder
+
+struct DebugRegionMarker{
+  DebugRegionMarker(String name);
+  ~DebugRegionMarker();
+};
+
+#define DEBUG_REGION(NAME) DebugRegionMarker _marker(__LINE__)(NAME)
+
+String GetDebugRegionFilepath(String filename,Arena* out);
+
+void DebugRegionOutputDotGraph(Accelerator* accel,String fileName);

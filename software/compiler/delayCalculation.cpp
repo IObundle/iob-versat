@@ -213,8 +213,8 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
     static int funCalls = 0;
     BLOCK_REGION(out);
 
-    String fileName = PushString(out,"global_latency_%.*s_%d_%d.dot",UNPACK_SS(top.accelName),top.mergeIndex,funCalls++);
-    String filePath = PushDebugPath(out,top.accelName,STRING("delays"),fileName);
+    String fileName = PushString(out,"global_latency_%.*s_%d_%d.dot",UN(top.accelName),top.mergeIndex,funCalls++);
+    String filePath = PushDebugPath(out,top.accelName,"delays",fileName);
 
     GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,temp);
     
@@ -345,8 +345,8 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
     static int funCalls = 0;
     BLOCK_REGION(out);
     
-    String fileName = PushString(out,"edge_delays_%.*s_%d_%d.dot",UNPACK_SS(top.accelName),top.mergeIndex,funCalls++);
-    String filePath = PushDebugPath(out,top.accelName,STRING("delays"),fileName);
+    String fileName = PushString(out,"edge_delays_%.*s_%d_%d.dot",UN(top.accelName),top.mergeIndex,funCalls++);
+    String filePath = PushDebugPath(out,top.accelName,"delays",fileName);
 
     GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,temp);
     
@@ -403,9 +403,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
     static int funCalls = 0;
     BLOCK_REGION(out);
     
-    String fileName = PushString(out,"final_delays_%.*s_%d_%d.dot",UNPACK_SS(top.accelName),top.mergeIndex,funCalls++);
+    String fileName = PushString(out,"final_delays_%.*s_%d_%d.dot",UN(top.accelName),top.mergeIndex,funCalls++);
 
-    String filePath = PushDebugPath(out,top.accelName,STRING("delays"),fileName);
+    String filePath = PushDebugPath(out,top.accelName,"delays",fileName);
 
     GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,temp);
     
@@ -482,7 +482,7 @@ GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> or
     FUInstance* node = info->inst;
     
     nodeArray[i].name = PushString(out,node->name);
-    nodeArray[i].content = PushString(out,"%.*s:%d:%d",UNPACK_SS(node->name),nodeLatencyByOrder[i].value,info->special);
+    nodeArray[i].content = PushString(out,"%.*s:%d:%d",UN(node->name),nodeLatencyByOrder[i].value,info->special);
     nodeArray[i].color = Color_BLACK;
   }
 
@@ -511,7 +511,7 @@ GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> or
   GraphPrintingContent result = {};
   result.edges = edgeArray;
   result.nodes = nodeArray;
-  result.graphLabel = STRING("Nodes and edges contain their global latency (nodes also contain special)");
+  result.graphLabel = "Nodes and edges contain their global latency (nodes also contain special)";
   
   return result;
 }

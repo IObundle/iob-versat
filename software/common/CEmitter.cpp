@@ -5,19 +5,21 @@
 
 String Repr(CASTType type){
   switch(type){
-  case CASTType_TOP_LEVEL: return STRING("CASTType_TOP_LEVEL");
-  case CASTType_FUNCTION: return STRING("CASTType_FUNCTION");
-  case CASTType_ASSIGNMENT: return STRING("CASTType_ASSIGNMENT");
-  case CASTType_COMMENT: return STRING("CASTType_COMMENT");
-  case CASTType_STRUCT_DEF: return STRING("CASTType_STRUCT_DEF");
-  case CASTType_STATEMENT: return STRING("CASTType_STATEMENT");
-  case CASTType_MEMBER_DECL: return STRING("CASTType_MEMBER_DECL");
-  case CASTType_VAR_DECL: return STRING("CASTType_VAR_DECL");
-  case CASTType_VAR_DECL_STMT: return STRING("CASTType_VAR_DECL_STMT"); 
-  case CASTType_IF: return STRING("CASTType_IF");
+  case CASTType_TOP_LEVEL: return "CASTType_TOP_LEVEL";
+  case CASTType_FUNCTION: return "CASTType_FUNCTION";
+  case CASTType_ASSIGNMENT: return "CASTType_ASSIGNMENT";
+  case CASTType_COMMENT: return "CASTType_COMMENT";
+  case CASTType_STRUCT_DEF: return "CASTType_STRUCT_DEF";
+  case CASTType_STATEMENT: return "CASTType_STATEMENT";
+  case CASTType_MEMBER_DECL: return "CASTType_MEMBER_DECL";
+  case CASTType_VAR_DECL: return "CASTType_VAR_DECL";
+  case CASTType_VAR_DECL_STMT: return "CASTType_VAR_DECL_STMT";
+  case CASTType_IF: return "CASTType_IF";
   }
 
-  return STRING("No repr for the given type, check if forgot to implement it: %d\n",(int) type);
+  // TODO: Move this to meta
+  NOT_IMPLEMENTED();
+  return {};
 }
 
 CAST* PushCAST(CASTType type,Arena* out){
@@ -49,10 +51,10 @@ CAST* CEmitter::FindFirstCASTType(CASTType type,bool errorIfNotFound){
   }
 
   if(errorIfNotFound){
-    printf("Did not find CAST of type: %.*s\n",UNPACK_SS(Repr(type)));
+    printf("Did not find CAST of type: %.*s\n",UN(Repr(type)));
     printf("Emitter stack currently has %d levels and is, from zero:\n",top);
     for(int i = 0; i < top; i++){
-      printf("%.*s\n",UNPACK_SS(Repr(buffer[i]->type)));
+      printf("%.*s\n",UN(Repr(buffer[i]->type)));
     }
     DEBUG_BREAK();
   }
@@ -202,16 +204,14 @@ CExpr* FixAnd(Array<CExpr> expressions,int& index,Arena* out){
 
 
 String CEmitter::EndExpressionAsString(Arena* out){
-  TEMP_REGION(temp,arena);
-  
-  Array<CExpr> expressions = PushArrayFromList(temp,expressionList);
+  Array<CExpr> expressions = PushArrayFromList(out,expressionList);
 
   int index = 0;
-  CExpr* top = FixAnd(expressions,index,temp);
+  CExpr* top = FixAnd(expressions,index,out);
 
   Assert(index == expressions.size);
   
-  auto builder = StartString(temp);
+  auto builder = StartString(out);
   
   auto Recurse = [builder](auto Recurse,CExpr* top) -> void{
     FULL_SWITCH(top->type){
@@ -306,11 +306,11 @@ void CEmitter::EndEnum(){
   PopLevel();
 }
 
-void CEmitter::Extern(const char* typeName,const char* name){
+void CEmitter::Extern(String typeName,String name){
   CAST* externDecl = PushCAST(CASTType_VAR_DECL_STMT,arena);
 
-  externDecl->varDecl.typeName = PushString(arena,"%s",typeName);
-  externDecl->varDecl.varName = PushString(arena,"%s",name);
+  externDecl->varDecl.typeName = PushString(arena,typeName);
+  externDecl->varDecl.varName = PushString(arena,name);
   externDecl->varDecl.isExtern = true;
   
   InsertStatement(externDecl);
@@ -366,11 +366,11 @@ void CEmitter::VarDeclare(String type,String name,String initialValue){
   InsertStatement(declaration);
 }
 
-void CEmitter::VarDeclareBlock(const char* type,const char* name,bool isStatic){
+void CEmitter::VarDeclareBlock(String type,String name,bool isStatic){
   CAST* varBlock = PushCAST(CASTType_VAR_DECL_BLOCK,arena);
 
-  varBlock->varDeclBlock.type = PushString(arena,"%s",type);
-  varBlock->varDeclBlock.name = PushString(arena,"%s",name);
+  varBlock->varDeclBlock.type = PushString(arena,type);
+  varBlock->varDeclBlock.name = PushString(arena,name);
   varBlock->varDeclBlock.arrayElems = PushArenaList<CAST*>(arena);
   varBlock->varDeclBlock.isStatic = isStatic;
 
@@ -378,11 +378,11 @@ void CEmitter::VarDeclareBlock(const char* type,const char* name,bool isStatic){
   PushLevel(varBlock);
 }
 
-void CEmitter::ArrayDeclareBlock(const char* type,const char* name,bool isStatic){
+void CEmitter::ArrayDeclareBlock(String type,String name,bool isStatic){
   CAST* varBlock = PushCAST(CASTType_VAR_DECL_BLOCK,arena);
 
-  varBlock->varDeclBlock.type = PushString(arena,"%s",type);
-  varBlock->varDeclBlock.name = PushString(arena,"%s",name);
+  varBlock->varDeclBlock.type = PushString(arena,type);
+  varBlock->varDeclBlock.name = PushString(arena,name);
   varBlock->varDeclBlock.arrayElems = PushArenaList<CAST*>(arena);
   varBlock->varDeclBlock.isStatic = isStatic;
   varBlock->varDeclBlock.isArray = true;
@@ -394,7 +394,7 @@ void CEmitter::ArrayDeclareBlock(const char* type,const char* name,bool isStatic
 void CEmitter::StringElem(String value){
   CAST* elem = PushCAST(CASTType_ELEM,arena);
 
-  elem->content = PushString(arena,"STRING(\"%.*s\")",UN(value));
+  elem->content = PushString(arena,"String(\"%.*s\")",UN(value));
   
   InsertStatement(elem);
 }
@@ -586,10 +586,10 @@ void CEmitter::Once(){
   topLevel->top.oncePragma = true;
 }
 
-void CEmitter::Include(const char* filename){
+void CEmitter::Include(String filename){
   CAST* include = PushCAST(CASTType_RAW_STATEMENT,arena);
 
-  include->rawData = PushString(arena,"#include \"%s\"",filename);
+  include->rawData = PushString(arena,"#include \"%.*s\"",UN(filename));
   InsertStatement(include);
 }
 
@@ -651,11 +651,11 @@ void CEmitter::Assignment(String lhs,String rhs){
 
 void CEmitter::Return(String varToReturn){
   if(Empty(varToReturn)){
-    Statement(STRING("return"));
+    Statement("return");
   } else {
     TEMP_REGION(temp,arena);
     
-    String stmt = PushString(temp,"return %.*s",UNPACK_SS(varToReturn));
+    String stmt = PushString(temp,"return %.*s",UN(varToReturn));
     Statement(stmt);
   }
 }
@@ -742,7 +742,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     if(cppStyle){
       b->PushString("};");
     } else {
-      b->PushString("} %.*s;",UNPACK_SS(top->enumDef.name));
+      b->PushString("} %.*s;",UN(top->enumDef.name));
     }
   } break;
   
@@ -781,14 +781,14 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     }    
   } break;
   case CASTType_VAR_DECL: {
-    b->PushString("%.*s %.*s",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName));
+    b->PushString("%.*s %.*s",UN(top->varDecl.typeName),UN(top->varDecl.varName));
   } break;
   case CASTType_MEMBER_DECL:{
     b->PushSpaces(level * 2);
     if(top->varDecl.arraySize > 0){
-      b->PushString("%.*s %.*s[%d];",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName),top->varDecl.arraySize);
+      b->PushString("%.*s %.*s[%d];",UN(top->varDecl.typeName),UN(top->varDecl.varName),top->varDecl.arraySize);
     } else {
-      b->PushString("%.*s %.*s;",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName));
+      b->PushString("%.*s %.*s;",UN(top->varDecl.typeName),UN(top->varDecl.varName));
     }
   } break;
   case CASTType_VAR_DECL_STMT: {
@@ -797,9 +797,9 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
       b->PushString("extern ");
     }
     if(Empty(top->varDecl.defaultValue)){
-      b->PushString("%.*s %.*s;",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName));
+      b->PushString("%.*s %.*s;",UN(top->varDecl.typeName),UN(top->varDecl.varName));
     } else {
-      b->PushString("%.*s %.*s = %.*s;",UNPACK_SS(top->varDecl.typeName),UNPACK_SS(top->varDecl.varName),UNPACK_SS(top->varDecl.defaultValue));
+      b->PushString("%.*s %.*s = %.*s;",UN(top->varDecl.typeName),UN(top->varDecl.varName),UN(top->varDecl.defaultValue));
     }
   } break;
   case CASTType_COMMENT:{
@@ -813,7 +813,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     
     if(isSingleLine){
       b->PushSpaces(level * 2);
-      b->PushString("// %.*s",UNPACK_SS(top->comment));
+      b->PushString("// %.*s",UN(top->comment));
     } else {
       TEMP_REGION(temp,b->arena);
       
@@ -849,7 +849,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     CASTIf ifExpr = iter->elem;
     
     b->PushSpaces(level * 2);
-    b->PushString("if(%.*s){\n",UNPACK_SS(ifExpr.ifExpression));
+    b->PushString("if(%.*s){\n",UN(ifExpr.ifExpression));
     if(ifExpr.statements){
       for(SingleLink<CAST*>* iter = ifExpr.statements->head; iter; iter = iter->next){
         CAST* ast = iter->elem;
@@ -865,7 +865,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     for(SingleLink<CASTIf>* otherIter = iter->next; otherIter; otherIter = otherIter->next){
       CASTIf ifExpr = otherIter->elem;
       
-      b->PushString("else if(%.*s){\n",UNPACK_SS(ifExpr.ifExpression));
+      b->PushString("else if(%.*s){\n",UN(ifExpr.ifExpression));
 
       if(ifExpr.statements){
         for(SingleLink<CAST*>* subIter = ifExpr.statements->head; subIter; subIter = subIter->next){
@@ -916,7 +916,7 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     if(cppStyle){
       b->PushString("};");
     } else {
-      b->PushString("} %.*s;",UNPACK_SS(top->structDef.name));
+      b->PushString("} %.*s;",UN(top->structDef.name));
     }
   } break;
 
@@ -940,13 +940,13 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     if(cppStyle){
       b->PushString("};");
     } else {
-      b->PushString("} %.*s;",UNPACK_SS(top->structDef.name));
+      b->PushString("} %.*s;",UN(top->structDef.name));
     }
   } break;
   
   case CASTType_STATEMENT:{
     b->PushSpaces(level * 2);
-    b->PushString("%.*s;",UNPACK_SS(top->simpleStatement));
+    b->PushString("%.*s;",UN(top->simpleStatement));
   } break;
 
   case CASTType_VAR_DECL_BLOCK:{
@@ -1018,17 +1018,17 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
   } break;
   
   case CASTType_ELEM:{
-    b->PushString("%.*s",UNPACK_SS(top->content));
+    b->PushString("%.*s",UN(top->content));
   } break;
     
   case CASTType_RAW_STATEMENT:{
     b->PushSpaces(level * 2);
-    b->PushString("%.*s",UNPACK_SS(top->rawData));
+    b->PushString("%.*s",UN(top->rawData));
   } break;
 
   case CASTType_ASSIGNMENT:{
     b->PushSpaces(level * 2);
-    b->PushString("%.*s = %.*s;",UNPACK_SS(top->assign.lhs),UNPACK_SS(top->assign.rhs));
+    b->PushString("%.*s = %.*s;",UN(top->assign.lhs),UN(top->assign.rhs));
   } break;
   } END_SWITCH();
 }

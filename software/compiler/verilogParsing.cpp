@@ -18,28 +18,28 @@ struct MathFunctionDescription{
 #define MATH_FUNC(...) [](Value f,Value g) -> Value{__VA_ARGS__}
 
 static MathFunctionDescription verilogMathFunctions[] = {
-  {STRING("clog2"),1,MATH_FUNC(return MakeValue(log2i(f.number));)},
-  {STRING("ln"),1},
-  {STRING("log"),1},
-  {STRING("exp"),1},
-  {STRING("sqrt"),1},
-  {STRING("pow"),2},
-  {STRING("floor"),1},
-  {STRING("ceil"),1},
-  {STRING("sin"),1},
-  {STRING("cos"),1},
-  {STRING("tan"),1},
-  {STRING("asin"),1},
-  {STRING("acos"),1},
-  {STRING("atan"),1},
-  {STRING("atan2"),2},
-  {STRING("hypot"),2},
-  {STRING("sinh"),1},
-  {STRING("cosh"),1},
-  {STRING("tanh"),1},
-  {STRING("asinh"),1},
-  {STRING("acosh"),1},
-  {STRING("atanh"),1}
+  {"clog2",1,MATH_FUNC(return MakeValue(log2i(f.number));)},
+  {"ln",1},
+  {"log",1},
+  {"exp",1},
+  {"sqrt",1},
+  {"pow",2},
+  {"floor",1},
+  {"ceil",1},
+  {"sin",1},
+  {"cos",1},
+  {"tan",1},
+  {"asin",1},
+  {"acos",1},
+  {"atan",1},
+  {"atan2",2},
+  {"hypot",2},
+  {"sinh",1},
+  {"cosh",1},
+  {"tanh",1},
+  {"asinh",1},
+  {"acosh",1},
+  {"atanh",1}
 };
 
 Opt<MathFunctionDescription> GetMathFunction(String name){
@@ -173,7 +173,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
       tok->AssertNextToken("\"");
 
       // Open include file
-      std::string filename(UNPACK_SS_REVERSE(fileName));
+      std::string filename(UN_REVERSE(fileName));
       FILE* file = nullptr;
       for(String str : includeFilepaths){
         std::string string(str.data,str.size);
@@ -194,12 +194,12 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
       DEFER_CLOSE_FILE(file);
       
       if(!file){
-        printf("Couldn't find file: %.*s\n",UNPACK_SS(fileName));
+        printf("Couldn't find file: %.*s\n",UN(fileName));
         printf("Looked on the following folders:\n");
 
         printf("  %s\n",GetCurrentDirectory());
         for(String str : includeFilepaths){
-          printf("  %.*s\n",UNPACK_SS(str));
+          printf("  %.*s\n",UN(str));
         }
 
         NOT_IMPLEMENTED("Some error handling here");
@@ -219,7 +219,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
 
       mem[amountRead] = '\0';
 
-      PreprocessVerilogFile_(STRING((const char*) mem,fileSize),macros,includeFilepaths,builder);
+      PreprocessVerilogFile_(String((const char*) mem,fileSize),macros,includeFilepaths,builder);
     } else if(CompareString(identifier,"define")){
       tok->AdvancePeek();
 
@@ -299,7 +299,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
 
       // TODO: Better error handling. Report file position.
       if(!PerformDefineSubstitution(builder,macros,identifier)){
-        printf("Do not recognize directive: %.*s\n",UNPACK_SS(identifier));
+        printf("Do not recognize directive: %.*s\n",UN(identifier));
         NOT_POSSIBLE("Some better error handling here");
       }
     }
@@ -314,7 +314,6 @@ String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,A
   auto builder = StartString(temp);
   PreprocessVerilogFile_(fileContent,macros,includeFilepaths,builder);
 
-  PushString(out,STRING("\0"));
   String res = EndString(out,builder);
 
   return res;
@@ -439,7 +438,7 @@ static Value Eval(Expression* expr,TrieMap<String,Value>* map){
   case Expression::IDENTIFIER:{
     Value* val = map->Get(expr->id);
     if(!map){
-      printf("Error, did not find parameter %.*s\n",UNPACK_SS(expr->id));
+      printf("Error, did not find parameter %.*s\n",UN(expr->id));
       NOT_IMPLEMENTED("Need to also report file position and stuff like that, similar to parser tokenizer error");
     }
     
@@ -455,7 +454,7 @@ static Value Eval(Expression* expr,TrieMap<String,Value>* map){
     MathFunctionDescription optDescription = GetMathFunction(functionName).value();
 
     if(!optDescription.func){
-      printf("Verilog Math function not currently implemented: %.*s",UNPACK_SS(functionName));
+      printf("Verilog Math function not currently implemented: %.*s",UN(functionName));
       exit(0);
     }
 
@@ -604,7 +603,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
           Token attributeName = tok->NextToken();
 
           if(!Contains(possibleAttributes,(String) attributeName)){
-            printf("ERROR: Do not know attribute named: %.*s\n",UNPACK_SS(attributeName));
+            printf("ERROR: Do not know attribute named: %.*s\n",UN(attributeName));
             exit(-1);
           }
 
@@ -850,9 +849,9 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
         wire = values[0].str;
 		String outOrIn = values[1].str;
-		if(CompareString(outOrIn,STRING("out"))){
+		if(CompareString(outOrIn,"out")){
 		  out = true;
-		} else if(CompareString(outOrIn,STRING("in"))){
+		} else if(CompareString(outOrIn,"in")){
 		  out = false;
 		} else {
 		  Assert(false && "Either out or in is mispelled or not present\n");

@@ -16,10 +16,10 @@ struct {
   bool dir;
   String name;
 } memInfo[] = {
-  {0,false,S8("Output_0")},
-  {0,true,S8("Input_0")},
-  {1,false,S8("Output_1")},
-  {1,true,S8("Input_1")}
+  {0,false,"Output_0"},
+  {0,true,"Input_0"},
+  {1,false,"Output_1"},
+  {1,true,"Input_1"}
 };
 
 AddressAccess* GetAddressGenOrFail(String name){
@@ -179,7 +179,7 @@ AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out){
   SymbolicExpression* maxLoopValue = EvaluateMaxLinearSumValue(result->internal,temp);
   maxLoopValue = Normalize(SymbolicAdd(maxLoopValue,PushLiteral(temp,1),temp),out);
 
-  result->external = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),maxLoopValue,out);
+  result->external = PushLoopLinearSumSimpleVar("x",PushLiteral(temp,1),PushLiteral(temp,0),maxLoopValue,out);
   result->external->freeTerm = SymbolicDeepCopy(freeTerm,out);
   result->dutyDivExpr = SymbolicDeepCopy(access->dutyDivExpr,out);
   
@@ -208,16 +208,16 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
 
   Array<SymbolicExpression*> terms = PushArray<SymbolicExpression*>(out,2);
   terms[0] = maxLoopValueExpr;
-  terms[1] = PushVariable(out,STRING("VERSAT_DIFF_W"));
-  maxLoopValueExpr = SymbolicFunc(STRING("ALIGN"),terms,out);
+  terms[1] = PushVariable(out,"VERSAT_DIFF_W");
+  maxLoopValueExpr = SymbolicFunc("ALIGN",terms,out);
   
   result->internal = Copy(external,out);
   result->internal->terms[highestConstantIndex].term = maxLoopValueExpr; //PushLiteral(out,maxLoopValue);
   
-  LoopLinearSum* innermostExternal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(out,1),PushLiteral(out,0),maxLoopValueExpr,out);
+  LoopLinearSum* innermostExternal = PushLoopLinearSumSimpleVar("x",PushLiteral(out,1),PushLiteral(out,0),maxLoopValueExpr,out);
 
   // NOTE: Not sure about the end of this loop. We carry it directly but need to do further tests to make sure that this works fine.
-  LoopLinearSum* outerMostExternal = PushLoopLinearSumSimpleVar(STRING("y"),highestConstant,PushLiteral(out,0),external->terms[highestConstantIndex].loopEnd,out);
+  LoopLinearSum* outerMostExternal = PushLoopLinearSumSimpleVar("y",highestConstant,PushLiteral(out,0),external->terms[highestConstantIndex].loopEnd,out);
   
   result->external = AddLoopLinearSum(innermostExternal,outerMostExternal,out);
   result->external->freeTerm = SymbolicDeepCopy(freeTerm,out);
@@ -266,8 +266,8 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Sy
   
   if(size == 1){
     result.totalTransferSize = result.length;
-    result.amountMinusOne = STRING("0");
-    result.addrShift = STRING("0");
+    result.amountMinusOne = "0";
+    result.addrShift = "0";
   } else {
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
     result.addrShift = PushRepresentation(derived,out);
@@ -302,7 +302,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
         newLoops[i+1] = loops[i];
       }
 
-      newLoops[0].var = S8("NONE");
+      newLoops[0].var = "NONE";
       newLoops[0].term = PushLiteral(temp,1);
       newLoops[0].loopStart = PushLiteral(temp,0);
       newLoops[0].loopEnd = duty;
@@ -329,7 +329,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
 
       if(i == 0){
         if(duty){
-          result[0].dutyExpression = S8("1");
+          result[0].dutyExpression = "1";
         } else {
           result[0].dutyExpression = PushString(out,PushRepresentation(loops[0].loopEnd,temp)); // For now, do not care too much about duty. Use a full duty
         }
@@ -338,7 +338,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
       String firstEnd = PushRepresentation(l0.loopEnd,out);
       SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp);
 
-      res.shiftWithoutRemovingIncrement = STRING("0"); // By default
+      res.shiftWithoutRemovingIncrement = "0"; // By default
       if(i * 2 + 1 < loops.size){
         LoopLinearSumTerm l1 = loops[i*2 + 1];
 
@@ -350,17 +350,17 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
         // We handle shifts very easily. We just remove the effects of all the previous period increments and then apply the shift.
         // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
         // We need to subtract 1 because the period increment is only applied (period - 1) times.
-        SymbolicExpression* templateSym = ParseSymbolicExpression(STRING("-(firstIncrement * (firstEnd - 1)) + term"),temp);
+        SymbolicExpression* templateSym = ParseSymbolicExpression("-(firstIncrement * (firstEnd - 1)) + term",temp);
 
-        SymbolicExpression* replaced = SymbolicReplace(templateSym,STRING("firstIncrement"),firstDerived,temp);
-        replaced = SymbolicReplace(replaced,STRING("firstEnd"),firstEndSym,temp);
-        replaced = SymbolicReplace(replaced,STRING("term"),derived,temp);
+        SymbolicExpression* replaced = SymbolicReplace(templateSym,"firstIncrement",firstDerived,temp);
+        replaced = SymbolicReplace(replaced,"firstEnd",firstEndSym,temp);
+        replaced = SymbolicReplace(replaced,"term",derived,temp);
         replaced = Normalize(replaced,temp,false);
         
         res.shiftExpression = PushRepresentation(replaced,out);
       } else {
-        res.iterationExpression = STRING("0");
-        res.shiftExpression = STRING("0");
+        res.iterationExpression = "0";
+        res.shiftExpression = "0";
       }
     }
 
@@ -390,43 +390,43 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
   String start = PushRepresentation(freeTerm,temp);
 
-  *list->PushElem() = {S8("start"),start};
+  *list->PushElem() = {"start",start};
 
   {
     InternalMemoryAccess l = compiled[0]; 
 
-    *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
-    *list->PushElem() = {S8("per"),PushString(out,l.periodExpression)};
-    *list->PushElem() = {S8("incr"),PushString(out,l.incrementExpression)};
-    *list->PushElem() = {S8("iter"),PushString(out,l.iterationExpression)};
-    *list->PushElem() = {S8("shift"),PushString(out,l.shiftExpression)};
+    *list->PushElem() = {"duty",PushString(out,l.dutyExpression)};
+    *list->PushElem() = {"per",PushString(out,l.periodExpression)};
+    *list->PushElem() = {"incr",PushString(out,l.incrementExpression)};
+    *list->PushElem() = {"iter",PushString(out,l.iterationExpression)};
+    *list->PushElem() = {"shift",PushString(out,l.shiftExpression)};
   }
     
   // TODO: This is stupid. We can just put some loop logic in here. Do this when tests are stable and quick changes are easy to do.
   if(compiled.size > 1){
     InternalMemoryAccess l = compiled[1]; 
-    *list->PushElem() = {S8("per2"),PushString(out,l.periodExpression)};
-    *list->PushElem() = {S8("incr2"),PushString(out,l.incrementExpression)};
-    *list->PushElem() = {S8("iter2"),PushString(out,l.iterationExpression)};
-    *list->PushElem() = {S8("shift2"),PushString(out,l.shiftExpression)};
+    *list->PushElem() = {"per2",PushString(out,l.periodExpression)};
+    *list->PushElem() = {"incr2",PushString(out,l.incrementExpression)};
+    *list->PushElem() = {"iter2",PushString(out,l.iterationExpression)};
+    *list->PushElem() = {"shift2",PushString(out,l.shiftExpression)};
   } else {
-    *list->PushElem() = {S8("per2"),S8("0")};
-    *list->PushElem() = {S8("incr2"),S8("0")};
-    *list->PushElem() = {S8("iter2"),S8("0")};
-    *list->PushElem() = {S8("shift2"),S8("0")};
+    *list->PushElem() = {"per2","0"};
+    *list->PushElem() = {"incr2","0"};
+    *list->PushElem() = {"iter2","0"};
+    *list->PushElem() = {"shift2","0"};
   }
 
   if(compiled.size > 2){
     InternalMemoryAccess l = compiled[2]; 
-    *list->PushElem() = {S8("per3"),PushString(out,l.periodExpression)};
-    *list->PushElem() = {S8("incr3"),PushString(out,l.incrementExpression)};
-    *list->PushElem() = {S8("iter3"),PushString(out,l.iterationExpression)};
-    *list->PushElem() = {S8("shift3"),PushString(out,l.shiftExpression)};
+    *list->PushElem() = {"per3",PushString(out,l.periodExpression)};
+    *list->PushElem() = {"incr3",PushString(out,l.incrementExpression)};
+    *list->PushElem() = {"iter3",PushString(out,l.iterationExpression)};
+    *list->PushElem() = {"shift3",PushString(out,l.shiftExpression)};
   } else {
-    *list->PushElem() = {S8("per3"),S8("0")};
-    *list->PushElem() = {S8("incr3"),S8("0")};
-    *list->PushElem() = {S8("iter3"),S8("0")};
-    *list->PushElem() = {S8("shift3"),S8("0")};
+    *list->PushElem() = {"per3","0"};
+    *list->PushElem() = {"incr3","0"};
+    *list->PushElem() = {"iter3","0"};
+    *list->PushElem() = {"shift3","0"};
   }
   
   if(compiled.size > 3){
@@ -455,67 +455,67 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   }
   
   // NOTE: We push the start term to the ext pointer in order to save memory inside the unit. This is being done in a  kinda hacky way, but nothing major.
-  String ext_addr = STRING("ext"); // TODO: Should be a parameter or something, not randomly hardcoded here
+  String ext_addr = "ext"; // TODO: Should be a parameter or something, not randomly hardcoded here
   if(!IsZero(freeTerm)){
     String repr = PushRepresentation(freeTerm,temp);
 
-    ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UNPACK_SS(repr));
+    ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UN(repr));
   }
   
   // TODO: No need for a list, we already know all the memory that we are gonna need
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
 
   if(!Empty(compiled.dutyDivExpression)){
-    *list->PushElem() = {S8("extra_delay"),PushString(out,"(%.*s) - 1",UN(compiled.dutyDivExpression))};
+    *list->PushElem() = {"extra_delay",PushString(out,"(%.*s) - 1",UN(compiled.dutyDivExpression))};
   }
   
-  *list->PushElem() = {S8("start"),S8("0")};
-  *list->PushElem() = {S8("ext_addr"),ext_addr};
-  *list->PushElem() = {S8("length"),PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.length))};
+  *list->PushElem() = {"start","0"};
+  *list->PushElem() = {"ext_addr",ext_addr};
+  *list->PushElem() = {"length",PushString(out,"(%.*s) * sizeof(float)",UN(external.length))};
 
   // NOTE: The reason we need to align is because the increase in AXI_DATA_W forces data to be aligned inside the VUnits memories. The single loop does not care because we only need to access values individually, but the double loop cannot function because it assumes that the data is read and stored in a linear matter while in reality the data is stored in multiples of (AXI_DATA_W/DATA_W). 
 
-  *list->PushElem() = {S8("amount_minus_one"),PushString(out,external.amountMinusOne)};
-  *list->PushElem() = {S8("addr_shift"),PushString(out,"(%.*s) * sizeof(float)",UNPACK_SS(external.addrShift))};
+  *list->PushElem() = {"amount_minus_one",PushString(out,external.amountMinusOne)};
+  *list->PushElem() = {"addr_shift",PushString(out,"(%.*s) * sizeof(float)",UN(external.addrShift))};
 
-  *list->PushElem() = {S8("enabled"),S8("1")};
-  *list->PushElem() = {S8("pingPong"),S8("1")};
+  *list->PushElem() = {"enabled","1"};
+  *list->PushElem() = {"pingPong","1"};
 
   {
     InternalMemoryAccess l = internal[0]; 
 
-    *list->PushElem() = {S8("duty"),PushString(out,l.dutyExpression)};
-    *list->PushElem() = {S8("per"),PushString(out,l.periodExpression)};
-    *list->PushElem() = {S8("incr"),PushString(out,l.incrementExpression)};
-    *list->PushElem() = {S8("iter"),PushString(out,l.iterationExpression)};
-    *list->PushElem() = {S8("shift"),PushString(out,l.shiftExpression)};
+    *list->PushElem() = {"duty",PushString(out,l.dutyExpression)};
+    *list->PushElem() = {"per",PushString(out,l.periodExpression)};
+    *list->PushElem() = {"incr",PushString(out,l.incrementExpression)};
+    *list->PushElem() = {"iter",PushString(out,l.iterationExpression)};
+    *list->PushElem() = {"shift",PushString(out,l.shiftExpression)};
   }
     
   if(internal.size > 1){
     InternalMemoryAccess l = internal[1]; 
-    *list->PushElem() = {S8("per2"),PushString(out,l.periodExpression)};
-    *list->PushElem() = {S8("incr2"),PushString(out,l.incrementExpression)};
-    *list->PushElem() = {S8("iter2"),PushString(out,l.iterationExpression)};
-    *list->PushElem() = {S8("shift2"),PushString(out,l.shiftExpression)};
+    *list->PushElem() = {"per2",PushString(out,l.periodExpression)};
+    *list->PushElem() = {"incr2",PushString(out,l.incrementExpression)};
+    *list->PushElem() = {"iter2",PushString(out,l.iterationExpression)};
+    *list->PushElem() = {"shift2",PushString(out,l.shiftExpression)};
   } else {
-    *list->PushElem() = {S8("per2"),S8("0")};
-    *list->PushElem() = {S8("incr2"),S8("0")};
-    *list->PushElem() = {S8("iter2"),S8("0")};
-    *list->PushElem() = {S8("shift2"),S8("0")};
+    *list->PushElem() = {"per2","0"};
+    *list->PushElem() = {"incr2","0"};
+    *list->PushElem() = {"iter2","0"};
+    *list->PushElem() = {"shift2","0"};
   }
 
   // TODO: This is stupid. We can just put some loop logic in here. Do this when tests are stable and quick changes are easy to do.
   if(internal.size > 2){
     InternalMemoryAccess l = internal[2]; 
-    *list->PushElem() = {S8("per3"),PushString(out,l.periodExpression)};
-    *list->PushElem() = {S8("incr3"),PushString(out,l.incrementExpression)};
-    *list->PushElem() = {S8("iter3"),PushString(out,l.iterationExpression)};
-    *list->PushElem() = {S8("shift3"),PushString(out,l.shiftExpression)};
+    *list->PushElem() = {"per3",PushString(out,l.periodExpression)};
+    *list->PushElem() = {"incr3",PushString(out,l.incrementExpression)};
+    *list->PushElem() = {"iter3",PushString(out,l.iterationExpression)};
+    *list->PushElem() = {"shift3",PushString(out,l.shiftExpression)};
   } else {
-    *list->PushElem() = {S8("per3"),S8("0")};
-    *list->PushElem() = {S8("incr3"),S8("0")};
-    *list->PushElem() = {S8("iter3"),S8("0")};
-    *list->PushElem() = {S8("shift3"),S8("0")};
+    *list->PushElem() = {"per3","0"};
+    *list->PushElem() = {"incr3","0"};
+    *list->PushElem() = {"iter3","0"};
+    *list->PushElem() = {"shift3","0"};
   }
 
   if(internal.size > 3){
@@ -536,22 +536,22 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
   String start = PushRepresentation(freeTerm,temp);
 
   if(port == 0){
-    *list->PushElem() = {S8("startA"),start};
+    *list->PushElem() = {"startA",start};
   } else {
-    *list->PushElem() = {S8("startB"),start};
+    *list->PushElem() = {"startB",start};
   }
     
   if(input){
     if(port == 0){
-      *list->PushElem() = {S8("in0_wr"),S8("1")};
+      *list->PushElem() = {"in0_wr","1"};
     } else {
-      *list->PushElem() = {S8("in1_wr"),S8("1")};
+      *list->PushElem() = {"in1_wr","1"};
     }
   } else {
     if(port == 0){
-      *list->PushElem() = {S8("in0_wr"),S8("0")};
+      *list->PushElem() = {"in0_wr","0"};
     } else {
-      *list->PushElem() = {S8("in1_wr"),S8("0")};
+      *list->PushElem() = {"in1_wr","0"};
     }
   }
   
@@ -559,17 +559,17 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
     InternalMemoryAccess l = compiled[0]; 
 
     if(port == 0){
-      *list->PushElem() = {S8("dutyA"),PushString(out,l.dutyExpression)};
-      *list->PushElem() = {S8("perA"),PushString(out,l.periodExpression)};
-      *list->PushElem() = {S8("incrA"),PushString(out,l.incrementExpression)};
-      *list->PushElem() = {S8("iterA"),PushString(out,l.iterationExpression)};
-      *list->PushElem() = {S8("shiftA"),PushString(out,l.shiftExpression)};
+      *list->PushElem() = {"dutyA",PushString(out,l.dutyExpression)};
+      *list->PushElem() = {"perA",PushString(out,l.periodExpression)};
+      *list->PushElem() = {"incrA",PushString(out,l.incrementExpression)};
+      *list->PushElem() = {"iterA",PushString(out,l.iterationExpression)};
+      *list->PushElem() = {"shiftA",PushString(out,l.shiftExpression)};
     } else {
-      *list->PushElem() = {S8("dutyB"),PushString(out,l.dutyExpression)};
-      *list->PushElem() = {S8("perB"),PushString(out,l.periodExpression)};
-      *list->PushElem() = {S8("incrB"),PushString(out,l.incrementExpression)};
-      *list->PushElem() = {S8("iterB"),PushString(out,l.iterationExpression)};
-      *list->PushElem() = {S8("shiftB"),PushString(out,l.shiftExpression)};
+      *list->PushElem() = {"dutyB",PushString(out,l.dutyExpression)};
+      *list->PushElem() = {"perB",PushString(out,l.periodExpression)};
+      *list->PushElem() = {"incrB",PushString(out,l.incrementExpression)};
+      *list->PushElem() = {"iterB",PushString(out,l.iterationExpression)};
+      *list->PushElem() = {"shiftB",PushString(out,l.shiftExpression)};
     }
   }
     
@@ -578,27 +578,27 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
     InternalMemoryAccess l = compiled[1]; 
 
     if(port == 0){
-      *list->PushElem() = {S8("per2A"),PushString(out,l.periodExpression)};
-      *list->PushElem() = {S8("incr2A"),PushString(out,l.incrementExpression)};
-      *list->PushElem() = {S8("iter2A"),PushString(out,l.iterationExpression)};
-      *list->PushElem() = {S8("shift2A"),PushString(out,l.shiftExpression)};
+      *list->PushElem() = {"per2A",PushString(out,l.periodExpression)};
+      *list->PushElem() = {"incr2A",PushString(out,l.incrementExpression)};
+      *list->PushElem() = {"iter2A",PushString(out,l.iterationExpression)};
+      *list->PushElem() = {"shift2A",PushString(out,l.shiftExpression)};
     } else {
-      *list->PushElem() = {S8("per2B"),PushString(out,l.periodExpression)};
-      *list->PushElem() = {S8("incr2B"),PushString(out,l.incrementExpression)};
-      *list->PushElem() = {S8("iter2B"),PushString(out,l.iterationExpression)};
-      *list->PushElem() = {S8("shift2B"),PushString(out,l.shiftExpression)};
+      *list->PushElem() = {"per2B",PushString(out,l.periodExpression)};
+      *list->PushElem() = {"incr2B",PushString(out,l.incrementExpression)};
+      *list->PushElem() = {"iter2B",PushString(out,l.iterationExpression)};
+      *list->PushElem() = {"shift2B",PushString(out,l.shiftExpression)};
     }
   } else {
     if(port == 0){
-      *list->PushElem() = {S8("per2A"),S8("0")};
-      *list->PushElem() = {S8("incr2A"),S8("0")};
-      *list->PushElem() = {S8("iter2A"),S8("0")};
-      *list->PushElem() = {S8("shift2A"),S8("0")};
+      *list->PushElem() = {"per2A","0"};
+      *list->PushElem() = {"incr2A","0"};
+      *list->PushElem() = {"iter2A","0"};
+      *list->PushElem() = {"shift2A","0"};
     } else {
-      *list->PushElem() = {S8("per2B"),S8("0")};
-      *list->PushElem() = {S8("incr2B"),S8("0")};
-      *list->PushElem() = {S8("iter2B"),S8("0")};
-      *list->PushElem() = {S8("shift2B"),S8("0")};
+      *list->PushElem() = {"per2B","0"};
+      *list->PushElem() = {"incr2B","0"};
+      *list->PushElem() = {"iter2B","0"};
+      *list->PushElem() = {"shift2B","0"};
     }
   }
   
@@ -741,7 +741,7 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
   AddressAccess* result = globalAddressGen.Alloc();
   result->name = PushString(out,def->name);
   result->inputVariableNames = CopyArray<String>(def->inputs,out);
-  result->internal = PushLoopLinearSumSimpleVar(STRING("x"),PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
+  result->internal = PushLoopLinearSumSimpleVar("x",PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
   result->dutyDivExpr = SymbolicDeepCopy(dutyDiv,out);
   
@@ -759,16 +759,16 @@ static void EmitDebugAddressGenInfo(AddressAccess* access,CEmitter* c){
   Repr(builder,access->external);
   String externalStr = EndString(temp,builder);
 
-  c->Comment(S8("[DEBUG] Internal address"));
+  c->Comment("[DEBUG] Internal address");
   c->Comment(internalStr);
-  c->Comment(S8("[DEBUG] External address"));
+  c->Comment("[DEBUG] External address");
   c->Comment(externalStr);
 }
 
 static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out){
   TEMP_REGION(temp,out);
 
-  String varName = STRING("args");
+  String varName = "args";
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
     TEMP_REGION(temp,emitter->arena);
@@ -776,12 +776,12 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     for(int i = 0; i < params.size; i++){
       String str = params[i].first;
       
-      String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
+      String t = PushString(temp,"%.*s.%.*s",UN(varName),UN(str));
       String v = params[i].second;
 
       // TODO: Kinda hacky
-      if(CompareString(str,STRING("ext_addr"))){
-        v = PushString(temp,"(iptr) (%.*s)",UNPACK_SS(v));
+      if(CompareString(str,"ext_addr")){
+        v = PushString(temp,"(iptr) (%.*s)",UN(v));
       }
 
       emitter->Assignment(t,v);
@@ -798,17 +798,17 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
 
     region(temp){
       String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
-      c->VarDeclare(STRING("int"),STRING("doubleLoop"),repr);
+      c->VarDeclare("int","doubleLoop",repr);
     }
 
     region(temp){
       String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,temp),temp);
-      c->VarDeclare(STRING("int"),STRING("singleLoop"),repr2);
+      c->VarDeclare("int","singleLoop",repr2);
     }
 
     // TODO: Maybe it would be better to just not generate single or double loop if we can check that one is always gonna be better than the other, right?
-    c->If(STRING("(!forceSingleLoop && forceDoubleLoop) || (!forceSingleLoop && (doubleLoop < singleLoop))"));
-    c->Comment(STRING("Double is smaller (better)"));
+    c->If("(!forceSingleLoop && forceDoubleLoop) || (!forceSingleLoop && (doubleLoop < singleLoop))");
+    c->Comment("Double is smaller (better)");
     region(temp){
       StringBuilder* b = StartString(temp);
       EmitDebugAddressGenInfo(doubleLoop,c);
@@ -819,7 +819,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     }
 
     c->Else();
-    c->Comment(STRING("Single is smaller (better)"));
+    c->Comment("Single is smaller (better)");
     region(temp){
       StringBuilder* b = StartString(temp);
       EmitDebugAddressGenInfo(singleLoop,c);
@@ -881,23 +881,23 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
 
   EmitDebugAddressGenInfo(initial,m);
   
-  String functionName = PushString(temp,"CompileVUnit_%.*s_Ext",UNPACK_SS(addressGenName));
-  m->FunctionBlock(STRING("static AddressVArguments"),functionName);
-  m->Argument(STRING("void*"),STRING("ext"));
+  String functionName = PushString(temp,"CompileVUnit_%.*s_Ext",UN(addressGenName));
+  m->FunctionBlock("static AddressVArguments",functionName);
+  m->Argument("void*","ext");
   
   for(String input : inputVars){
-    m->Argument(STRING("int"),input);
+    m->Argument("int",input);
   }
-  m->VarDeclare(STRING("AddressVArguments"),varName,STRING("{}"));
+  m->VarDeclare("AddressVArguments",varName,"{}");
   
   if(initial->external->terms.size > 1){
     for(int i = 0; i <  initial->external->terms.size; i++){
       LoopLinearSumTerm term  =  initial->external->terms[i];
       String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
       String name = PushString(temp,"a%d",i);
-      String comment = PushString(temp,"Loop var: %.*s",UNPACK_SS(term.var));
+      String comment = PushString(temp,"Loop var: %.*s",UN(term.var));
       m->Comment(comment);
-      m->VarDeclare(STRING("int"),name,repr);
+      m->VarDeclare("int",name,repr);
     }
   
     Recurse(Recurse,0,m,temp);
@@ -919,7 +919,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
 static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
   TEMP_REGION(temp,out);
 
-  String varName = STRING("args");
+  String varName = "args";
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
     TEMP_REGION(temp,emitter->arena);
@@ -927,7 +927,7 @@ static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
     for(int i = 0; i < params.size; i++){
       String str = params[i].first;
       
-      String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
+      String t = PushString(temp,"%.*s.%.*s",UN(varName),UN(str));
       String v = params[i].second;
 
       emitter->Assignment(t,v);
@@ -943,17 +943,17 @@ static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
   Repr(builder,initial->external);
   String addressStr = EndString(temp,builder);
 
-  m->Comment(S8("[DEBUG] Address"));
+  m->Comment("[DEBUG] Address");
   m->Comment(addressStr);
   
-  String functionName = PushString(temp,"CompileVUnit_%.*s",UNPACK_SS(addressGenName));
-  m->FunctionBlock(STRING("static AddressGenArguments"),functionName);
+  String functionName = PushString(temp,"CompileVUnit_%.*s",UN(addressGenName));
+  m->FunctionBlock("static AddressGenArguments",functionName);
 
   for(String input : inputVars){
-    m->Argument(STRING("int"),input);
+    m->Argument("int",input);
   }
 
-  m->VarDeclare(STRING("AddressGenArguments"),varName,STRING("{}"));
+  m->VarDeclare("AddressGenArguments",varName,"{}");
 
   Array<Pair<String,String>> params = InstantiateGen(initial,temp);
   EmitStoreAddressGenIntoConfig(m,params);
@@ -972,7 +972,7 @@ static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
 static String GenerateMemCompilationFunction(AddressAccess* initial,Arena* out){
   TEMP_REGION(temp,out);
 
-  String varName = STRING("args");
+  String varName = "args";
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
     TEMP_REGION(temp,emitter->arena);
@@ -980,7 +980,7 @@ static String GenerateMemCompilationFunction(AddressAccess* initial,Arena* out){
     for(int i = 0; i < params.size; i++){
       String str = params[i].first;
       
-      String t = PushString(temp,"%.*s.%.*s",UNPACK_SS(varName),UNPACK_SS(str));
+      String t = PushString(temp,"%.*s.%.*s",UN(varName),UN(str));
       String v = params[i].second;
 
       emitter->Assignment(t,v);
@@ -996,20 +996,20 @@ static String GenerateMemCompilationFunction(AddressAccess* initial,Arena* out){
   Repr(builder,initial->external);
   String addressStr = EndString(temp,builder);
 
-  m->Comment(S8("[DEBUG] Address"));
+  m->Comment("[DEBUG] Address");
   m->Comment(addressStr);
 
   for(int i = 0; i < ARRAY_SIZE(memInfo); i++){
     auto info = memInfo[i];
 
-    String functionName = PushString(temp,"CompileVUnit_%.*s_%.*s",UNPACK_SS(addressGenName),UN(info.name));
-    m->FunctionBlock(STRING("static AddressMemArguments"),functionName);
+    String functionName = PushString(temp,"CompileVUnit_%.*s_%.*s",UN(addressGenName),UN(info.name));
+    m->FunctionBlock("static AddressMemArguments",functionName);
 
     for(String input : inputVars){
-      m->Argument(STRING("int"),input);
+      m->Argument("int",input);
     }
 
-    m->VarDeclare(STRING("AddressMemArguments"),varName,STRING("{}"));
+    m->VarDeclare("AddressMemArguments",varName,"{}");
 
     Array<Pair<String,String>> params = InstantiateMem(initial,info.port,info.dir,temp);
     EmitStoreAddressGenIntoConfig(m,params);
@@ -1049,42 +1049,42 @@ String GenerateAddressLoadingFunction(String structName,AddressGenType type,Aren
 
   CEmitter* m = StartCCode(temp);
 
-  String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
-  m->FunctionBlock(STRING("static void"),loadFunctionName);
-  String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
-  String varName = STRING("config");
+  String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UN(structName));
+  m->FunctionBlock("static void",loadFunctionName);
+  String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
+  String varName = "config";
   m->Argument(argName,varName);
   
   FULL_SWITCH(type){
   case AddressGenType_GEN:{
-    m->Argument(STRING("AddressGenArguments"),STRING("args"));
+    m->Argument("AddressGenArguments","args");
     for(int i = 0; i <  META_AddressGenParameters_Members.size; i++){
       String str = META_AddressGenParameters_Members[i];
 
-      String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
-      String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
+      String lhs = PushString(temp,"config->%.*s",UN(str));
+      String rhs = PushString(temp,"args.%.*s",UN(str));
       m->Assignment(lhs,rhs);
     }
   } break;
   case AddressGenType_READ:{
-    m->Argument(STRING("AddressVArguments"),STRING("args"));
+    m->Argument("AddressVArguments","args");
 
     for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
       String str = META_AddressVParameters_Members[i];
 
-      String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
-      String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
+      String lhs = PushString(temp,"config->%.*s",UN(str));
+      String rhs = PushString(temp,"args.%.*s",UN(str));
       m->Assignment(lhs,rhs);
     }
   } break;
   case AddressGenType_MEM:{
-    m->Argument(STRING("AddressMemArguments"),STRING("args"));
+    m->Argument("AddressMemArguments","args");
 
     for(int i = 0; i <  META_AddressMemParameters_Members.size; i++){
       String str = META_AddressMemParameters_Members[i];
 
-      String lhs = PushString(temp,"config->%.*s",UNPACK_SS(str));
-      String rhs = PushString(temp,"args.%.*s",UNPACK_SS(str));
+      String lhs = PushString(temp,"config->%.*s",UN(str));
+      String rhs = PushString(temp,"args.%.*s",UN(str));
       m->Assignment(lhs,rhs);
     }
   } break;
@@ -1113,14 +1113,14 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
 
       Array<String> inputVars = access->inputVariableNames;
 
-      m->FunctionBlock(STRING("static void"),functionName);
+      m->FunctionBlock("static void",functionName);
 
       String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
-      String varName = STRING("config");
+      String varName = "config";
       m->Argument(argName,varName);
       
       for(String input : inputVars){
-        m->Argument(STRING("int"),input);
+        m->Argument("int",input);
       }
 
       auto strBuilder = StartString(temp);
@@ -1139,7 +1139,7 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
 
       String load = PushString(temp,"%.*s(%.*s,args)",UN(loadFunctionName),UN(varName));
 
-      m->Assignment(STRING("AddressMemArguments args"),functionCall);
+      m->Assignment("AddressMemArguments args",functionCall);
       
       m->Statement(load);
       m->EndBlock();
@@ -1154,20 +1154,20 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
     return data;
   }
     
-  String functionName = PushString(temp,"%.*s_%.*s",UNPACK_SS(access->name),UNPACK_SS(structName));
-  String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UNPACK_SS(structName));
+  String functionName = PushString(temp,"%.*s_%.*s",UN(access->name),UN(structName));
+  String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UN(structName));
 
   Array<String> inputVars = access->inputVariableNames;
 
-  m->FunctionBlock(STRING("static void"),functionName);
+  m->FunctionBlock("static void",functionName);
 
-  String argName = PushString(temp,"volatile %.*sConfig*",UNPACK_SS(structName));
-  String varName = STRING("config");
+  String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
+  String varName = "config";
   m->Argument(argName,varName);
 
   FULL_SWITCH(type){
   case AddressGenType_READ: {
-    m->Argument(S8("void*"),S8("ext"));
+    m->Argument("void*","ext");
   } break;
   case AddressGenType_GEN: {
   } break;
@@ -1177,7 +1177,7 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
   }
 
   for(String input : inputVars){
-    m->Argument(STRING("int"),input);
+    m->Argument("int",input);
   }
 
   auto strBuilder = StartString(temp);
@@ -1186,10 +1186,10 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
   bool addComma = true;
   FULL_SWITCH(type){
   case AddressGenType_READ: {
-    strBuilder->PushString("CompileVUnit_%.*s_Ext(ext",UNPACK_SS(access->name));
+    strBuilder->PushString("CompileVUnit_%.*s_Ext(ext",UN(access->name));
   } break;
   case AddressGenType_GEN: {
-    strBuilder->PushString("CompileVUnit_%.*s(",UNPACK_SS(access->name));
+    strBuilder->PushString("CompileVUnit_%.*s(",UN(access->name));
     addComma = false;
   } break;
   case AddressGenType_MEM:{
@@ -1207,14 +1207,14 @@ String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* ac
   strBuilder->PushString(")");
   String functionCall = EndString(temp,strBuilder);
 
-  String load = PushString(temp,"%.*s(%.*s,args)",UNPACK_SS(loadFunctionName),UNPACK_SS(varName));
+  String load = PushString(temp,"%.*s(%.*s,args)",UN(loadFunctionName),UN(varName));
 
   FULL_SWITCH(type){
   case AddressGenType_READ: {
-    m->Assignment(STRING("AddressVArguments args"),functionCall);
+    m->Assignment("AddressVArguments args",functionCall);
   } break;
   case AddressGenType_GEN: {
-    m->Assignment(STRING("AddressGenArguments args"),functionCall);
+    m->Assignment("AddressGenArguments args",functionCall);
   } break;
   case AddressGenType_MEM:{
     Assert(false);
@@ -1237,10 +1237,10 @@ String GenerateAddressPrintFunction(AddressAccess* access,Arena* out){
 
   Array<String> inputVars = access->inputVariableNames;
 
-  String functionName = PushString(temp,"Print_%.*s",UNPACK_SS(access->name));
-  m->FunctionBlock(STRING("static void"),functionName);
+  String functionName = PushString(temp,"Print_%.*s",UN(access->name));
+  m->FunctionBlock("static void",functionName);
   for(String input : inputVars){
-    m->Argument(STRING("int"),input);
+    m->Argument("int",input);
   }
 
   for(String input : inputVars){
