@@ -150,6 +150,8 @@ struct MergeGraphResultExisting{
 };
 
 struct GraphMapping{
+  AcceleratorMapping* instMap;
+
   InstanceMap* instanceMap;
   InstanceMap* reverseInstanceMap;
   EdgeMap* edgeMap;

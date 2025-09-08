@@ -1,9 +1,7 @@
 #pragma once
 
 #include "utils.hpp"
-//#include "verilogParsing.hpp"
-
-struct SymbolicExpression;
+#include "symbolic.hpp"
 
 // ============================================================================
 // Verilog interface manipulation
@@ -59,12 +57,12 @@ struct VerilogModuleBuilder{
   ArenaList<VerilogPortGroup>* groups;
 
   // TODO: Is it worth it to encode the groups as an enum instead of names? 
-  void StartGroup(const char* name);
+  void StartGroup(String name);
   void EndGroup(bool preserveEmptyGroup = false);
 
   // If called without group, creates a single wire group.
-  void AddPort(const char* name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
-  void AddPortIndexed(const char* name,int index,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
+  void AddPort(String name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
+  void AddPortIndexed(const char* format,int index,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
 
   // Acts as a bunch of AddPort calls
   void AddInterface(Array<VerilogPortSpec> interface,String prefix);
@@ -287,69 +285,70 @@ struct VEmitter{
   void StartPortGroup();
   void EndPortGroup();
 
-  // TODO: We probably want to change all the bitsize to accept a SymbolicExpression
+  // TODO: We probably want to change all the bitsize to accept a SymbolicExpression. A lot of these duplicated functions can be removed and only access sym expressions.
   // TODO: We also want to remove all the const char* and only use String
-  void Input(String name,int bitsize = 1);
+  void Input(String name,int bitsize);
   void Input(String name,String expr);
-  void Input(String name,SymbolicExpression* expr);
-  void InputIndexed(const char* format,int index,int bitsize = 1);
-  void InputIndexed(const char* format,int index,const char* expression);
+  void Input(String name,SymbolicExpression* expr = SYM_one);
+  void InputIndexed(const char* format,int index,int bitsize);
+  void InputIndexed(const char* format,int index,String expr);
+  void InputIndexed(const char* format,int index,SymbolicExpression* expr = SYM_one);
 
-  void Output(String name,int bitsize = 1);
+  void Output(String name,int bitsize);
   void Output(String name,String expr);
-  void OutputIndexed(const char* format,int index,int bitsize = 1);
-  void OutputIndexed(const char* format,int index,const char* expression);
-
+  void Output(String name,SymbolicExpression* expr = SYM_one);
+  void OutputIndexed(const char* format,int index,int bitsize);
+  void OutputIndexed(const char* format,int index,String expr);
+  void OutputIndexed(const char* format,int index,SymbolicExpression* expr = SYM_one);
+  
   // Module declarations
-  void Wire(String name,int bitsize = 1);
+  void Wire(String name,int bitsize);
   void Wire(String name,String bitsizeExpr);
-  void WireArray(const char* name,int count,int bitsize = 1);
-  void WireArray(const char* name,int count,const char* bitsizeExpr);
-  void WireAndAssignJoinBlock(const char* name,const char* joinElem,int bitsize = 1);
-  void WireAndAssignJoinBlock(const char* name,const char* joinElem,const char* bitsize);
-  void Reg(const char* name,int bitsize = 1);
-  void Reg(const char* name,String expr);
-  void Assign(const char* name,const char* expr);
+  void Wire(String name,SymbolicExpression* expr = SYM_one);
+  void WireArray(String name,int count,int bitsize);
+  void WireArray(String name,int count,String bitsizeExpr);
+  void WireArray(String name,int count,SymbolicExpression* expr = SYM_one);
+  void WireAndAssignJoinBlock(String name,String joinElem,int bitsize = 1);
+  void WireAndAssignJoinBlock(String name,String joinElem,String bitsize);
+  void Reg(String name,int bitsize);
+  void Reg(String name,String expr);
+  void Reg(String name,SymbolicExpression* expr = SYM_one);
   void Assign(String name,String expr);
-  void Integer(const char* name);
+  void Integer(String name);
   void LocalParam(String name,String defaultValue = {});
   
   void DeclareInterface(VerilogModuleInterface* interface,String prefix);
   
   void Blank();
-  void Comment(const char* expr);
-  void Expression(const char* expr);
+  void Comment(String expr);
+  void Expression(String expr);
   void RawStatement(String stmt);
   
-  void AlwaysBlock(const char* posedge1,const char* posedge2); // We only care about clk and rst so max of two allowed
+  void AlwaysBlock(String posedge1,String posedge2); // We only care about clk and rst so max of two allowed
   void InitialBlock();
   void CombBlock();
 
-  void Set(const char* identifier,int val);
-  void Set(const char* identifier,const char* expr);
+  void Set(String identifier,int val);
   void Set(String identifier,String expr);
 
-  void If(const char* expr);
-  void ElseIf(const char* expr);
+  void If(String expr);
+  void ElseIf(String expr);
   void Else();
   void EndIf();
 
-  void Loop(const char* start,const char* loop,const char* incr);
+  void Loop(String start,String loop,String incr);
   void EndLoop();
   
   void EndBlock();
 
   // Instantiating
-  void StartInstance(const char* moduleName,const char* instanceName);
-  void StartInstance(String moduleName,const char* instanceName);
-  void InstanceParam(const char* paramName,int paramValue);
-  void InstanceParam(const char* paramName,const char* paramValue);
-  void InstanceParam(const char* paramName,SymbolicExpression* sym);
-  void PortConnect(const char* portName,const char* connectionExpr);
+  void StartInstance(String moduleName,String instanceName);
+  void InstanceParam(String paramName,int paramValue);
+  void InstanceParam(String paramName,String paramValue);
+  void InstanceParam(String paramName,SymbolicExpression* sym);
   void PortConnect(String portName,String connectionExpr);
-  void PortConnectIndexed(const char* portFormat,int index,const char* connectionExpr);
-  void PortConnectIndexed(const char* portFormat,int index,const char* connectFormat,int connectIndex);
   void PortConnectIndexed(const char* portFormat,int index,String connectionExpr);
+  void PortConnectIndexed(const char* portFormat,int index,const char* connectFormat,int connectIndex);
 
   void PortConnectInterface(VerilogModuleInterface* interface,String interfaceWirePrefix);
 

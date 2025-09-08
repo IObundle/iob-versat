@@ -23,7 +23,7 @@ enum Direction{
 struct PortInstance{
   FUInstance* inst;
   int port;
-  Direction dir; // NOTE: At the moment a Direction_NONE is most likely an error. 
+  Direction dir; // NOTE: At the moment a Direction_NONE is most likely an error. TODO: Does it make sense to remove this and just have two different types, a InputPortInstance and an OutputPortInstance?
 };
 
 static inline PortInstance MakePortOut(FUInstance* inst,int port){
@@ -388,6 +388,7 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);
 
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+Opt<Edge> FindEdge(PortInstance out,PortInstance in,int delay);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
@@ -397,8 +398,8 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay);
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnitOutput,PortInstance newUnitInput);
-
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnitOutput,PortInstance newUnitInput,int delay = 0);
+void RemoveFUInstance(Accelerator* accel,FUInstance* toRemove);
 //
 // Graph info and connection calculations
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
@@ -453,3 +454,14 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
 Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 void PrintSubMappingInfo(SubMap* info);
+
+// ============================================================================
+// MARKED
+
+struct FlattenWithMergeResult{
+  Accelerator* accel;
+  AcceleratorMapping* reconToFlattenInst;
+};
+
+bool CanBeFlattened(Accelerator* accel);
+FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex);

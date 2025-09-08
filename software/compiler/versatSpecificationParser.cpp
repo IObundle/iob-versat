@@ -16,41 +16,40 @@
 
 
 // TODO: This functions could show more lines of code before and after so we can actually see where the problem is.
-void ReportError(String content,Token faultyToken,const char* error){
+void ReportError(String content,Token faultyToken,String error){
   TEMP_REGION(temp,nullptr);
 
   String loc = GetRichLocationError(content,faultyToken,temp);
 
   printf("[Error]\n");
-  printf("%s:\n",error);
+  printf("%.*s:\n",UN(error));
   printf("%.*s\n",UN(loc));
   printf("\n");
 }
 
-void ReportError2(String content,Token faultyToken,Token goodToken,const char* faultyError,const char* good){
+void ReportError2(String content,Token faultyToken,Token goodToken,String faultyError,String good){
   TEMP_REGION(temp,nullptr);
 
   String loc = GetRichLocationError(content,faultyToken,temp);
   String loc2 = GetRichLocationError(content,goodToken,temp);
   
   printf("[Error]\n");
-  printf("%s:\n",faultyError);
+  printf("%.*s:\n",UN(faultyError));
   printf("%.*s\n",UN(loc));
-  printf("%s:\n",good);
+  printf("%.*s:\n",UN(good));
   printf("%.*s\n",UN(loc2));
   printf("\n");
 }
 
-void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
+void ReportError(Tokenizer* tok,Token faultyToken,String error){
   String content = tok->GetContent();
   ReportError(content,faultyToken,error);
 }
 
-bool _ExpectError(Tokenizer* tok,const char* str){
+bool _ExpectError(Tokenizer* tok,String expected){
   TEMP_REGION(temp,nullptr);
 
   Token got = tok->NextToken();
-  String expected = str;
   if(!CompareString(got,expected)){
     
     auto builder = StartString(temp);
@@ -1526,11 +1525,11 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   return res;
 }
 
-void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
+void Synchronize(Tokenizer* tok,BracketList<String> syncPoints){
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
-    for(const char* point : syncPoints){
+    for(String point : syncPoints){
       if(CompareString(peek,point)){
         return;
       }

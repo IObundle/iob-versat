@@ -180,7 +180,7 @@ public:
 };
 
 bool IsOnlyWhitespace(String tok);
-bool Contains(String str,const char* toCheck);
+bool Contains(String str,String toCheck);
 bool StartsWith(String toSearch,String starter);
 
 bool CheckFormat(const char* format,String tok);

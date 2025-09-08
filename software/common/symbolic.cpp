@@ -2493,3 +2493,34 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum){
   Repr(builder,fullExpression);
   
 }
+
+// ============================================================================
+// Global special Symbolic Expressions 
+
+static SymbolicExpression SYM_INST_zero  = {.type = SymbolicExpressionType_LITERAL,.literal = 0};
+static SymbolicExpression SYM_INST_one   = {.type = SymbolicExpressionType_LITERAL,.literal = 1};
+static SymbolicExpression SYM_INST_eight = {.type = SymbolicExpressionType_LITERAL,.literal = 8};
+
+static SymbolicExpression SYM_INST_dataW    = {.type = SymbolicExpressionType_VARIABLE,.variable = "DATA_W"};
+static SymbolicExpression SYM_INST_addrW    = {.type = SymbolicExpressionType_VARIABLE,.variable = "ADDR_W"};
+static SymbolicExpression SYM_INST_axiAddrW = {.type = SymbolicExpressionType_VARIABLE,.variable = "AXI_ADDR_W"};
+static SymbolicExpression SYM_INST_axiDataW = {.type = SymbolicExpressionType_VARIABLE,.variable = "AXI_DATA_W"};
+static SymbolicExpression SYM_INST_delayW   = {.type = SymbolicExpressionType_VARIABLE,.variable = "DELAY_W"};
+static SymbolicExpression SYM_INST_lenW     = {.type = SymbolicExpressionType_VARIABLE,.variable = "LEN_W"};
+
+SymbolicExpression* SYM_zero = &SYM_INST_zero;
+SymbolicExpression* SYM_one = &SYM_INST_one;
+SymbolicExpression* SYM_eight = &SYM_INST_eight;
+
+SymbolicExpression* SYM_dataW = &SYM_INST_dataW;
+SymbolicExpression* SYM_addrW = &SYM_INST_addrW;
+SymbolicExpression* SYM_axiAddrW = &SYM_INST_axiAddrW;
+SymbolicExpression* SYM_axiDataW = &SYM_INST_axiDataW;
+SymbolicExpression* SYM_delayW = &SYM_INST_delayW;
+SymbolicExpression* SYM_lenW = &SYM_INST_lenW;
+
+static SymbolicExpression  SYM_INST_axiStrobeW  = {.type = SymbolicExpressionType_DIV,.top = SYM_axiDataW,.bottom = SYM_eight};
+static SymbolicExpression  SYM_INST_dataStrobeW = {.type = SymbolicExpressionType_DIV,.top = SYM_dataW,.bottom = SYM_eight};
+
+SymbolicExpression* SYM_axiStrobeW = &SYM_INST_axiStrobeW;
+SymbolicExpression* SYM_dataStrobeW = &SYM_INST_dataStrobeW;

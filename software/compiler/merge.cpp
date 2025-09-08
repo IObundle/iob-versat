@@ -1,6 +1,7 @@
 #include "merge.hpp"
 
 #include "accelerator.hpp"
+#include "configurations.hpp"
 #include "debug.hpp"
 #include "debugVersat.hpp"
 #include "declaration.hpp"
@@ -665,6 +666,54 @@ void OutputConsolidationGraph(ConsolidationGraph graph,bool onlyOutputValid,Stri
   fprintf(outputFile,"}\n");
 }
 
+void DebugRegionOutputConsolidationGraph(ConsolidationGraph graph,String name,bool onlyOutputValid = true){
+  TEMP_REGION(temp,nullptr);
+
+  String filePath = GetDebugRegionFilepath(name,temp);
+  
+  FILE* outputFile = OpenFileAndCreateDirectories(filePath,"w",FilePurpose_DEBUG_INFO);
+  DEFER_CLOSE_FILE(outputFile);
+
+  fprintf(outputFile,"graph GraphName {\n\tnode [fontcolor=white,style=filled,color=\"160,60,176\"];\n");
+  for(int i = 0; i < graph.nodes.size; i++){
+    MappingNode* node = &graph.nodes[i];
+
+    if(onlyOutputValid && !graph.validNodes.Get(i)){
+      continue;
+    }
+
+    BLOCK_REGION(temp);
+
+    fprintf(outputFile,"\t\"%.*s\";\n",UN(Repr(node,temp)));
+  }
+
+  for(int i = 0; i < graph.nodes.size; i++){
+    if(!graph.validNodes.Get(i)){
+      continue;
+    }
+
+    MappingNode* node1 = &graph.nodes[i];
+    for(int ii = i + 1; ii < graph.edges.size; ii++){
+      if(!graph.validNodes.Get(ii)){
+        continue;
+      }
+      if(!graph.edges[i].Get(ii)){
+        continue;
+      }
+
+      MappingNode* node2 = &graph.nodes[ii];
+
+      BLOCK_REGION(temp);
+      String str1 = Repr(node1,temp);
+      String str2 = Repr(node2,temp);
+
+      fprintf(outputFile,"\t\"%.*s\" -- \"%.*s\";\n",UN(str1),UN(str2));
+    }
+  }
+
+  fprintf(outputFile,"}\n");
+}
+
 void DoInsertMapping(InstanceMap* map,FUInstance* inst1,FUInstance* inst0){
   if(map->Exists(inst1)){
     Assert(map->GetOrFail(inst1) == inst0);
@@ -715,7 +764,7 @@ GraphMapping InitGraphMapping(Arena* out){
   return mapping;
 }
 
-GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,String name,Arena* out){
+GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,ConsolidationGraphOptions options,Arena* out){
   TEMP_REGION(temp,out);
 
   ConsolidationResult result = {};
@@ -724,9 +773,7 @@ GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,C
   }
   ConsolidationGraph graph = result.graph;
 
-  if(globalDebug.outputConsolidationGraphs){
-    OutputConsolidationGraph(graph,true,name,"ConsolidationGraph.dot");
-  }
+  DebugRegionOutputConsolidationGraph(graph,"ConsolidationGraph");
   
   GraphMapping res = InitGraphMapping(out);
 
@@ -756,13 +803,7 @@ GraphMapping ConsolidationGraphMapping(Accelerator* accel1,Accelerator* accel2,C
   upperBound = INT_MAX; // TODO: Upperbound not working correctly.
   ConsolidationGraph clique = MaxClique(graph,upperBound,temp,Seconds(10)).clique;
 
-#if 0
-  printf("Clique: %d\n",ValidNodes(clique));
-#endif
-
-  if(globalDebug.outputGraphs){
-    OutputConsolidationGraph(clique,true,name,"Clique1.dot");
-  }
+  DebugRegionOutputConsolidationGraph(clique,"Clique");
   AddCliqueToMapping(res,clique);
 
   return res;
@@ -933,7 +974,7 @@ void PrintMergePossibility(Accelerator* accel1,Accelerator* accel2){
 #endif
 }
 
-static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,String name,Arena* out){
+static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,Arena* out){
   DEBUG_REGION("CalculateMergeMapping");
   TEMP_REGION(temp,out);
 
@@ -975,7 +1016,7 @@ static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel
     options.mapNodes = false;
     options.specifics = specificNodes;
 
-    graphMapping = ConsolidationGraphMapping(accel1,accel2,options,name,out);
+    graphMapping = ConsolidationGraphMapping(accel1,accel2,options,out);
   }break;
   case MergingStrategy::FIRST_FIT:{
     graphMapping = FirstFitGraphMapping(accel1,accel2,out);
@@ -1020,7 +1061,7 @@ int GetFreeMuxGroup(Accelerator* accel){
   }
 }
 
-MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator* flatten2,GraphMapping& graphMapping,String name,Arena* out){
+MergeGraphResultExisting MergeGraphToExisting(Accelerator* existing,Accelerator* flatten2,GraphMapping& graphMapping,Arena* out){
   TEMP_REGION(temp,out);
 
   int size1 = existing->allocated.Size();
@@ -1591,7 +1632,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
-  Merge2(types,name,specifics,modifier,strat);
+  return Merge2(types,name,specifics,modifier,strat);
   
   Assert(types.size >= 2);
 
@@ -1606,8 +1647,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   for(FUDeclaration* decl : types){
     mergedAmount += decl->MergePartitionSize();
   }
-  
-  printf("%.*s %d\n",UN(name),mergedAmount);
   
   for(int i = 0; i < size; i++){
     flatten[i] = types[i]->flattenedBaseCircuit;
@@ -1632,7 +1671,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
     return EndArray(arr);
   }();
-                                            
+
   Array<SpecificMergeNodes> specificNodes = [&](){
     auto arr = StartArray<SpecificMergeNodes>(temp); // For now, only use specifics for two graphs.
     for(SpecificMergeNode node : specifics){
@@ -1645,20 +1684,17 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }();
 
   for(int i = 1; i < size; i++){
-    String folderName = PushString(temp,"%.*s/Merge_%d",UN(name),i);
-    
     GraphMapping map = {};
 
     if(modifier & MergeModifier_NO_UNIT_MERGED){
       map = InitGraphMapping(temp); // Empty map
     } else { 
-      map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,folderName,temp2);
+      map = CalculateMergeMapping(mergedAccel,flatten[i],specificNodes,strat,temp2);
     }
     
-    MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,folderName,temp2);
+    MergeGraphResultExisting res = MergeGraphToExisting(mergedAccel,flatten[i],map,temp2);
 
-    OutputDebugDotGraph(res.result,StaticFormat("result%d.dot",i));
-
+    //OutputDebugDotGraph(res.result,StaticFormat("result%d.dot",i));
     flattenToMergedAccel[i] = res.map2;
     mergedAccel = res.result;
   }
@@ -2028,13 +2064,16 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       for(DelayToAdd toAdd : delaysToAdd){
         Edge reconEdge = toAdd.edge;
 
+        printf("ADDDING\n\n\n\n");
+        DEBUG_BREAK();
+        
         PortInstance n0 = MappingMapOutput(reconToMergedAccel[i],reconEdge.units[0]);
         PortInstance n1 = MappingMapInput(reconToMergedAccel[i],reconEdge.units[1]);
 
         String uniqueName = PushString(globalPermanent,"%.*s_%d_%d",UN(toAdd.bufferName),i,outerIndex);
         FUInstance* buffer = CreateFUInstance(mergedAccel,BasicDeclaration::buffer,uniqueName);
         SetStatic(mergedAccel,buffer);
-       
+
         // TODO: After changing mapping, do not know if we keep reconEdge port or not. 
         InsertUnit(mergedAccel,MakePortOut(n0.inst,reconEdge.units[0].port),MakePortIn(n1.inst,reconEdge.units[1].port),MakePortOut(buffer,0),MakePortIn(buffer,0));
       }
@@ -2051,14 +2090,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   }
   
   size = recon.size;
-
-  printf("%.*s ReconSize: %d\n",UN(name),size);
   
   declInst.fixedDelayCircuit = mergedAccel;
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  // MARK: Causes MERGE_TwoLevels to fail if false
+  // MARK: Causes MERGE_TwoLevels to fail if false, which 
   bool oldDelayCalc = true;
   
   FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent,oldDelayCalc);
@@ -2242,6 +2279,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
 
+  DEBUG_BREAK();
+  
   return decl;
 }
 
@@ -2447,11 +2486,19 @@ MergeAndRecons* StartMerge(int amountOfRecons,Array<Accelerator*> inputs){
 }
 
 FUInstance* MapOrCreateNode(Accelerator* accel,AcceleratorMapping* map,FUInstance* inst){
-  FUInstance* mapped = MappingMapNode(map,inst);;
+  FUInstance* mapped = MappingMapNode(map,inst);
 
   // TODO: All this is extra logic because we still did not change Mapping to support the Direction present on a PortInstance. For now we carry on since we want to finish the recon stuff first.
   
-  if(!mapped){
+  if(mapped){
+    // NOTE: The name stuff is handled when inserting the mappings from the GraphMapping
+    //mapped->name = PushString(globalPermanent,"%.*s_%.*s",UN(inst->name),UN(mapped->name));
+  } else {
+     //static int id = 1000;
+     //String newName = PushString(globalPermanent,"%.*s_%d",UN(inst->name),id++);
+
+    //mapped = CopyInstance(accel,inst,false,newName);
+
     mapped = CopyInstance(accel,inst,false,inst->name);
     MappingInsertEqualNode(map,inst,mapped);
   }
@@ -2544,27 +2591,55 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   }
 #endif
   
+  for(int i = 0; i < size; i++){
+    DebugRegionOutputDotGraph(flatten[i],SF("Input%d",i));
+  }
+
+  /*
+    TODO: We need to make the recon graphs for each type of merged entity before we enter the merged graph loop.
+    For module entities that contain merged units, we need one recon for each type of merged entity and we also need to keep the units that the module instantiates as well.
+    We also need to make sure that the units from the module are always merged with themselves in the recons. Basically, the recons that come from modules that contain merged units are "poluted" with more units than we cared about and we have to make sure that these units always align with 
+  */
+
+  /*
+    First, I need a flatten algorithm that creates the recons when flattening a module that contains merged units.
+    Technically should be easy, all I have to do is use the merge recon as the source of the flattening instead of the actual graph.
+    Need to save the recons then.
+  */
+  
   MergeAndRecons* merged = StartMerge(size,flatten);
   Accelerator* mergedGraph = merged->mergedGraph;
   
   EdgeIterator iter = IterateEdges(flatten[0]); 
 
+  // Creates units
+  for(FUInstance* inst : flatten[0]->allocated){
+    FUInstance* recon = MapOrCreateNode(merged->recons[0],merged->inputToRecon[0],inst);
+    MapOrCreateNode(merged->mergedGraph,merged->reconToMerged[0],recon);
+  }
+  
   while(iter.HasNext()){
     Edge edge = iter.Next();
 
+    // TODO: Because the nodes already exist, we could change this to only map instead of creating units.
+    //       We do not want to create units at this point
     AddEdgeSingle(merged,edge,0);
   }
   
   for(int i = 1; i < size; i++){
-    String folderName = PushString(temp,"%.*s/Merge_%d",UN(name),i);
-
     // Maps from flatten to mergedGraph
-    GraphMapping map = CalculateMergeMapping(merged->mergedGraph,flatten[i],{},strat,folderName,temp);
+    GraphMapping map = {};
+
+    if(modifier & MergeModifier_NO_UNIT_MERGED){
+      map = InitGraphMapping(temp); // Empty map
+    } else { 
+      map = CalculateMergeMapping(merged->mergedGraph,flatten[i],{},strat,temp);
+    }
 
     Accelerator* recon = merged->recons[i];
     AcceleratorMapping* inputToRecon = merged->inputToRecon[i];
     AcceleratorMapping* reconToMerged = merged->reconToMerged[i];
-
+    
     // Insert the mapping for the recons
     for(Pair<FUInstance*,FUInstance**> mapped : map.instanceMap){
       FUInstance* flattenInst = mapped.first;
@@ -2572,9 +2647,23 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
 
       FUInstance* reconInst = MapOrCreateNode(recon,inputToRecon,flattenInst);
 
+      if(mergedInst){
+        if(!(mergedInst->name == flattenInst->name)){
+          mergedInst->name = PushString(globalPermanent,"%.*s_%.*s",UN(mergedInst->name),UN(flattenInst->name));
+        }
+      }
+      
       MappingInsertEqualNode(reconToMerged,reconInst,mergedInst);
     }
+
+    // Create nodes
+    for(FUInstance* inst : flatten[i]->allocated){
+      FUInstance* recon = MapOrCreateNode(merged->recons[i],merged->inputToRecon[i],inst);
+      MapOrCreateNode(merged->mergedGraph,merged->reconToMerged[i],recon);
+    }
     
+    // TODO: Because the nodes already exist, we could change this to only map instead of creating units.
+    //       We do not want to create units at this point
     EdgeIterator iter = IterateEdges(flatten[i]);
     while(iter.HasNext()){
       Edge edge = iter.Next();
@@ -2595,6 +2684,8 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   // TODO: We have the full information needed to only use the minimum amount of ports needed.
   //       We are not forced to use a fixed amount of ports.
   FUDeclaration* muxType = GetTypeByName("CombMux8");
+
+  DebugOutputGraphs(merged,"BeforeInsertingMux");
   
   // At this point we need to add the multiplexers
   // Also assuming that we already removed all the superflouos edges (same node and input connected to same node and input edges can just be collapsed into one)
@@ -2628,11 +2719,12 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
       
       String uniqueName = GetFreeMergeMultiplexerName(mergedGraph,globalPermanent);
       FUInstance* multiplexer = CreateFUInstance(mergedGraph,muxType,uniqueName);
-
+      multiplexer->isMergeMultiplexer = true;
+      
       ConnectUnits(MakePortOut(multiplexer,0),MakePortIn(inst,port),0);
 
-      // NOTE: Because units can be merged and recon graphs might contain more muxes that there are conflicts (because the input node is shared between recons) then we need to make sure that we do not map more 
-      Hashmap<PortInstance,int>* portsMapped = PushHashmap<PortInstance,int>(temp,size);
+      // NOTE: Because units can be merged and recon graphs might contain more muxes than there are conflicts (because the input node is shared between recons) then we need to make sure that we do not map more 
+      Hashmap<Pair<PortInstance,int>,int>* portsMapped = PushHashmap<Pair<PortInstance,int>,int>(temp,size);
 
       int multiplexerInputPortUsed = 0;
 
@@ -2646,39 +2738,48 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
         if(!mappedReconInput.inst){
           continue;
         }
-            
+        
         for(int i = 0; i <  portInstancesConnectSameInput.size; i++){
           PortInstance outputPort  =  portInstancesConnectSameInput[i];
           int edgeDelay = edgeDelays[i];
-              
+
           PortInstance mappedReconOutput = MappingMapOutput(map,outputPort);
-          if(mappedReconOutput.inst){
-            int mergeGraphInputPort = -1;
-            if(portsMapped->Exists(outputPort)){
-              // Only add multiplexer to recon graph
-              mergeGraphInputPort = portsMapped->GetOrFail(outputPort);
-            } else {
-              mergeGraphInputPort = multiplexerInputPortUsed++;
-              portsMapped->Insert(outputPort,mergeGraphInputPort);
 
-              // Also adds connection to merged graph multiplexer
-              ConnectUnits(outputPort,MakePortIn(multiplexer,mergeGraphInputPort),edgeDelay);
-            }
-            Assert(mergeGraphInputPort >= 0);
-                
-            // Add multiplexer to recon graph
-            FUInstance* reconMux = CreateFUInstance(recon,muxType,uniqueName);
-
-            InsertUnit(recon,mappedReconOutput,mappedReconInput,MakePortOut(reconMux,0),MakePortIn(reconMux,mergeGraphInputPort));
-                
-            MappingInsertEqualNode(merged->reconToMerged[reconIndex],reconMux,multiplexer);
+          if(!mappedReconOutput.inst){
+            continue;
           }
+          // NOTE: Need to check if the edge exists (because we might have different graphs with almost equal edges because of different delays)
+          Opt<Edge> edge = FindEdge(mappedReconOutput,mappedReconInput,edgeDelay);
+          if(!edge.has_value()){
+            continue;
+          }
+
+          int mergeGraphInputPort = -1;
+          if(portsMapped->Exists({outputPort,edgeDelay})){
+            // Only add multiplexer to recon graph
+            mergeGraphInputPort = portsMapped->GetOrFail({outputPort,edgeDelay});
+          } else {
+            mergeGraphInputPort = multiplexerInputPortUsed++;
+            portsMapped->Insert({outputPort,edgeDelay},mergeGraphInputPort);
+
+            // Also adds connection to merged graph multiplexer
+            ConnectUnits(outputPort,MakePortIn(multiplexer,mergeGraphInputPort),edgeDelay);
+          }
+          Assert(mergeGraphInputPort >= 0);
+                
+          // Add multiplexer to recon graph
+          FUInstance* reconMux = CreateFUInstance(recon,muxType,uniqueName);
+          reconMux->isMergeMultiplexer = true;
+
+          InsertUnit(recon,mappedReconOutput,mappedReconInput,MakePortOut(reconMux,0),MakePortIn(reconMux,mergeGraphInputPort),edgeDelay);
+                
+          MappingInsertEqualNode(merged->reconToMerged[reconIndex],reconMux,multiplexer);
         }
       }
     }
   }
 
-  DebugOutputGraphs(merged,"MergeAndRecons");
+  DebugOutputGraphs(merged,"AfterInsertingMux");
 
   // TODO: Because we added the muxes we calculate the inversion again to update stuff.
   //       This is wasteful and the better approach would be to implement a bimap.
@@ -2686,11 +2787,194 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
     mergedToRecon[i] = MappingInvert(merged->reconToMerged[i],temp);
   }
 
+  FUDeclaration declInst = {};
+
+  // TODO: Kinda hacked approach to this
+  declInst.parameters = PushArray<Parameter>(globalPermanent,6);
+
+  declInst.parameters[0] = {"ADDR_W",PushLiteral(globalPermanent,32)};
+  declInst.parameters[1] = {"DATA_W",PushLiteral(globalPermanent,32)};
+  declInst.parameters[2] = {"DELAY_W",PushLiteral(globalPermanent,7)};
+  declInst.parameters[3] = {"AXI_ADDR_W",PushLiteral(globalPermanent,32)};
+  declInst.parameters[4] = {"AXI_DATA_W",PushLiteral(globalPermanent,32)};
+  declInst.parameters[5] = {"LEN_W",PushLiteral(globalPermanent,20)};
+
+  declInst.name = PushString(globalPermanent,name);
+  
+  FUDeclaration* decl = RegisterFU(declInst);
+
+  Pair<Accelerator*,AcceleratorMapping*> baseCopy = CopyAcceleratorWithMapping(mergedGraph,AcceleratorPurpose_BASE,true,globalPermanent);
+
+  // ======================================
+  // Calculate and fix delays
+
+  Array<DAGOrderNodes> reconOrder = PushArray<DAGOrderNodes>(temp,size);
+  Array<CalculateDelayResult> reconDelay = PushArray<CalculateDelayResult>(temp,size);
+
+  while(true){
+    bool insertedBuffer = false;
+    for(int i = 0; i < size; i++){
+      Accelerator* recon = merged->recons[i];
+
+      // TODO: Need to see if we actually need reconOrder here or not.
+      //       After previous changes, we might get away with only calculating it on the spot. Need to check this.
+      reconOrder[i] = CalculateDAGOrder(recon,temp);
+      reconDelay[i] = CalculateDelay(recon,temp);
+      
+      Array<DelayToAdd> delaysToAdd = GenerateFixDelays(recon,reconDelay[i].edgesDelay,globalPermanent);
+
+      AcceleratorMapping* reconToMerged = merged->reconToMerged[i];
+      for(DelayToAdd toAdd : delaysToAdd){
+        insertedBuffer = true;
+        
+        Edge reconEdge = toAdd.edge;
+
+        static int added = 0;
+        String uniqueName = PushString(globalPermanent,"%.*s_%d_%d",UN(toAdd.bufferName),i,added++);
+
+        // Add to recon
+        {
+          FUInstance* buffer = CreateFUInstance(recon,BasicDeclaration::buffer,uniqueName);
+          SetStatic(recon,buffer);
+
+          InsertUnit(recon,reconEdge.units[0],reconEdge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
+        }
+
+        // Add to merged graph
+        {
+          PortInstance n0 = MappingMapOutput(reconToMerged,reconEdge.units[0]);
+          PortInstance n1 = MappingMapInput(reconToMerged,reconEdge.units[1]);
+
+          FUInstance* buffer = CreateFUInstance(mergedGraph,BasicDeclaration::buffer,uniqueName);
+          SetStatic(mergedGraph,buffer);
+
+          InsertUnit(mergedGraph,MakePortOut(n0.inst,reconEdge.units[0].port),MakePortIn(n1.inst,reconEdge.units[1].port),MakePortOut(buffer,0),MakePortIn(buffer,0));
+        }
+      }
+    }
+
+    if(insertedBuffer){
+      continue;
+    }
+
+    break;
+  }
+
+  DebugOutputGraphs(merged,"AfterInsertingBuffers");
+
+  Array<Hashmap<FUInstance*,int>*> reconToOrder = PushArray<Hashmap<FUInstance*,int>*>(temp,size);
+  for(int i = 0; i < reconToOrder.size; i++){
+    DAGOrderNodes order = reconOrder[i];
+    reconToOrder[i] = PushHashmap<FUInstance*,int>(temp,order.instances.size);
+
+    for(int ii = 0; ii < order.instances.size; ii++){
+      reconToOrder[i]->Insert(order.instances[ii],order.order[ii]);
+    }
+  }
+  
+  decl->baseCircuit = baseCopy.first;
+  decl->flattenedBaseCircuit = baseCopy.first; // Merged graph is already flattened.
+  // TODO: We still need to look at the delay insertion step.
+  decl->fixedDelayCircuit = baseCopy.first;
+  
+  decl->type = FUDeclarationType_MERGED;
+
+  FillDeclarationWithAcceleratorValues(decl,mergedGraph,globalPermanent,false);
+  FillDeclarationWithDelayType(decl);
+
+  decl->info.infos = PushArray<MergePartition>(globalPermanent,size);
+  
+  for(int i = 0; i < size; i++){
+    decl->info.infos[i].recon = merged->recons[i];
+    decl->info.infos[i].name  = types[i]->name;
+
+    decl->info.infos[i].info = GenerateInitialInstanceInfo(mergedGraph,globalPermanent,{},false);
+
+    AccelInfoIterator iter = StartIteration(&decl->info);
+    iter.SetMergeIndex(i);
+    iter.accelName = decl->info.infos[i].name;
+    FillInstanceInfo(iter,globalPermanent);
+    
+    for(; iter.IsValid(); iter = iter.Next()){
+      InstanceInfo* info = iter.CurrentUnit();
+      info->isMergeMultiplexer = info->inst->isMergeMultiplexer;
+
+      FUInstance* mergeInst = info->inst;
+      FUInstance* reconInst = MappingMapNode(mergedToRecon[i],mergeInst);
+
+      if(reconInst){
+        info->inst = reconInst;
+        info->debug = reconInst->debug;
+        info->baseName = reconInst->name;
+
+        if(info->isMergeMultiplexer){
+          Assert(reconInst->allInputs->next == nullptr);
+
+          info->mergePort = reconInst->allInputs->port;
+        }
+
+        info->baseNodeDelay = reconDelay[i].nodeDelay->GetOrFail(reconInst).value;
+        info->localOrder = reconToOrder[i]->GetOrFail(reconInst);
+        info->addressGenUsed = reconInst->addressGenUsed;
+      } else {
+        // TODO: In theory we would like for this to work but some code relies on the inst always existing.
+        //info->inst = nullptr;
+        info->doesNotBelong = true;
+      }
+    }
+  }
+  
+  for(int i = 0; i < size; i++){
+    decl->info.infos[i].baseType = types[i];
+    
+    AccelInfoIterator iter = StartIteration(&decl->info);
+    iter.SetMergeIndex(i);
+    
+    decl->info.infos[i].inputDelays = ExtractInputDelays(iter,globalPermanent);
+    decl->info.infos[i].outputLatencies = ExtractOutputLatencies(iter,globalPermanent);
+  }
+
+  // TODO: Honestly this shouldn't even be needed. Kinda hacky
+  //
+  if(1){
+    AccelInfoIterator iter = StartIteration(&decl->info);
+    for(int i = 0; i < iter.MergeSize(); i++){
+      for(AccelInfoIterator it = iter; it.IsValid(); it = it.Next()){
+        it.SetMergeIndex(i);
+        it.CurrentUnit()->parent = decl;
+      }
+    }
+  }
+
+
+  /*
+      Missing data:
+      - all the AccelInfo data besides the units themselves.
+  */
+  
+  DebugRegionOutputDotGraph(decl->flattenedBaseCircuit,"FlattenedMergedGraph");
+
+  decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
+
+  FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
+
+  DEBUG_BREAK();
+  
+  return decl;
+  
   /*
     Because there is no guarantee that we can perform delay calculation on the recon graphs that we currently have, in order to implement proper hierarchical merge we need to obtain the recon of the lowest level of graphs that we can go.
   */
 
   /*
+
+IMPORTANT:
+
+  Merge units are always flattened. That means that in the flatten approach we only need to flatten a merge unit at one level only. We never reach the point where a flatten of a merge units needs to be flattened again, because a merge unit cannot contain merge units. They are always flattened.
+
+
+
+
 
   Because we need to be able to perform delay calculation, we need to get recon of the smallest types possible (any higher order type probably cannot handle delay calculation).
 
@@ -2723,19 +3007,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   If that is the case, then we might be able to offload the merge revamp to another time. We need to focus on fixing the merge right now and worrying about the proper impl. later
 
   */
-
-#if 0
-  LEFT HERE - TODO tomorrow. Check how the current merge handles a merge with a module that contains a merge and some units.
-  Based on how well this works, try to simplify for our reimplementation. Remember, I do not want any path based reconstruction based approach. Do not want any name based approach either.
-  Check what needs to be improved, either the mappings that we store need to improve or wathever. Do it.
-#endif
-  
-# if 0
-  LEFT HERE - First, check if using CombMux is enough to skip delay calculation and if we can just use this very crude impl to fix our problem.
-              Then, if this works, just shove it onto git and move to versat-ai because we still need to do that stuff with the benchmark stuff.
-#endif
-
-  return {};
 }
 
 #endif

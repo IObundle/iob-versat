@@ -337,6 +337,9 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
 }
 
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
+  DEBUG_REGION("RegisterSubUnit");
+  DEBUG_REGION(circuit->name);
+
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
@@ -364,6 +367,17 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   res->parameters[3] = {"AXI_ADDR_W",PushLiteral(permanent,32)};
   res->parameters[4] = {"AXI_DATA_W",PushLiteral(permanent,32)};
   res->parameters[5] = {"LEN_W",PushLiteral(permanent,20)};
+  
+  bool containsMerge = false;
+
+  for(FUInstance* inst : circuit->allocated){
+    if(inst->declaration->type == FUDeclarationType_MERGED){
+      containsMerge = true;
+    }
+  }
+
+  if(containsMerge)
+    printf("Contains Merged\n");
   
   if(circuit->allocated.Size() == 0){
     res->baseCircuit = circuit;
@@ -443,6 +457,13 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
       res->staticUnits->InsertIfNotExist(id,data);
     }
   }
+
+  if(res->baseCircuit)
+    DebugRegionOutputDotGraph(res->baseCircuit,"BaseCircuit");
+  if(res->fixedDelayCircuit)
+    DebugRegionOutputDotGraph(res->fixedDelayCircuit,"FixedDelay");
+  if(res->flattenedBaseCircuit)
+    DebugRegionOutputDotGraph(res->flattenedBaseCircuit,"FlattenedBase");
 
   return res;
 }

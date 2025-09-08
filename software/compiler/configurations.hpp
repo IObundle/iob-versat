@@ -81,7 +81,7 @@ struct InstanceInfo{
   bool doesNotBelong; // For merge units, if true then this unit does not actually exist for the given partition
   int special;
   int localOrder;
-  FUInstance* inst;
+  FUInstance* inst; // Points to the recon instance for merge declarations.
   bool debug;
 
   NodeType connectionType;
@@ -106,6 +106,8 @@ struct MergePartition{
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
 
+  Accelerator* recon;
+  
   // TODO: All these are useless. We can just store the data in the units themselves.
   Array<int> inputDelays;
   Array<int> outputLatencies;

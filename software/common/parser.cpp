@@ -850,7 +850,7 @@ Array<String> Split(String content,char sep,Arena* out){
   return res;
 }
 
-bool Contains(String str,const char* toCheck){
+bool Contains(String str,String toCheck){
   Tokenizer tok(str,"",{toCheck});
 
   while(!tok.Done()){

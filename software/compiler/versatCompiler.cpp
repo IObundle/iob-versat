@@ -3,6 +3,7 @@
 #include <ftw.h>
 
 // TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
+#include "debugVersat.hpp"
 #include "embeddedData.hpp"
 #include "filesystem.hpp"
 #include "globals.hpp"
@@ -636,11 +637,19 @@ int main(int argc,char* argv[]){
       }
 #endif
 
+#if 0
+      if(work.definition.type == ConstructType_MODULE && work.definition.module.name == "ModuleWithExtra"){
+        auto p = FlattenWithMerge(decl->baseCircuit,0);
+
+        DebugRegionOutputDotGraph(p.accel,"FlattenReconAttemp0");
+      }
+#endif
+      
       // Flatten with mapping seems to be specific to modules.
       // Merge circuits are already flatten by the way the merge is performed.
       if(work.definition.type != ConstructType_MERGE && work.flattenWithMapping){
         Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99);
-  
+        
         decl->flattenedBaseCircuit = p.first;
         decl->flattenMapping = p.second;
       }
@@ -741,6 +750,8 @@ int main(int argc,char* argv[]){
     accel = CreateAccelerator(name,AcceleratorPurpose_MODULE);
     TOP = CreateFUInstance(accel,type,"TOP");
   } else {
+    // TODO: I think that the rest of the code is good enough that we do not need to do this extra step.
+    //       
     accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
 
     TOP = CreateFUInstance(accel,type,"TOP");
@@ -750,9 +761,11 @@ int main(int argc,char* argv[]){
       FUInstance* input = CreateOrGetInput(accel,name,i);
       ConnectUnits(input,0,TOP,i);
     }
-    FUInstance* output = CreateOrGetOutput(accel);
-    for(int i = 0; i < type->NumberOutputs(); i++){
-      ConnectUnits(TOP,i,output,i);
+    if(type->NumberOutputs() > 0){
+      FUInstance* output = CreateOrGetOutput(accel);
+      for(int i = 0; i < type->NumberOutputs(); i++){
+        ConnectUnits(TOP,i,output,i);
+      }
     }
   }
 
@@ -827,7 +840,7 @@ int main(int argc,char* argv[]){
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
 
-      if(globalOptions.debug){
+      if(globalOptions.debug && decl->fixedDelayCircuit){
         GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp);
         String repr = GenerateDotGraph(content,temp);
         String debugPath = PushDebugPath(temp,decl->name,"NormalGraph.dot");
@@ -958,6 +971,8 @@ Module Test(){
 
 // ============================================================================
 // Bugs
+
+BUG: localOrder appears to be broken. 
 
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
 

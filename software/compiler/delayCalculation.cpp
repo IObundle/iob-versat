@@ -93,6 +93,8 @@ static ConnectionNode* GetConnectionNode(SimpleEdge edge,AccelInfoIterator top){
 // 
 
 SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
+  DEBUG_REGION("delays");
+  
   TEMP_REGION(temp,out);
   Assert(!Empty(top.accelName));
 
@@ -209,20 +211,9 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
 
   Array<DelayInfo> edgesExtraDelay = CopyArray(edgesGlobalLatency,out);
 
-  if(globalOptions.debug){
-    static int funCalls = 0;
-    BLOCK_REGION(out);
+  DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"globalLatency");
 
-    String fileName = PushString(out,"global_latency_%.*s_%d_%d.dot",UN(top.accelName),top.mergeIndex,funCalls++);
-    String filePath = PushDebugPath(out,top.accelName,"delays",fileName);
-
-    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,temp);
-    
-    String result = GenerateDotGraph(content,out);
-    OutputContentToFile(filePath,result);
-  }
-
-  // This is still the global latency per port. I think it's good
+  // This is still the global latency per port.
   Array<Array<DelayInfo>> inputPortBaseLatencyByOrder = PushArray<Array<DelayInfo>>(out,orderToIndex.size);
   
   for(int i = 0; i < orderToIndex.size; i++){
@@ -341,19 +332,8 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
     }
   }
 
-  if(globalOptions.debug){
-    static int funCalls = 0;
-    BLOCK_REGION(out);
-    
-    String fileName = PushString(out,"edge_delays_%.*s_%d_%d.dot",UN(top.accelName),top.mergeIndex,funCalls++);
-    String filePath = PushDebugPath(out,top.accelName,"delays",fileName);
+  DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"edgeDelay");
 
-    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,temp);
-    
-    String result = GenerateDotGraph(content,out);
-    OutputContentToFile(filePath,result);
-  }
-  
   // Store delays on data producing units
   for(int i = 0; i < orderToIndex.size; i++){
     FUInstance* node = top.GetUnit(orderToIndex[i])->inst;
@@ -399,19 +379,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
     }
   }
 
-  if(globalOptions.debug){
-    static int funCalls = 0;
-    BLOCK_REGION(out);
-    
-    String fileName = PushString(out,"final_delays_%.*s_%d_%d.dot",UN(top.accelName),top.mergeIndex,funCalls++);
-
-    String filePath = PushDebugPath(out,top.accelName,"delays",fileName);
-
-    GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,temp);
-    
-    String result = GenerateDotGraph(content,out);
-    OutputContentToFile(filePath,result);
-  }
+  DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"finalDelays");
   
   SimpleCalculateDelayResult res = {};
   res.nodeBaseLatencyByOrder = nodeBaseLatencyByOrder;

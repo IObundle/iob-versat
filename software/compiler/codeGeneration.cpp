@@ -444,7 +444,7 @@ void EmitCombOperations(VEmitter* m,Pool<FUInstance> instances){
   if(combOps){
     for(FUInstance* node : instances){
       if(node->declaration->IsCombinatorialOperation()){
-        m->Reg(SF("comb_%.*s_%d",UN(node->name),node->id),"DATA_W");
+        m->Reg(SF("comb_%.*s_%d",UN(node->name),node->id),SYM_dataW);
       }
     }
 
@@ -491,8 +491,7 @@ void EmitInstanciateUnits(VEmitter* m,Pool<FUInstance> instances,FUDeclaration* 
     Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
     for(Pair<String,SymbolicExpression**> p : params){
       if(p.second){
-        String repr = PushRepresentation(*p.second,temp);
-        m->InstanceParam(CS(p.first),CS(repr));
+        m->InstanceParam(p.first,*p.second);
       }
     }
     if(decl->memoryMapBits.has_value()){
@@ -651,8 +650,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
     Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(inst,temp);
     for(Pair<String,SymbolicExpression**> p : params){
       if(p.second){
-        String repr = PushRepresentation(*p.second,temp);
-        m->InstanceParam(CS(p.first),CS(repr));
+        m->InstanceParam(p.first,*p.second);
       }
     }
     if(decl->memoryMapBits.has_value()){
@@ -856,13 +854,13 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
 
   m->StartGroup("Config");
   for(Wire w : decl->configs){
-    m->AddPort(CS(w.name),w.sizeExpr,WireDir_INPUT);
+    m->AddPort(w.name,w.sizeExpr,WireDir_INPUT);
   }
 
   for(Pair<StaticId,StaticData*> p : decl->staticUnits){
     for(Wire w : p.second->configs){
       String wireTrueName = GlobalStaticWireName(p.first,w,temp);
-      m->AddPort(CS(wireTrueName),w.sizeExpr,WireDir_INPUT);
+      m->AddPort(wireTrueName,w.sizeExpr,WireDir_INPUT);
     }
   }
   m->EndGroup();
@@ -870,7 +868,7 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   m->StartGroup("State");
   for(Wire w : decl->states){
     Assert(w.sizeExpr);
-    m->AddPort(CS(w.name),w.sizeExpr,WireDir_OUTPUT);
+    m->AddPort(w.name,w.sizeExpr,WireDir_OUTPUT);
   }
   m->EndGroup();
 
@@ -986,23 +984,21 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   }
   
   for(int i = 0; i < module->NumberInputs(); i++){
-    m->InputIndexed("in%d",i,"DATA_W");
+    m->InputIndexed("in%d",i,SYM_dataW);
   }
 
   for(int i = 0; i < module->NumberOutputs(); i++){
-    m->OutputIndexed("out%d",i,"DATA_W");
+    m->OutputIndexed("out%d",i,SYM_dataW);
   }
 
   if(module->configs.size) m->Blank();
   for(Wire w : module->configs){
-    String repr = PushRepresentation(w.sizeExpr,temp);
-    m->Input(CS(w.name),CS(repr));
+    m->Input(w.name,w.sizeExpr);
   }
-
+  
   for(Pair<StaticId,StaticData*> p : module->staticUnits){
     for(Wire w : p.second->configs){
-      String repr = PushRepresentation(w.sizeExpr,temp);
-      m->Input(CS(GlobalStaticWireName(p.first,w,temp2)),CS(repr));
+      m->Input(GlobalStaticWireName(p.first,w,temp2),w.sizeExpr);
     }
   }
 
@@ -1011,18 +1007,18 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   }
 
   for(int i = 0; i < module->numberDelays; i++){
-    m->InputIndexed("delay%d",i,"DELAY_W");
+    m->InputIndexed("delay%d",i,SYM_delayW);
   }
 
   // Databus interface
   for(int i = 0; i < module->nIOs; i++){
     m->InputIndexed("databus_ready_%d",i);
     m->OutputIndexed("databus_valid_%d",i);
-    m->OutputIndexed("databus_addr_%d",i,"AXI_ADDR_W");
-    m->InputIndexed("databus_rdata_%d",i,"AXI_DATA_W");
-    m->OutputIndexed("databus_wdata_%d",i,"AXI_DATA_W");
-    m->OutputIndexed("databus_wstrb_%d",i,"(AXI_DATA_W/8)");
-    m->OutputIndexed("databus_len_%d",i,"LEN_W");
+    m->OutputIndexed("databus_addr_%d",i,SYM_axiAddrW);
+    m->InputIndexed("databus_rdata_%d",i,SYM_axiDataW);
+    m->OutputIndexed("databus_wdata_%d",i,SYM_axiDataW);
+    m->OutputIndexed("databus_wstrb_%d",i,SYM_axiStrobeW);
+    m->OutputIndexed("databus_len_%d",i,SYM_lenW);
     m->InputIndexed("databus_last_%d",i);
   }
   
@@ -1056,8 +1052,8 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
     if(module->memoryMapBits.value() > 0){
       m->Input("addr",module->memoryMapBits.value());
     }
-    m->Input("wstrb","(DATA_W/8)");
-    m->Input("wdata","DATA_W");
+    m->Input("wstrb",SYM_dataStrobeW);
+    m->Input("wdata",SYM_dataW);
     m->Output("rvalid");
     m->Output("rdata","DATA_W");
   }
@@ -1156,30 +1152,26 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
     m->ModuleParam("DELAY_W",7);
 
     if(configurationsBits){
-      String repr = PushRepresentation(val.configurationBitsExpr,temp);
-
-      m->Output("config_data_o",CS(repr));
-      
-      m->Reg("configdata",repr);
+      m->Output("config_data_o",val.configurationBitsExpr);
+      m->Reg("configdata",val.configurationBitsExpr);
 
       if(globalOptions.shadowRegister){
-        m->Reg("shadow_configdata",repr);
+        m->Reg("shadow_configdata",val.configurationBitsExpr);
       }
     }
 
     m->Input("memoryMappedAddr");
     m->Input("data_write");
 
-    m->Input("address","ADDR_W");
-    m->Input("data_wstrb","(DATA_W/8)");
-    m->Input("data_data","DATA_W");
+    m->Input("address",SYM_addrW);
+    m->Input("data_wstrb",SYM_dataStrobeW);
+    m->Input("data_data",SYM_dataW);
 
     m->Input("change_config_pulse");
 
     for(WireInformation info : wireInfo){
       if(info.isStatic){
-        String repr = PushRepresentation(info.wire.sizeExpr,temp);
-        m->Output(CS(info.wire.name),CS(repr));
+        m->Output(info.wire.name,info.wire.sizeExpr);
       }
     }
 
@@ -1189,13 +1181,12 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
     m->Assign("config_data_o","configdata");
 
     for(WireInformation info : wireInfo){
-      String repr = PushRepresentation(info.wire.sizeExpr,temp);
       Wire w = info.wire;
       if(w.stage == VersatStage_COMPUTE || w.stage == VersatStage_WRITE){
-        m->Reg(SF("Compute_%.*s",UN(w.name)),repr);
+        m->Reg(SF("Compute_%.*s",UN(w.name)),info.wire.sizeExpr);
       }
       if(w.stage == VersatStage_WRITE){
-        m->Reg(SF("Write_%.*s",UN(w.name)),repr);
+        m->Reg(SF("Write_%.*s",UN(w.name)),info.wire.sizeExpr);
       }
     }
 
@@ -2117,11 +2108,7 @@ void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogPortSpec> spec,Strin
   TEMP_REGION(temp,m->arena);
       
   for(VerilogPortSpec info : spec){
-    String unpackedName = info.name;
-
-    String repr = PushRepresentation(info.size,temp);
-    
-    m->WireArray(CS(unpackedName),arraySize,CS(repr));
+    m->WireArray(info.name,arraySize,info.size);
   }
       
   for(int i = 0; i < arraySize; i++){
@@ -2281,10 +2268,10 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
 
     m->StartPortGroup();
     for(int i = 0; i < topLevelDecl->NumberInputs(); i++){
-      m->InputIndexed("in%d",i,"DATA_W");
+      m->InputIndexed("in%d",i,SYM_dataW);
     }
     for(int i = 0; i < topLevelDecl->NumberOutputs(); i++){
-      m->OutputIndexed("out%d",i,"DATA_W");
+      m->OutputIndexed("out%d",i,SYM_dataW);
     }
     m->EndPortGroup();
       
@@ -2494,13 +2481,11 @@ assign data_wstrb = csr_wstrb;
     VEmitter* m = StartVCode(temp);
       
     if(val.configurationBits){
-      String repr = PushRepresentation(val.configurationBitsExpr,temp);
-        
-      m->Wire("configdata",CS(repr));
+      m->Wire("configdata",val.configurationBitsExpr);
 
       for(auto info : wireInfo){
         if(info.isStatic){
-          m->Wire(CS(info.wire.name),info.wire.bitSize);
+          m->Wire(info.wire.name,info.wire.bitSize);
         }
       }
 
@@ -2961,6 +2946,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
     Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(&info,temp2);
 
+    DEBUG_BREAK();
     for(TypeStructInfo info : addressStructures){
       c->Define(PushString(temp,"VERSAT_DEFINED_%.*sAddr",UN(info.name)));
       c->Struct(PushString(temp,"%.*sAddr",UN(info.name)));
@@ -4207,7 +4193,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     String repr = PushRepresentation(p.valueExpr,temp);
 
     // NOTE: Since AXI_ADDR_W is usually used to instantiate a memory,
-    // need severely reduce size otherwise simulation can get stuck
+    // need to severely reduce size otherwise simulation can get stuck
     // and not even a warning is given
     if(CompareString(p.name,"AXI_ADDR_W")){
       repr = "16";
@@ -4227,8 +4213,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   
   m->StartInstance(decl->name,"uut");
   for(Parameter p : decl->parameters){
-    const char* asChar = CS(p.name);
-    m->InstanceParam(asChar,asChar);
+    m->InstanceParam(p.name,p.name);
   }
   m->PortConnectInterface(interface,"");
   m->EndInstance();
@@ -4275,20 +4260,18 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     Opt<VerilogPortSpec> dataSpec = GetPortSpecByName(allPorts,"databus_wdata_0");
     Opt<VerilogPortSpec> lenSpec = GetPortSpecByName(allPorts,"databus_len_0");
 
-    String dataW = PushRepresentation(dataSpec.value().size,temp);
-    String addrW = PushRepresentation(addressSpec.value().size,temp);
-    String lenW = PushRepresentation(lenSpec.value().size,temp);
-
+    SymbolicExpression* dataW = dataSpec.value().size;
+    SymbolicExpression* addrW = addressSpec.value().size;
+    SymbolicExpression* lenW = lenSpec.value().size;
+    
     m->Reg("insertValue",1);
     m->Reg("addrToInsert",addrW);
     m->Reg("valueToInsert",dataW);
 
     m->StartInstance("SimHelper_DatabusMem","DatabusMem");
-    m->InstanceParam("DATA_W",CS(dataW));
-
-    m->InstanceParam("ADDR_W",CS(addrW));
-
-    m->InstanceParam("LEN_W",CS(lenW));
+    m->InstanceParam("DATA_W",dataW);
+    m->InstanceParam("ADDR_W",addrW);
+    m->InstanceParam("LEN_W",lenW);
     
     m->PortConnect(INT_IOb,"_0");
     m->PortConnect("insertValue","insertValue");
@@ -4301,8 +4284,8 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
 
     m->Task("WriteMemory");
     
-    m->Input("addr_i",CS(addrW));
-    m->Input("data_i",CS(dataW));
+    m->Input("addr_i",addrW);
+    m->Input("data_i",dataW);
 
     m->Set("insertValue","1");
     m->Set("addrToInsert","addr_i");

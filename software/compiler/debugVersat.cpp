@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "declaration.hpp"
 #include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
@@ -26,13 +27,22 @@ static String graphPrintingColorTable[] = {
 
 Color DefaultNodeColor(FUInstance* inst){
   Color color = Color_BLUE;
-    
+
+  if(inst->declaration == BasicDeclaration::input){
+    color = Color_GREEN;
+  }
+  if(inst->declaration == BasicDeclaration::output){
+    color = Color_BLACK;
+  }
+  
+#if 0
   if(inst->type == NodeType_SOURCE || inst->type == NodeType_SOURCE_AND_SINK){
     color = Color_GREEN;
   } else if(inst->type == NodeType_SINK){
     color = Color_BLACK;
   }
-
+#endif
+  
   return color;
 }
 
@@ -131,23 +141,8 @@ String GenerateDotGraph(GraphPrintingContent content,Arena* out){
   }
 
   result->PushString("}\n");
-    
+
   return EndString(out,result);
-}
-
-void OutputDebugDotGraph(Accelerator* accel,String folder,String fileName){
-  TEMP_REGION(temp,nullptr);
-
-  if(!globalOptions.debug){
-    return;
-  }
-
-  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
-  String filePath = PushDebugPath(temp,folder,trueFileName);
-      
-  GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp);
-  String result = GenerateDotGraph(content,temp);
-  OutputContentToFile(filePath,result);
 }
 
 void OutputDebugDotGraph(Accelerator* accel,String fileName){
@@ -273,18 +268,6 @@ static Arena debugRegionArenaInst;
 static Arena* debugRegionArena;
 static bool debugRegionInit;
 
-#if 0
-void PushDebugRegion(String name){
-  debugRegionStack[debugRegionIndex] = PushString(debugRegionArena,name);
-
-  debugRegionIndex += 1;
-}
-
-void PopDebugRegion(){
-
-}
-#endif
-
 DebugRegionMarker::DebugRegionMarker(String name){
   if(!debugRegionInit){
     debugRegionArenaInst = InitArena(Megabyte(16));
@@ -305,16 +288,21 @@ DebugRegionMarker::~DebugRegionMarker(){
 
 String GetDebugRegionFilepath(String filename,Arena* out){
   TEMP_REGION(temp,out);
-
+  
   auto* builder = StartString(temp);
-
+  
   builder->PushString(globalOptions.debugPath);
-  for(int i = 0; i < debugRegionIndex; i++){
-    String component = debugRegionStack[i];
-    builder->PushString("/");
-    builder->PushString(component);
-  }
 
+  if(debugRegionIndex == 0){
+    builder->PushString("/TOP");
+  } else {
+    for(int i = 0; i < debugRegionIndex; i++){
+      String component = debugRegionStack[i];
+      builder->PushString("/");
+      builder->PushString(component);
+    }
+  }
+    
   builder->PushString("/");
   builder->PushString(filename);
 
@@ -332,5 +320,19 @@ void DebugRegionOutputDotGraph(Accelerator* accel,String fileName){
   
   GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp);
   String result = GenerateDotGraph(content,temp);
+  OutputContentToFile(filePath,result);
+}
+
+void DebugRegionLatencyGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,String filename){
+  TEMP_REGION(temp,nullptr);
+
+  if(!globalOptions.debug){
+    return;
+  }
+
+  GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeLatencyByOrder,edgeLatency,temp);
+  String result = GenerateDotGraph(content,temp);
+
+  String filePath = GetDebugRegionFilepath(filename,temp);
   OutputContentToFile(filePath,result);
 }

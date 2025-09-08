@@ -75,18 +75,6 @@ extern Pool<FUDeclaration> globalDeclarations;
 // Most of this data cannot be described in a constant expression unless we make changes to the way stuff works in a fundamental way or we add a meta build step.
 // However both approaches are just more trouble than they are worth. Just add stuff in here and augment the InitializeDefaultData as needed.
 
-extern SymbolicExpression* SYM_zero;
-extern SymbolicExpression* SYM_one;
-extern SymbolicExpression* SYM_eight;
-extern SymbolicExpression* SYM_dataW;
-extern SymbolicExpression* SYM_addrW;
-extern SymbolicExpression* SYM_axiAddrW;
-extern SymbolicExpression* SYM_axiDataW;
-extern SymbolicExpression* SYM_delayW;
-extern SymbolicExpression* SYM_lenW;
-extern SymbolicExpression* SYM_axiStrobeW;
-extern SymbolicExpression* SYM_dataStrobeW;
-
 // Verilog interfaces. Direction is from controller POV.
 // Format means that the wires contain a single '%d' because they support multiple appearances.
 // Most of the functions that expect an interface will have an extra function terminated in Indexed to support
@@ -97,9 +85,5 @@ extern SymbolicExpression* SYM_dataStrobeW;
 //       important this is. Memory interfaces are kinda limitted, right?
 extern Array<VerilogPortSpec> INT_IOb;
 extern Array<VerilogPortSpec> INT_IObFormat;
-
-// NOTE: We cannot have generic interfaces for this because the size of wires can change
-//extern Array<VerilogPortSpec> INT_DPFormat;
-//extern Array<VerilogPortSpec> INT_TPFormat;
 
 void InitializeDefaultData(Arena* perm);

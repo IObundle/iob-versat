@@ -54,7 +54,7 @@ struct FUDeclaration{
   int numberDelays;
   Array<Parameter> parameters;
 
-  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression
+  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression at this point.
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
 
@@ -66,7 +66,8 @@ struct FUDeclaration{
   // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
   Accelerator* baseCircuit; // For merge, baseCircuit contains muxes but not buffers.
   Accelerator* fixedDelayCircuit;
-  Accelerator* flattenedBaseCircuit;
+  Accelerator* flattenedBaseCircuit
+;
   
   String operation;
 
@@ -85,7 +86,7 @@ struct FUDeclaration{
 
   SingleInterfaces singleInterfaces;
   bool isOperation;
-
+  
   // Simple access functions
   int NumberInputs(){
     if(info.infos.size > 0){
@@ -103,9 +104,6 @@ struct FUDeclaration{
     }
   };
 
-  // This only works for base units.
-  // TODO: When things start settling in, need to move all these calculations to a specific file.
-  //       Any data that needs to be computed should have a simple function and all off these should be organized to be all in one file.
   int NumberConfigs(){return configs.size;}
   int NumberStates(){return states.size;}
   int NumberDelays(){return numberDelays;};

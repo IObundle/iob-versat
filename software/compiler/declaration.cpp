@@ -61,8 +61,8 @@ static FUDeclaration* RegisterLiteral(){
 
 static void RegisterOperators(){
   struct Operation{
-    const char* name;
-    const char* operation;
+    String name;
+    String operation;
   };
 
   Operation unary[] =  {{"NOT" ,"~{0}"},

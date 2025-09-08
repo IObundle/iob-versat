@@ -30,35 +30,10 @@ Options DefaultOptions(Arena* out){
   return res;
 }
 
-SymbolicExpression* SYM_one;
-SymbolicExpression* SYM_zero;
-SymbolicExpression* SYM_eight;
-SymbolicExpression* SYM_dataW;
-SymbolicExpression* SYM_addrW;
-SymbolicExpression* SYM_axiAddrW;
-SymbolicExpression* SYM_axiDataW;
-SymbolicExpression* SYM_delayW;
-SymbolicExpression* SYM_lenW;
-SymbolicExpression* SYM_axiStrobeW;
-SymbolicExpression* SYM_dataStrobeW;
-
 Array<VerilogPortSpec> INT_IOb;
 Array<VerilogPortSpec> INT_IObFormat;
 
 void InitializeDefaultData(Arena* perm){
-  SYM_zero = PushLiteral(perm,0);
-  SYM_one = PushLiteral(perm,1);
-  SYM_eight = PushLiteral(perm,8);
-  SYM_dataW = PushVariable(perm,"DATA_W");
-  SYM_addrW = PushVariable(perm,"ADDR_W");
-  SYM_axiAddrW = PushVariable(perm,"AXI_ADDR_W");
-  SYM_axiDataW = PushVariable(perm,"AXI_DATA_W");
-  SYM_delayW = PushVariable(perm,"DELAY_W");
-  SYM_lenW = PushVariable(perm,"LEN_W");
-
-  SYM_axiStrobeW = SymbolicDiv(PushVariable(perm,"AXI_DATA_W"),SYM_eight,perm);
-  SYM_dataStrobeW = SymbolicDiv(PushVariable(perm,"DATA_W"),SYM_eight,perm);
-
   static VerilogPortSpec iobDatabus[] = {
     {"databus_ready",SYM_one,WireDir_INPUT},
     {"databus_valid",SYM_one,WireDir_OUTPUT},

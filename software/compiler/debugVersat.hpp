@@ -66,7 +66,6 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
 
 String GenerateDotGraph(GraphPrintingContent content,Arena* out);
 
-void OutputDebugDotGraph(Accelerator* accel,String folder,String fileName);
 void OutputDebugDotGraph(Accelerator* accel,String fileName);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight);
 void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight);
@@ -94,6 +93,8 @@ struct DebugRegionMarker{
 
 #define DEBUG_REGION(NAME) DebugRegionMarker _marker(__LINE__)(NAME)
 
+
 String GetDebugRegionFilepath(String filename,Arena* out);
 
 void DebugRegionOutputDotGraph(Accelerator* accel,String fileName);
+void DebugRegionLatencyGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,String filename);
