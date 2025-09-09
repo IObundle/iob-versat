@@ -380,7 +380,7 @@ bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
 
 int GetFreeShareIndex(Accelerator* accel);
 void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
-void SetStatic(Accelerator* accel,FUInstance* instance);
+void SetStatic(FUInstance* instance);
 
 // 
 // Edge iteration and edge operations, including connecting units

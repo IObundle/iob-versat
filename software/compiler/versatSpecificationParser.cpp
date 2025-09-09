@@ -1387,7 +1387,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
           table->Insert(actualName,inst);
 
           if(decl.modifier == InstanceDeclarationType_STATIC){
-            SetStatic(circuit,inst);
+            SetStatic(inst);
           }
         }
       } else {
@@ -1397,7 +1397,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         table->Insert(varDecl.name,inst);
 
         if(decl.modifier == InstanceDeclarationType_STATIC){
-          SetStatic(circuit,inst);
+          SetStatic(inst);
         }
       }
     } break;

@@ -2656,7 +2656,6 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
       }
     }
 
-    DEBUG_BREAK();
     structs = GenerateStructs(allStructs,"Config",true,temp);
   }
   

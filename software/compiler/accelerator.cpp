@@ -59,7 +59,7 @@ void ShareInstanceConfig(FUInstance* inst, int shareBlockIndex){
   Memset(inst->isSpecificConfigShared,true);
 }
 
-void SetStatic(Accelerator* accel,FUInstance* inst){
+void SetStatic(FUInstance* inst){
   inst->isStatic = true;
 }
 
@@ -444,7 +444,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
       buffer = CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::buffer->info.infos[0].outputLatencies[0];
       Assert(buffer->bufferAmount >= 0);
-      SetStatic(accel,buffer);
+      SetStatic(buffer);
     }
 
     InsertUnit(accel,edge.units[0],edge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
