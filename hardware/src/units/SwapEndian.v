@@ -26,4 +26,17 @@ module SwapEndian #(
       end
    end
 
+   integer i;
+   always @* begin
+      out0 = {DATA_W{1'b0}};
+      if (running) begin
+          out0 = in0;
+          if (enabled) begin
+            for(i=0; i<DATA_W; i=i+8) begin
+               out0[i +: 8] = in0[(DATA_W-8-i) +: 8];
+            end
+          end
+      end
+   end
+
 endmodule

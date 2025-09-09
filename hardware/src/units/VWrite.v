@@ -70,6 +70,7 @@ module VWrite #(
    input [ DELAY_W-1:0] delay0
 );
    localparam DELAY_STORE_W = (DELAY_W > 20) ? DELAY_W : 20;
+   localparam EXTRA_DELAY_W = 20;
 
    //reg  doneWrite; // Databus write part
    wire transferDone;
@@ -82,10 +83,10 @@ module VWrite #(
    wire [DELAY_STORE_W-1:0] delay_store;
 
    generate
-        if (DELAY_W < 20) begin : gen_delay_smaller
-           assign delay_store = {{(20-DELAY_W){1'b0}},delay0} + extra_delay;
-        end else if (DELAY_W > 20) begin : gen_delay_bigger
-           assign delay_store = {{(DELAY_W-20){1'b0}},extra_delay} + delay0;
+        if (DELAY_W < EXTRA_DELAY_W) begin : gen_delay_smaller
+           assign delay_store = {{(EXTRA_DELAY_W-DELAY_W){1'b0}},delay0} + extra_delay;
+        end else if (DELAY_W > EXTRA_DELAY_W) begin : gen_delay_bigger
+           assign delay_store = {{(DELAY_W-EXTRA_DELAY_W){1'b0}},extra_delay} + delay0;
         end else begin : gen_delay_equal
            assign delay_store = delay0 + extra_delay;
         end
