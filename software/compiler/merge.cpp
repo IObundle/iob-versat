@@ -2800,8 +2800,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   declInst.parameters[5] = {"LEN_W",PushLiteral(globalPermanent,20)};
 
   declInst.name = PushString(globalPermanent,name);
-  
-  FUDeclaration* decl = RegisterFU(declInst);
 
   Pair<Accelerator*,AcceleratorMapping*> baseCopy = CopyAcceleratorWithMapping(mergedGraph,AcceleratorPurpose_BASE,true,globalPermanent);
 
@@ -2872,10 +2870,11 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
     }
   }
   
+  FUDeclaration* decl = RegisterFU(declInst);
   decl->baseCircuit = baseCopy.first;
   decl->flattenedBaseCircuit = baseCopy.first; // Merged graph is already flattened.
   // TODO: We still need to look at the delay insertion step.
-  decl->fixedDelayCircuit = baseCopy.first;
+  decl->fixedDelayCircuit = mergedGraph;
   
   decl->type = FUDeclarationType_MERGED;
 
