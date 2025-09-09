@@ -76,7 +76,7 @@ struct InstanceInfo{
   // Sepcific to merge muxs
   bool isMergeMultiplexer;
   int mergePort;
-  int muxGroup;
+  int muxGroup; // TODO: I think that we can remove muxGroup. We know which units belong or not to a given merge partition and we know their input value so there is no point in keeping the harder to understand and compute muxGroups.
 
   bool doesNotBelong; // For merge units, if true then this unit does not actually exist for the given partition
   int special;

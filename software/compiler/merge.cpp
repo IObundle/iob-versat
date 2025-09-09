@@ -2894,6 +2894,7 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
     iter.accelName = decl->info.infos[i].name;
     FillInstanceInfo(iter,globalPermanent);
     
+    int muxGroup = 0;
     for(; iter.IsValid(); iter = iter.Next()){
       InstanceInfo* info = iter.CurrentUnit();
       info->isMergeMultiplexer = info->inst->isMergeMultiplexer;
@@ -2912,6 +2913,10 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
           info->mergePort = reconInst->allInputs->port;
         }
 
+        if(info->isMergeMultiplexer){
+          info->muxGroup = muxGroup++;
+        }
+        
         info->baseNodeDelay = reconDelay[i].nodeDelay->GetOrFail(reconInst).value;
         info->localOrder = reconToOrder[i]->GetOrFail(reconInst);
         info->addressGenUsed = reconInst->addressGenUsed;
