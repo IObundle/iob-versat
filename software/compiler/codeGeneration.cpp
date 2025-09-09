@@ -2647,6 +2647,16 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
       }
     }
 
+    for(StructInfo* info : allStructs){
+      for(DoubleLink<StructElement>* childPtr = info->memberList->head; childPtr; childPtr = childPtr->next){
+        StructElement& elem = childPtr->elem;
+        if(elem.isMergeMultiplexer){
+          elem.doesNotBelong = false;
+        }
+      }
+    }
+
+    DEBUG_BREAK();
     structs = GenerateStructs(allStructs,"Config",true,temp);
   }
   
