@@ -22,6 +22,8 @@ module OnlyOutputMem #(
    input      [  ADDR_W-1:0] addr,
    input      [  DATA_W-1:0] wdata,
    input                     valid,
+   output reg                rvalid,
+   output     [  DATA_W-1:0] rdata,
 
    //input / output data
    (* versat_latency = 2 *) output [DATA_W-1:0] out0,
