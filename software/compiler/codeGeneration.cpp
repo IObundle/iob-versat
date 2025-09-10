@@ -2990,7 +2990,6 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
     Array<TypeStructInfo> addressStructures = GetMemMappedStructInfo(&info,temp2);
 
-    DEBUG_BREAK();
     for(TypeStructInfo info : addressStructures){
       c->Define(PushString(temp,"VERSAT_DEFINED_%.*sAddr",UN(info.name)));
       c->Struct(PushString(temp,"%.*sAddr",UN(info.name)));
@@ -4444,8 +4443,6 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   
   m->EndModule();
 
-  DEBUG_BREAK();
-  
   VAST* ast = EndVCode(m);
 
   auto* builder = StartString(temp);

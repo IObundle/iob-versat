@@ -336,9 +336,7 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
     if(right == 0){
       PRINTF_WITH_LOCATION("Division by zero\n");
       DEBUG_BREAK();
-      //WARN_CODE();
       return 0;
-      //DEBUG_BREAK();
     }
 
     val = (left / right);

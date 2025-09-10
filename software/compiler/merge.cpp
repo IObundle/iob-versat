@@ -2063,9 +2063,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
       Array<DelayToAdd> delaysToAdd = GenerateFixDelays(accel,reconDelay[i].edgesDelay,globalPermanent);
       for(DelayToAdd toAdd : delaysToAdd){
         Edge reconEdge = toAdd.edge;
-
-        printf("ADDDING\n\n\n\n");
-        DEBUG_BREAK();
         
         PortInstance n0 = MappingMapOutput(reconToMergedAccel[i],reconEdge.units[0]);
         PortInstance n1 = MappingMapInput(reconToMergedAccel[i],reconEdge.units[1]);
@@ -2278,8 +2275,6 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
 
   FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
-
-  DEBUG_BREAK();
   
   return decl;
 }
@@ -2999,8 +2994,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
 
   FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
-
-  DEBUG_BREAK();
   
   return decl;
   
