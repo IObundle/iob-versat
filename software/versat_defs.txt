@@ -25,9 +25,10 @@
 // TODO: Map should be able to map multiple data into multiple data. Something like map M(A a,B b : C c,D d,E e) to describe a 2 to 3 map.
 
 enum AddressGenType{
-   AddressGenType_MEM          = 0x01,
-   AddressGenType_READ         = 0x02,
-   AddressGenType_GEN          = 0x04
+   // NONE is not defined so that we do not have to implement full switch
+   AddressGenType_MEM  = 1,
+   AddressGenType_READ = 2,
+   AddressGenType_GEN  = 3
 };
 
 map addressGenType(AddressGenType t,String name){
@@ -36,21 +37,13 @@ map addressGenType(AddressGenType t,String name){
    AddressGenType_GEN : Gen,
 };
 
-struct AddressGenParameters{
+struct AddressGenBaseParameters{
    String start;
    String duty;
    String per;
    String incr;
    String iter;
    String shift;
-   String per2;
-   String incr2;
-   String iter2;
-   String shift2;
-   String per3;
-   String incr3;
-   String iter3;
-   String shift3;
 };
 
 struct AddressVParameters{
@@ -67,15 +60,9 @@ struct AddressVParameters{
    String incr;
    String iter;
    String shift;
-   String per2;
-   String incr2;
-   String iter2;
-   String shift2;
-   String per3;
-   String incr3;
-   String iter3;
-   String shift3;
 };
+
+array String AddressGenExtraFormat = {"per%d","incr%d","iter%d","shift%d"};
 
 struct AddressMemParameters{
    String iterA;
@@ -87,10 +74,6 @@ struct AddressMemParameters{
    String reverseA;
    String extA;
    String in0_wr;
-   String iter2A;
-   String per2A;
-   String shift2A;
-   String incr2A;
    String iterB;
    String perB;
    String dutyB;
@@ -100,43 +83,13 @@ struct AddressMemParameters{
    String reverseB;
    String extB;
    String in1_wr;
-   String iter2B;
-   String per2B;
-   String shift2B;
-   String incr2B;
 };
 
-struct AddressMem0{
-   String iterA;
-   String perA;
-   String dutyA;
-   String startA;
-   String shiftA;
-   String incrA;
-   String in0_wr;
-   String iter2A;
-   String per2A;
-   String shift2A;
-   String incr2A;
-};
-
-struct AddressMem1{
-   String iterB;
-   String perB;
-   String dutyB;
-   String startB;
-   String shiftB;
-   String incrB;
-   String in1_wr;
-   String iter2B;
-   String per2B;
-   String shift2B;
-   String incr2B;
-};
+array String AddressGenMemExtraFormat = {"per%dA","incr%dA","iter%dA","shift%dA","per%dB","incr%dB","iter%dB","shift%dB"};
 
 table AddressGenWireNames(AddressGenType type,String[] names){
    AddressGenType_MEM  : @Members(AddressMemParameters),
-   AddressGenType_GEN  : @Members(AddressGenParameters),
+   AddressGenType_GEN  : @Members(AddressGenBaseParameters),
    AddressGenType_READ : @Members(AddressVParameters),
 };
 

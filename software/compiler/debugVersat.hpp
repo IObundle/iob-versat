@@ -84,15 +84,14 @@ String PushDebugPath(Arena* out,String folderName,String fileName);
 String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName);
 
 // ============================================================================
-// Debug path regions - Each region is associated to a folder created on the debug folder
+// Debug path - Global way of defining a path tree for debug info
 
-struct DebugRegionMarker{
-  DebugRegionMarker(String name);
-  ~DebugRegionMarker();
+struct DebugPathMarker{
+  DebugPathMarker(String name);
+  ~DebugPathMarker();
 };
 
-#define DEBUG_REGION(NAME) DebugRegionMarker _marker(__LINE__)(NAME)
-
+#define DEBUG_PATH(NAME) DebugPathMarker _marker(__LINE__)(NAME)
 
 String GetDebugRegionFilepath(String filename,Arena* out);
 

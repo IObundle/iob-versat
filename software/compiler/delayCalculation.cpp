@@ -93,7 +93,7 @@ static ConnectionNode* GetConnectionNode(SimpleEdge edge,AccelInfoIterator top){
 // 
 
 SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
-  DEBUG_REGION("delays");
+  DEBUG_PATH("delays");
   
   TEMP_REGION(temp,out);
   Assert(!Empty(top.accelName));

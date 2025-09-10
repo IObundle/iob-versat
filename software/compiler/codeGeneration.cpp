@@ -98,7 +98,7 @@ Array<Array<InstanceInfo*>> VUnitInfoPerMerge(AccelInfo info,Arena* out){
 
   auto IsVUnit = [](FUDeclaration* decl){
     // TODO: We need to do this properly if we want to push more runtime stuff related to VUnits.
-    return decl->supportedAddressGenType == AddressGenType_READ;
+    return decl->supportedAddressGen.type == AddressGenType_READ;
   };
 
   AccelInfoIterator iter = StartIteration(&info);
@@ -2706,22 +2706,59 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   TemplateSetBool("simulateLoops",true);
 
   {
+    // NOTE: We only check the declarations. We do not check wether the units are actually used or not. This means that we are always outputting the same structs for every accelerator regardless of wether they use the units or not. We can change this later if needed but we do not gain much from it.
+    int highestVLoop = -1;
+    int highestGenLoop = -1;
+    int highestMemLoop = -1;
+
+    for(FUDeclaration* decl : globalDeclarations){
+      FULL_SWITCH(decl->supportedAddressGen.type){
+      case AddressGenType_MEM:{
+        highestMemLoop = MAX(highestMemLoop,decl->supportedAddressGen.loopsSupported);
+      } break;
+      case AddressGenType_READ:{
+        highestVLoop = MAX(highestVLoop,decl->supportedAddressGen.loopsSupported);
+      } break;
+      case AddressGenType_GEN:{
+        highestGenLoop = MAX(highestGenLoop,decl->supportedAddressGen.loopsSupported);
+      } break;
+    }
+    }      
+    
     CEmitter* m = StartCCode(temp);
     m->Struct("AddressVArguments");
     for(String str : META_AddressVParameters_Members){
       m->Member("iptr",str);
     }
+    for(int i = 2; i < highestVLoop + 1; i++){
+      for(String format : AddressGenExtraFormat){
+        String inst = PushString(temp,format.data,i);
+        m->Member("iptr",inst);
+      }
+    }
     m->EndBlock();
 
     m->Struct("AddressGenArguments");
-    for(String str : META_AddressGenParameters_Members){
+    for(String str : META_AddressGenBaseParameters_Members){
       m->Member("iptr",str);
+    }
+    for(int i = 2; i < highestGenLoop + 1; i++){
+      for(String format : AddressGenExtraFormat){
+        String inst = PushString(temp,format.data,i);
+        m->Member("iptr",inst);
+      }
     }
     m->EndBlock();
 
     m->Struct("AddressMemArguments");
     for(String str : META_AddressMemParameters_Members){
       m->Member("iptr",str);
+    }
+    for(int i = 2; i < highestMemLoop + 1; i++){
+      for(String format : AddressGenMemExtraFormat){
+        String inst = PushString(temp,format.data,i);
+        m->Member("iptr",inst);
+      }
     }
     m->EndBlock();
     
@@ -2777,7 +2814,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   // Combines address gen with the struct names that use them. Mostly done this way because we generate C code which does not support method overloading meaning that we have to do it manually.
   TrieSet<Pair<String,AccessAndType>>* structNameAndAddressGen = PushTrieSet<Pair<String,AccessAndType>>(temp);
   TrieSet<AccessAndType>* addressGenUsed = PushTrieSet<AccessAndType>(temp);
-  TrieSet<Pair<String,AddressGenType>>* structsUsed = PushTrieSet<Pair<String,AddressGenType>>(temp);
+  TrieSet<Pair<String,AddressGenInst>>* structsUsed = PushTrieSet<Pair<String,AddressGenInst>>(temp);
   TrieSet<AddressAccess*>* addressAccessUsed = PushTrieSet<AddressAccess*>(temp);
   
   AccelInfoIterator top = StartIteration(&info);
@@ -2798,15 +2835,15 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         String typeName = unit->structInfo->name;
 
         // TODO: We need to do this check beforehand. Backend code should assume that everything is working correctly and that the data is all good.
-        if((int) unit->decl->supportedAddressGenType == 0){
+        if((int) unit->decl->supportedAddressGen.type == 0){
           printf("[USER_ERROR] Unit '%.*s' does not support address gen '%.*s'\n",UN(unit->decl->name),UN(addressGenName));
           exit(-1);
         }
 
-        AddressGenType type = unit->decl->supportedAddressGenType;
-        structNameAndAddressGen->Insert({typeName,{access,type}});
-        addressGenUsed->Insert({access,type});
-        structsUsed->Insert({typeName,type});
+        AddressGenInst inst = unit->decl->supportedAddressGen;
+        structNameAndAddressGen->Insert({typeName,{access,inst}});
+        addressGenUsed->Insert({access,inst});
+        structsUsed->Insert({typeName,inst});
         addressAccessUsed->Insert(access);
       }
     }
@@ -2823,26 +2860,24 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   }
 
   for(AccessAndType p : addressGenUsed){
-    AddressAccess* initial = p.access;
-    AddressGenType type = p.type;
-    String data = GenerateAddressGenCompilationFunction(initial,type,temp);
+    String data = GenerateAddressGenCompilationFunction(p,temp);
     *builder.PushElem() = data;
   }
 
-  for(Pair<String,AddressGenType> p : structsUsed){
+  for(Pair<String,AddressGenInst> p : structsUsed){
     String structName = p.first;
-    AddressGenType type = p.second;
+    AddressGenInst inst = p.second;
 
-    String content = GenerateAddressLoadingFunction(structName,type,temp);
+    String content = GenerateAddressLoadingFunction(structName,inst,temp);
     *builder.PushElem() = content;
   }
 
   for(Pair<String,AccessAndType> p : structNameAndAddressGen){
     String structName = p.first;
     AddressAccess* initial = p.second.access;
-    AddressGenType type = p.second.type;
+    AddressGenInst inst = p.second.inst;
 
-    String content = GenerateAddressCompileAndLoadFunction(structName,initial,type,temp);
+    String content = GenerateAddressCompileAndLoadFunction(structName,initial,inst,temp);
     *builder.PushElem() = content;
   }
 

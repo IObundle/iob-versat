@@ -133,6 +133,12 @@ struct DataValue{
   };
 };
 
+struct ArrayDef{
+  Token name;
+  Token type;
+  DataValue* val;
+};
+
 struct Parameter{
   TypeDef* type;
   Token name;
@@ -205,6 +211,7 @@ Pool<TableDef> tables = {};
 Pool<MapDef> maps = {};
 Pool<FileDef> files = {};
 Pool<FileGroupDef> fileGroups = {};
+Pool<ArrayDef> arrays = {};
 
 // TODO: Weird way of doing things but works for now.
 GenericDef GetDefinition(Token name){
@@ -416,10 +423,32 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
   }
   
   if(!tok->IfNextToken("{")){
+    // Parsing a simple value here
     DataValue* val = PushStruct<DataValue>(out);
     val->type = DataValueType_SINGLE;
-    val->asStr = tok->NextToken();
-    return val;
+
+    Token peek = tok->PeekToken();
+    if(peek == "\""){
+      tok->AdvancePeek();
+      TokenizerMark mark = tok->Mark();
+
+      while(true){
+        Token peek = tok->PeekToken();
+        if(peek == "\""){
+          break;
+        }
+        tok->AdvancePeek();
+      }
+
+      Token fullValue = tok->Point(mark);
+      tok->AdvancePeek();
+
+      val->asStr = fullValue;
+      return val;
+    } else {
+      val->asStr = tok->NextToken();
+      return val;
+    }
   }
 
   // Parsing an array here.
@@ -628,6 +657,31 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
   return nullptr;
 }
 
+ArrayDef* ParseArray(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  AssertToken(tok,"array");
+
+  Token arrayType = tok->NextToken();
+  CheckIdentifier(arrayType);
+
+  Token arrayName = tok->NextToken();
+  CheckIdentifier(arrayName);
+  
+  AssertToken(tok,"=");
+
+  DataValue* val = ParseValue(tok,out);
+  Assert2(val->type == DataValueType_ARRAY,"Array cannot handle single values. Pass an array of values using {}");
+  
+  AssertToken(tok,";");
+
+  ArrayDef* res = arrays.Alloc();
+  res->name = arrayName;
+  res->type = arrayType;
+  res->val = val;
+
+  return res;
+}
+
 void ParseContent(String content,Arena* out){
   TEMP_REGION(temp,out);
   Tokenizer tokInst(content,"!@#$%^&*()-+={[}]\\|~`;:'\",./?",{"//","/*","*/"});
@@ -640,6 +694,8 @@ void ParseContent(String content,Arena* out){
       ParseEnum(tok,out);
     } else if(CompareString(peek,"struct")){
       ParseStruct(tok,out);
+    } else if(CompareString(peek,"array")){
+      ParseArray(tok,out);
     } else if(CompareString(peek,"table")){
       ParseTable(tok,out);
     } else if(CompareString(peek,"file")){
@@ -656,7 +712,7 @@ void ParseContent(String content,Arena* out){
 }
 
 String DefaultRepr(DataValue* val,TypeDef* type,Arena* out){
-  if(IsEnum(type->name)){
+  if(type && IsEnum(type->name)){
     return val->asStr;
   } else if(val->type == DataValueType_SINGLE){
     return PushString(out,"String(\"%.*s\")",UN(val->asStr));
@@ -793,7 +849,6 @@ int main(int argc,const char* argv[]){
 
       for(FileDef* def : files){
         String path = def->filepathFromRoot;
-        DEBUG_BREAK();
         String absolute = GetAbsolutePath(path,temp);
         *list->PushElem() = absolute;
       }
@@ -891,10 +946,15 @@ int main(int argc,const char* argv[]){
       h->EndStruct();
     }
 
+    h->Comment("Arrays");
+    for(ArrayDef* def : arrays){
+      h->Extern(SF("Array<%.*s>",UN(def->type)),def->name);
+    }
+    
     h->Comment("Tables");
     
     for(TableDef* def : tables){
-      h->Extern(SF("Array<%.*s_GenType>",UN(def->structTypename)),CS(def->structTypename));
+      h->Extern(SF("Array<%.*s_GenType>",UN(def->structTypename)),def->structTypename);
     }
     
     h->Comment("Define Maps (the arrays store the data, not the keys)");
@@ -911,7 +971,7 @@ int main(int argc,const char* argv[]){
         h->RawLine(PushString(temp,"#define %.*s \"%.*s\"",UN(p[0]->asStr),UN(p[1]->asStr)));
       }
 
-      h->Extern("Array<String>",CS(def->name));
+      h->Extern("Array<String>",def->name);
     }
 
     h->Comment("Normal Maps");
@@ -959,7 +1019,7 @@ int main(int argc,const char* argv[]){
     h->EndStruct();
 
     for(FileGroupDef* def : fileGroups){
-      h->Extern("Array<FileContent>",CS(def->name));
+      h->Extern("Array<FileContent>",def->name);
     }
     
     CAST* end = EndCCode(h);
@@ -984,7 +1044,7 @@ int main(int argc,const char* argv[]){
     
     String headerFilenameOnly = ExtractFilenameOnly(headerName);
 
-    c->Include(CS(headerFilenameOnly));
+    c->Include(headerFilenameOnly);
 
     // Enum stuff
     c->Comment("Enum representation");
@@ -1043,7 +1103,7 @@ int main(int argc,const char* argv[]){
           }
           
           if(val->type == DataValueType_ARRAY){
-            c->ArrayDeclareBlock(CS(typeDef->name),SF("%.*s_%.*s_aux%d",UN(def->structTypename),UN(name),i));
+            c->ArrayDeclareBlock(typeDef->name,SF("%.*s_%.*s_aux%d",UN(def->structTypename),UN(name),i));
             
             for(DataValue* child : val->asArray){
               c->StringElem(child->asStr);
@@ -1053,9 +1113,34 @@ int main(int argc,const char* argv[]){
         }
       }
     }
-    
-    fprintf(source,"\n// Raw C array Tables\n\n");
 
+    c->Comment("Raw C array Arrays");
+
+    auto EmitRawArray = [](CEmitter* m,String arrayName){
+      TEMP_REGION(temp,m->arena);
+      m->Elem(PushString(temp,"%.*s_Raw",UN(arrayName)));
+      m->Elem(PushString(temp,"ARRAY_SIZE(%.*s_Raw)",UN(arrayName)));
+    };
+
+    for(ArrayDef* def : arrays){
+      Assert(def->val->type == DataValueType_ARRAY);
+
+      c->ArrayDeclareBlock(def->type,SF("%.*s_Raw",UN(def->name)),true);
+
+      for(int i = 0; i < def->val->asArray.size; i++){
+        DataValue* val  = def->val->asArray[i];
+        Assert(val->type == DataValueType_SINGLE);
+        
+        c->Elem(DefaultRepr(val,nullptr,temp));
+      }
+
+      c->EndBlock();
+
+      c->VarDeclareBlock(SF("Array<%.*s>",UN(def->type)),def->name);
+      EmitRawArray(c,def->name);
+      c->EndBlock();
+    }
+      
     c->Comment("Raw C array Tables");
 
     for(TableDef* def : tables){
@@ -1093,16 +1178,10 @@ int main(int argc,const char* argv[]){
     }
     
     c->Comment("Tables");
-
-    auto EmitRawArray = [](CEmitter* m,String arrayName){
-      TEMP_REGION(temp,m->arena);
-      m->Elem(PushString(temp,"%.*s_Raw",UN(arrayName)));
-      m->Elem(PushString(temp,"ARRAY_SIZE(%.*s_Raw)",UN(arrayName)));
-    };
     
     for(TableDef* def : tables){
       String n = def->structTypename;
-      c->VarDeclareBlock(SF("Array<%.*s_GenType>",UN(n)),CS(n));
+      c->VarDeclareBlock(SF("Array<%.*s_GenType>",UN(n)),n);
       EmitRawArray(c,n);
       c->EndBlock();
     }
@@ -1123,7 +1202,7 @@ int main(int argc,const char* argv[]){
       
       c->EndBlock();
       
-      c->VarDeclareBlock("Array<String>",CS(def->name));
+      c->VarDeclareBlock("Array<String>",def->name);
       EmitRawArray(c,def->name);
       c->EndBlock();
     }
@@ -1275,7 +1354,7 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
 
       // Emit array
-      c->VarDeclareBlock("Array<FileContent>",CS(def->name));
+      c->VarDeclareBlock("Array<FileContent>",def->name);
       EmitRawArray(c,def->name);
       c->EndBlock();
     }

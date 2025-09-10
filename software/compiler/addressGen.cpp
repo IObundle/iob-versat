@@ -382,7 +382,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
   return res;
 }
 
-static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* out){
+static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,int maxLoops,Arena* out){
   TEMP_REGION(temp,out);
   Array<InternalMemoryAccess> compiled = CompileAccess(access->external,access->dutyDivExpr,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
@@ -409,7 +409,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
     *list->PushElem() = {"incr2",PushString(out,l.incrementExpression)};
     *list->PushElem() = {"iter2",PushString(out,l.iterationExpression)};
     *list->PushElem() = {"shift2",PushString(out,l.shiftExpression)};
-  } else {
+  } else if(maxLoops > 1){
     *list->PushElem() = {"per2","0"};
     *list->PushElem() = {"incr2","0"};
     *list->PushElem() = {"iter2","0"};
@@ -422,14 +422,14 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
     *list->PushElem() = {"incr3",PushString(out,l.incrementExpression)};
     *list->PushElem() = {"iter3",PushString(out,l.iterationExpression)};
     *list->PushElem() = {"shift3",PushString(out,l.shiftExpression)};
-  } else {
+  } else if(maxLoops > 2){
     *list->PushElem() = {"per3","0"};
     *list->PushElem() = {"incr3","0"};
     *list->PushElem() = {"iter3","0"};
     *list->PushElem() = {"shift3","0"};
   }
   
-  if(compiled.size > 3){
+  if(compiled.size > maxLoops){
     // TODO: Proper error reporting requires us to lift the data up.
     printf("[ERROR] Address gen contains %d loops but unit can only handle a maximum of 3\n",compiled.size);
     exit(-1);
@@ -438,7 +438,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,Arena* ou
   return PushArrayFromList(out,list);
 }
 
-static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out){
+static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,int maxLoops,Arena* out){
   TEMP_REGION(temp,out);
 
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,access->dutyDivExpr,temp);
@@ -497,7 +497,7 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
     *list->PushElem() = {"incr2",PushString(out,l.incrementExpression)};
     *list->PushElem() = {"iter2",PushString(out,l.iterationExpression)};
     *list->PushElem() = {"shift2",PushString(out,l.shiftExpression)};
-  } else {
+  } else if(maxLoops > 1) {
     *list->PushElem() = {"per2","0"};
     *list->PushElem() = {"incr2","0"};
     *list->PushElem() = {"iter2","0"};
@@ -511,14 +511,14 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
     *list->PushElem() = {"incr3",PushString(out,l.incrementExpression)};
     *list->PushElem() = {"iter3",PushString(out,l.iterationExpression)};
     *list->PushElem() = {"shift3",PushString(out,l.shiftExpression)};
-  } else {
+  } else if(maxLoops > 2){
     *list->PushElem() = {"per3","0"};
     *list->PushElem() = {"incr3","0"};
     *list->PushElem() = {"iter3","0"};
     *list->PushElem() = {"shift3","0"};
   }
 
-  if(internal.size > 3){
+  if(internal.size > maxLoops){
     // TODO: Proper error reporting requires us to lift the data up.
     printf("[ERROR] Address gen contains more loops than the unit is capable of handling\n");
     exit(-1);
@@ -527,7 +527,7 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   return PushArrayFromList(out,list);
 }
 
-static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,bool input,Arena* out){
+static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,bool input,int maxLoops,Arena* out){
   TEMP_REGION(temp,out);
   Array<InternalMemoryAccess> compiled = CompileAccess(access->external,access->dutyDivExpr,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
@@ -588,7 +588,7 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
       *list->PushElem() = {"iter2B",PushString(out,l.iterationExpression)};
       *list->PushElem() = {"shift2B",PushString(out,l.shiftExpression)};
     }
-  } else {
+  } else if(maxLoops > 1){
     if(port == 0){
       *list->PushElem() = {"per2A","0"};
       *list->PushElem() = {"incr2A","0"};
@@ -602,7 +602,7 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
     }
   }
   
-  if(compiled.size > 2){
+  if(compiled.size > maxLoops){
     // TODO: Proper error reporting requires us to lift the data up.
     printf("[ERROR] Address gen contains more loops than the unit is capable of handling\n");
     exit(-1);
@@ -765,10 +765,12 @@ static void EmitDebugAddressGenInfo(AddressAccess* access,CEmitter* c){
   c->Comment(externalStr);
 }
 
-static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out){
+static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
   TEMP_REGION(temp,out);
 
   String varName = "args";
+  AddressAccess* initial = access.access;
+  int maxLoops = access.inst.loopsSupported;
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
     TEMP_REGION(temp,emitter->arena);
@@ -788,7 +790,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
     }
   };
 
-  auto EmitDoubleOrSingleLoopCode = [EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess* access){
+  auto EmitDoubleOrSingleLoopCode = [maxLoops,EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess* access){
     TEMP_REGION(temp,c->arena);
     
     // TODO: The way we handle the free term is kinda sketchy.
@@ -814,7 +816,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
       EmitDebugAddressGenInfo(doubleLoop,c);
       Repr(b,doubleLoop);
 
-      Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,temp);
+      Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,maxLoops,temp);
       EmitStoreAddressGenIntoConfig(c,params);
     }
 
@@ -825,7 +827,7 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
       EmitDebugAddressGenInfo(singleLoop,c);
       Repr(b,singleLoop);
 
-      Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,temp);
+      Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,maxLoops,temp);
       EmitStoreAddressGenIntoConfig(c,params);
     }
 
@@ -916,10 +918,11 @@ static String GenerateReadCompilationFunction(AddressAccess* initial,Arena* out)
   return data;
 }
 
-static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
+static String GenerateGenCompilationFunction(AccessAndType access,Arena* out){
   TEMP_REGION(temp,out);
 
   String varName = "args";
+  AddressAccess* initial = access.access;
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
     TEMP_REGION(temp,emitter->arena);
@@ -955,7 +958,7 @@ static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
 
   m->VarDeclare("AddressGenArguments",varName,"{}");
 
-  Array<Pair<String,String>> params = InstantiateGen(initial,temp);
+  Array<Pair<String,String>> params = InstantiateGen(initial,access.inst.loopsSupported,temp);
   EmitStoreAddressGenIntoConfig(m,params);
   
   m->Return(varName);
@@ -969,10 +972,11 @@ static String GenerateGenCompilationFunction(AddressAccess* initial,Arena* out){
   return data;
 }
 
-static String GenerateMemCompilationFunction(AddressAccess* initial,Arena* out){
+static String GenerateMemCompilationFunction(AccessAndType access,Arena* out){
   TEMP_REGION(temp,out);
 
   String varName = "args";
+  AddressAccess* initial = access.access;
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
     TEMP_REGION(temp,emitter->arena);
@@ -1011,7 +1015,7 @@ static String GenerateMemCompilationFunction(AddressAccess* initial,Arena* out){
 
     m->VarDeclare("AddressMemArguments",varName,"{}");
 
-    Array<Pair<String,String>> params = InstantiateMem(initial,info.port,info.dir,temp);
+    Array<Pair<String,String>> params = InstantiateMem(initial,info.port,info.dir,access.inst.loopsSupported,temp);
     EmitStoreAddressGenIntoConfig(m,params);
   
     m->Return(varName);
@@ -1028,25 +1032,27 @@ static String GenerateMemCompilationFunction(AddressAccess* initial,Arena* out){
   return data;
 }
 
-String GenerateAddressGenCompilationFunction(AddressAccess* initial,AddressGenType type,Arena* out){
-  FULL_SWITCH(type){
+String GenerateAddressGenCompilationFunction(AccessAndType access,Arena* out){
+  FULL_SWITCH(access.inst.type){
   case AddressGenType_READ:{
-    return GenerateReadCompilationFunction(initial,out);
+    return GenerateReadCompilationFunction(access,out);
   } break;
   case AddressGenType_GEN:{
-    return GenerateGenCompilationFunction(initial,out);
+    return GenerateGenCompilationFunction(access,out);
   } break;
   case AddressGenType_MEM:{
-    return GenerateMemCompilationFunction(initial,out);
+    return GenerateMemCompilationFunction(access,out);
   } break;
   };
 
   return {};
 }
 
-String GenerateAddressLoadingFunction(String structName,AddressGenType type,Arena* out){
+String GenerateAddressLoadingFunction(String structName,AddressGenInst inst,Arena* out){
   TEMP_REGION(temp,out);
 
+  AddressGenType type = inst.type;
+  
   CEmitter* m = StartCCode(temp);
 
   String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UN(structName));
@@ -1054,16 +1060,25 @@ String GenerateAddressLoadingFunction(String structName,AddressGenType type,Aren
   String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
   String varName = "config";
   m->Argument(argName,varName);
+
+  auto EmitAssign = [m,temp](String str){
+    String lhs = PushString(temp,"config->%.*s",UN(str));
+    String rhs = PushString(temp,"args.%.*s",UN(str));
+    m->Assignment(lhs,rhs);
+  };
   
   FULL_SWITCH(type){
   case AddressGenType_GEN:{
     m->Argument("AddressGenArguments","args");
-    for(int i = 0; i <  META_AddressGenParameters_Members.size; i++){
-      String str = META_AddressGenParameters_Members[i];
-
-      String lhs = PushString(temp,"config->%.*s",UN(str));
-      String rhs = PushString(temp,"args.%.*s",UN(str));
-      m->Assignment(lhs,rhs);
+    for(int i = 0; i < META_AddressGenBaseParameters_Members.size; i++){
+      String str = META_AddressGenBaseParameters_Members[i];
+      EmitAssign(str);
+    }
+    for(int i = 2; i < inst.loopsSupported + 1; i++){
+      for(String format : AddressGenExtraFormat){
+        String inst = PushString(temp,format.data,i);
+        EmitAssign(inst);
+      }
     }
   } break;
   case AddressGenType_READ:{
@@ -1071,10 +1086,13 @@ String GenerateAddressLoadingFunction(String structName,AddressGenType type,Aren
 
     for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
       String str = META_AddressVParameters_Members[i];
-
-      String lhs = PushString(temp,"config->%.*s",UN(str));
-      String rhs = PushString(temp,"args.%.*s",UN(str));
-      m->Assignment(lhs,rhs);
+      EmitAssign(str);
+    }
+    for(int i = 2; i < inst.loopsSupported + 1; i++){
+      for(String format : AddressGenExtraFormat){
+        String inst = PushString(temp,format.data,i);
+        EmitAssign(inst);
+      }
     }
   } break;
   case AddressGenType_MEM:{
@@ -1082,10 +1100,13 @@ String GenerateAddressLoadingFunction(String structName,AddressGenType type,Aren
 
     for(int i = 0; i <  META_AddressMemParameters_Members.size; i++){
       String str = META_AddressMemParameters_Members[i];
-
-      String lhs = PushString(temp,"config->%.*s",UN(str));
-      String rhs = PushString(temp,"args.%.*s",UN(str));
-      m->Assignment(lhs,rhs);
+      EmitAssign(str);
+    }
+    for(int i = 2; i < inst.loopsSupported + 1; i++){
+      for(String format : AddressGenMemExtraFormat){
+        String inst = PushString(temp,format.data,i);
+        EmitAssign(inst);
+      }
     }
   } break;
   }
@@ -1099,9 +1120,10 @@ String GenerateAddressLoadingFunction(String structName,AddressGenType type,Aren
   return data;
 }
 
-String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenType type,Arena* out){
+String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenInst inst,Arena* out){
   TEMP_REGION(temp,out);
 
+  AddressGenType type = inst.type;
   CEmitter* m = StartCCode(temp);
       
   if(type == AddressGenType_MEM){

@@ -5,6 +5,7 @@
 #include "verilogParsing.hpp"
 #include "utils.hpp"
 #include "accelerator.hpp"
+#include "declaration.hpp"
 
 struct Accelerator;
 struct InstanceInfo;
@@ -146,28 +147,6 @@ static bool operator==(StructInfo& l,StructInfo& r){
   }
 
   return true;
-}
-
-struct AddressAccess;
-
-struct AccessAndType{
-  AddressAccess* access;
-  AddressGenType type;
-};
-
-template<> struct std::hash<AccessAndType>{
-   std::size_t operator()(AccessAndType const& s) const noexcept{
-     std::size_t res = std::hash<void*>()(s.access) * (int) s.type;
-     return res;
-   }
-};
-
-static bool operator==(const AccessAndType& l,const AccessAndType& r){
-  if(l.access == r.access && l.type == r.type){
-    return true;
-  }
-  
-  return false;
 }
 
 // TODO: Maybe move this to a better place. Probably merge.hpp

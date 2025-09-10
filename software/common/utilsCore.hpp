@@ -150,6 +150,7 @@ if(_){ \
     } \
   } while(0)
 
+// NOTE: Use assert2 to print a helpful message
 //#if defined(VERSAT_DEBUG)
 #define Assert2(EXPR,...) \
   do { \
@@ -505,6 +506,7 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 // TODO: I wonder if it would be better to have a arena backed region where we can dump strings and it acts globally, meaning that we must call functions to init it and to clear it everytime we want to use it.
 // TODO: It would be better if we just have a malloc failsafe where we allocate more memory if needed.
 char* StaticFormat(const char* format,...) __attribute__ ((format (printf, 1, 2)));;
+char* StaticFormat(String format,...);
 
 // Shorthand
 #define SF(...) StaticFormat(__VA_ARGS__) 

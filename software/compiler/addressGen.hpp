@@ -50,6 +50,46 @@ struct CompiledAccess{
   String dutyDivExpression;
 };
 
+struct AddressGenInst{
+   AddressGenType type;
+   int loopsSupported;
+};
+
+template<> struct std::hash<AddressGenInst>{
+   std::size_t operator()(AddressGenInst const& s) const noexcept{
+     std::size_t res = (int)(s.type) * (int) s.loopsSupported;
+     return res;
+   }
+};
+
+static bool operator==(const AddressGenInst& l,const AddressGenInst& r){
+  if(l.type == r.type && l.loopsSupported == r.loopsSupported){
+    return true;
+  }
+  
+  return false;
+}
+
+struct AccessAndType{
+  AddressAccess* access;
+  AddressGenInst inst;
+};
+
+template<> struct std::hash<AccessAndType>{
+   std::size_t operator()(AccessAndType const& s) const noexcept{
+     std::size_t res = std::hash<void*>()(s.access) * std::hash<AddressGenInst>()(s.inst);
+     return res;
+   }
+};
+
+static bool operator==(const AccessAndType& l,const AccessAndType& r){
+  if(l.access == r.access && l.inst == r.inst){
+    return true;
+  }
+  
+  return false;
+}
+
 void Repr(StringBuilder* builder,AddressAccess* access);
 void Print(AddressAccess* access);
 
@@ -63,7 +103,7 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 
 // Code generation functions
-String GenerateAddressGenCompilationFunction(AddressAccess* initial,AddressGenType type,Arena* out);
-String GenerateAddressLoadingFunction(String structName,AddressGenType type,Arena* out);
-String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenType type,Arena* out);
+String GenerateAddressGenCompilationFunction(AccessAndType access,Arena* out);
+String GenerateAddressLoadingFunction(String structName,AddressGenInst type,Arena* out);
+String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenInst type,Arena* out);
 String GenerateAddressPrintFunction(AddressAccess* initial,Arena* out);

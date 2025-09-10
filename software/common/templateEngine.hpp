@@ -17,7 +17,7 @@ Value MakeValue(String str);
 Value MakeValue(bool b);
 
 // TODO: Add TemplateSetCAST, TemplateSetStringBuilder and stuff like that.
-//       We can even provide faster implementations if we just pass in the top level type instead of doing the conversions above.
+//       We can even provide faster implementations if we just pass in the type instead of doing conversions.
 
 void TemplateSetNumber(String id,int number);
 void TemplateSetString(String id,String str);

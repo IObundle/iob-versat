@@ -975,7 +975,7 @@ void PrintMergePossibility(Accelerator* accel1,Accelerator* accel2){
 }
 
 static GraphMapping CalculateMergeMapping(Accelerator* accel1,Accelerator* accel2,Array<SpecificMergeNodes> specificNodes,MergingStrategy strategy,Arena* out){
-  DEBUG_REGION("CalculateMergeMapping");
+  DEBUG_PATH("CalculateMergeMapping");
   TEMP_REGION(temp,out);
 
   GraphMapping graphMapping = InitGraphMapping(out);
@@ -2582,7 +2582,7 @@ Opt<Edge> MapMergedEdgeToRecon(MergeAndRecons* recons,Edge mergedEdge,int reconI
 void DebugOutputGraphs(MergeAndRecons* recons,String stageName){
   TEMP_REGION(temp,recons->arena);
 
-  DEBUG_REGION(stageName);
+  DEBUG_PATH(stageName);
   
   DebugRegionOutputDotGraph(recons->mergedGraph,recons->mergedGraph->name);
   
@@ -2596,8 +2596,8 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
                      String name,Array<SpecificMergeNode> specifics,
                      MergeModifier modifier,MergingStrategy strat){
 
-  DEBUG_REGION("Merge2");
-  DEBUG_REGION(name);
+  DEBUG_PATH("Merge2");
+  DEBUG_PATH(name);
   
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -2876,14 +2876,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
           InsertUnit(recon,reconEdge.units[0],reconEdge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
         }
         
-        if(0){
-          Edge reconEdge = toAdd.edge;
-          FUInstance* buffer = CreateFUInstance(recon,BasicDeclaration::buffer,uniqueName);
-          SetStatic(buffer);
-
-          InsertUnit(recon,reconEdge.units[0],reconEdge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
-        }
-
         // Add to merged graph
         {
           PortInstance n0 = mergedEdge.out;

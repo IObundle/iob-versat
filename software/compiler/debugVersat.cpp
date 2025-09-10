@@ -268,7 +268,7 @@ static Arena debugRegionArenaInst;
 static Arena* debugRegionArena;
 static bool debugRegionInit;
 
-DebugRegionMarker::DebugRegionMarker(String name){
+DebugPathMarker::DebugPathMarker(String name){
   if(!debugRegionInit){
     debugRegionArenaInst = InitArena(Megabyte(16));
     debugRegionArena = &debugRegionArenaInst;
@@ -282,7 +282,7 @@ DebugRegionMarker::DebugRegionMarker(String name){
   debugRegionIndex += 1;
 }
 
-DebugRegionMarker::~DebugRegionMarker(){
+DebugPathMarker::~DebugPathMarker(){
   debugRegionIndex -= 1;
 }
 

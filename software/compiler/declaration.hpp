@@ -1,6 +1,7 @@
 #pragma once
 
 #include "configurations.hpp"
+#include "addressGen.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
@@ -73,7 +74,7 @@ struct FUDeclaration{
 
   SubMap* flattenMapping;
 
-  AddressGenType supportedAddressGenType;
+  AddressGenInst supportedAddressGen;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   

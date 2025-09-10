@@ -1,5 +1,6 @@
 #include "versat.hpp"
 
+#include "embeddedData.hpp"
 #include "globals.hpp"
 
 #include "declaration.hpp"
@@ -185,18 +186,49 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     return true;
   };
   
-  bool isGenLike = FollowsInterface(configs,META_AddressGenParameters_Members);
+  bool isGenLike = FollowsInterface(configs,META_AddressGenBaseParameters_Members);
   bool isExternLike = FollowsInterface(configs,META_AddressVParameters_Members);
   bool isMemLike = FollowsInterface(configs,META_AddressMemParameters_Members);
 
+  Array<String> configNames = Extract(configs,temp,&Wire::name);
+
+  auto CountLoops = [configNames](Array<String> extraLoopsFormats){
+    TEMP_REGION(temp,nullptr);
+    
+    int loops = 2;
+
+    while(true){
+      bool containsAllNames = true;
+      for(String format : extraLoopsFormats){
+        String inst = PushString(temp,format.data,loops);
+
+        if(!Contains(configNames,inst)){
+          containsAllNames = false;
+          break;
+        }
+      }
+
+      if(containsAllNames){
+        loops += 1;
+      } else {
+        break;
+      }
+    }
+
+    return loops - 1;
+  };
+
   if(isExternLike){
-    decl.supportedAddressGenType = AddressGenType_READ;
+    decl.supportedAddressGen.type = AddressGenType_READ;
+    decl.supportedAddressGen.loopsSupported = CountLoops(AddressGenExtraFormat);
   } else if(isGenLike){
-    decl.supportedAddressGenType = AddressGenType_GEN;
+    decl.supportedAddressGen.type = AddressGenType_GEN;
+    decl.supportedAddressGen.loopsSupported = CountLoops(AddressGenExtraFormat);
   } else if(isMemLike){
-    decl.supportedAddressGenType = AddressGenType_MEM;
+    decl.supportedAddressGen.type = AddressGenType_MEM;
+    decl.supportedAddressGen.loopsSupported = CountLoops(AddressGenMemExtraFormat);
   }
-  
+
   FUDeclaration* res = RegisterFU(decl);
 
   return res;
@@ -337,8 +369,8 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
 }
 
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
-  DEBUG_REGION("RegisterSubUnit");
-  DEBUG_REGION(circuit->name);
+  DEBUG_PATH("RegisterSubUnit");
+  DEBUG_PATH(circuit->name);
 
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
