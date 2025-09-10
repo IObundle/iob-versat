@@ -7,7 +7,6 @@
 // Take care when changing this. This unit is verilated in order to simulate address gen independently of the accelerator at pc-emul-run time.
 module SuperAddress #(
    parameter AXI_ADDR_W = 32,
-   parameter AXI_DATA_W = 32,
    parameter DATA_W   = 32,
    parameter ADDR_W   = 10,
    parameter PERIOD_W = 10,

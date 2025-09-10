@@ -9,7 +9,6 @@ module Buffer #(
    input rst,
 
    input running,
-   input run,
 
    // External memory
    //output [DELAY_W-1:0]     ext_2p_addr_out_0,
@@ -98,7 +97,7 @@ module Buffer #(
       .ext_mem_r_data_i(ext_2p_data_in)
    );
 
-   always @(posedge clk, posedge rst) begin
+   always @(posedge clk) begin
       if (rst) inData <= 0;
       else inData <= in0;
    end

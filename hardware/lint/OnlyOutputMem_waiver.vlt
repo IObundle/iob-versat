@@ -1,0 +1,7 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Unused submodule output
+lint_off -rule PINCONNECTEMPTY -file "**/OnlyOutputMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
+

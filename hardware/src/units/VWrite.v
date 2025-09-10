@@ -69,6 +69,8 @@ module VWrite #(
 
    input [ DELAY_W-1:0] delay0
 );
+   localparam DELAY_STORE_W = (DELAY_W > 20) ? DELAY_W : 20;
+   localparam EXTRA_DELAY_W = 20;
 
    //reg  doneWrite; // Databus write part
    wire transferDone;
@@ -78,6 +80,17 @@ module VWrite #(
 
    wire data_valid,data_ready,data_last;
    wire [AXI_DATA_W-1:0] data_data;
+   wire [DELAY_STORE_W-1:0] delay_store;
+
+   generate
+        if (DELAY_W < EXTRA_DELAY_W) begin : gen_delay_smaller
+           assign delay_store = {{(EXTRA_DELAY_W-DELAY_W){1'b0}},delay0} + extra_delay;
+        end else if (DELAY_W > EXTRA_DELAY_W) begin : gen_delay_bigger
+           assign delay_store = {{(DELAY_W-EXTRA_DELAY_W){1'b0}},extra_delay} + delay0;
+        end else begin : gen_delay_equal
+           assign delay_store = delay0 + extra_delay;
+        end
+   endgenerate
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
@@ -105,7 +118,6 @@ module VWrite #(
 
    // port addresses and enables
    wire [ADDR_W-1:0] store_addr_temp;
-   wire [ADDR_W-1:0] start_inst = {pingPong && pingPongState, start[ADDR_W-2:0]};
 
    // mem enables output by addr gen
    wire store_en,do_store;
@@ -139,7 +151,6 @@ module VWrite #(
 
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
-      .AXI_DATA_W(AXI_DATA_W),
       .LEN_W(LEN_W),
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
@@ -209,7 +220,7 @@ module VWrite #(
    AddressGen3 #(
       .ADDR_W(ADDR_W),
       .DATA_W(DATA_W),
-      .DELAY_W(DELAY_W),
+      .DELAY_W(DELAY_STORE_W),
       .PERIOD_W(PERIOD_W)
    ) addrgenStore (
       .clk_i(clk),
@@ -220,9 +231,8 @@ module VWrite #(
 
       //configurations 
       .per_i(per),
-      .delay_i (delay0 + extra_delay),
+      .delay_i (delay_store),
       .start_i ({1'b0,start[ADDR_W-2:0]}),
-      //.start_i (start_inst),
       .incr_i  (incr),
 
       .iter_i(iter),
@@ -252,8 +262,6 @@ module VWrite #(
    wire                  read_en;
    wire [    ADDR_W-1:0] read_addr;
    wire [AXI_DATA_W-1:0] read_data;
-
-   wire                  m_valid;
 
    MemoryReader #(
       .ADDR_W(ADDR_W),

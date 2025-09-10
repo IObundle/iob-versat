@@ -22,8 +22,6 @@ module OnlyOutputMem #(
    input      [  ADDR_W-1:0] addr,
    input      [  DATA_W-1:0] wdata,
    input                     valid,
-   output reg                rvalid,
-   output     [  DATA_W-1:0] rdata,
 
    //input / output data
    (* versat_latency = 2 *) output [DATA_W-1:0] out0,
@@ -43,13 +41,7 @@ module OnlyOutputMem #(
    input [ADDR_W-1:0] startA,
    input [ADDR_W-1:0] shiftA,
    input [ADDR_W-1:0] incrA,
-   input [DELAY_W-1:0] delay0,
-   input              reverseA,
-   input              extA,
-   input [ADDR_W-1:0] iter2A,
-   input [       9:0] per2A,
-   input [ADDR_W-1:0] shift2A,
-   input [ADDR_W-1:0] incr2A
+   input [DELAY_W-1:0] delay0
 );
 
    wire we = |wstrb;
@@ -57,7 +49,6 @@ module OnlyOutputMem #(
    wire doneA;
 
    //output databus
-   wire [DATA_W-1:0] outA;
    reg [DATA_W-1:0] outA_reg;
 
    assign out0 = running ? outA_reg : 0;

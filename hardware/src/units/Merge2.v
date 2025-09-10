@@ -91,12 +91,12 @@ module Merge2 #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         delay   <= 0;
-         counter <= 0;
+         delay   <= {DELAY_W{1'b0}};
+         counter <= 5'b0;
       end else if (run) begin
          delay   <= delay0;
-         counter <= 0;
-      end else begin
+         counter <= 5'b0;
+      end else if (running) begin
          if (|delay) begin
             delay <= delay - 1;
          end
@@ -106,6 +106,9 @@ module Merge2 #(
          end
 
          out0 <= select[counter];
+      end else begin
+         delay   <= delay;
+         counter <= counter;
       end
    end
 

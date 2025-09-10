@@ -1,0 +1,12 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Bits can be used in some parameter combinations:
+// example: W_DATA_W = R_DATA_W = 8 -> N = 1 -> N_W = 0 -> MINDATA_W = 8 -> SYMBOL_W = 0
+// w_addr_i[ADDR_W-1:N_W+SYMBOL_W] = w_addr_i[ADDR_W-1:0]
+// r_addr_i[ADDR_W-1:N_W+SYMBOL_W] = r_addr_i[ADDR_W-1:0]
+lint_off -rule UNUSEDSIGNAL -file "**/my_2p_asym_ram.v" -match "Bits of signal are not used: 'w_addr_i'[1:0]"
+
+lint_off -rule UNUSEDSIGNAL -file "**/my_2p_asym_ram.v" -match "Bits of signal are not used: 'r_addr_i'[1:0]"
+

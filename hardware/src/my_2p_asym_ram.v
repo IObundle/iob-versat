@@ -60,10 +60,11 @@ module my_2p_asym_ram #(
       end
    endgenerate
 
-   integer j, k, l;
    generate
 
       if (W_DATA_W > R_DATA_W) begin
+
+         integer j, l;
 
          //write parallel
          always @* begin
@@ -86,6 +87,7 @@ module my_2p_asym_ram #(
          end
 
       end else if (W_DATA_W < R_DATA_W) begin
+         integer j, k;
          wire [ADDR_W-1:0] byteAddr = w_addr_i[ADDR_W-1:0] >> SYMBOL_W;
 
          //write serial

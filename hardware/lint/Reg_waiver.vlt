@@ -1,0 +1,6 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Unused module input: keep to match Native Interface
+lint_off -rule UNUSEDSIGNAL -file "**/Reg.v" -match "Signal is not used: 'addr'"

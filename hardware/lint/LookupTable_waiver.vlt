@@ -1,0 +1,10 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Bits can be used in some combination of parameter
+// Example: ADDR_W = DATA_W
+lint_off -rule UNUSEDSIGNAL -file "**/LookupTable.v" -match "Bits of signal are not used: 'in0'[31:8]"
+
+lint_off -rule UNUSEDSIGNAL -file "**/LookupTable.v" -match "Bits of signal are not used: 'in1'[31:8]"
+

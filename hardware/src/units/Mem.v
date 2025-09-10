@@ -74,7 +74,6 @@
    wire doneA, doneB;
 
    //output databus
-   wire [DATA_W-1:0] outA, outB;
    reg [DATA_W-1:0] outA_reg, outB_reg;
 
    reg [DELAY_W-1:0] testDelay0;
