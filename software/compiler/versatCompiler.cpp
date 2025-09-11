@@ -3,6 +3,7 @@
 #include <ftw.h>
 
 // TODO: Eventually need to find a way of detecting superfluous includes or something to the same effect. Maybe possible change to a unity build although the main problem to solve is organization.
+#include "debugVersat.hpp"
 #include "embeddedData.hpp"
 #include "filesystem.hpp"
 #include "globals.hpp"
@@ -88,7 +89,7 @@ struct Work{
 };
 
 void Print(Work* work){
-  printf("Name: %.*s\n",UNPACK_SS(work->definition.base.name));
+  printf("Name: %.*s\n",UN(work->definition.base.name));
   printf("calculateDelayFixedGraph: %d\n",work->calculateDelayFixedGraph ? 1 : 0);
   printf("flattenWithMapping: %d\n",work->flattenWithMapping ? 1 : 0);
 }
@@ -168,21 +169,21 @@ parse_opt (int key, char *arg,
   // TODO: Better error handling
   switch (key)
     {
-    case 'S': *opts->extraSources->PushElem() = STRING(arg); break;
-    case 'I': *opts->includePaths->PushElem() = STRING(arg); break;
+    case 'S': *opts->extraSources->PushElem() = arg; break;
+    case 'I': *opts->includePaths->PushElem() = arg; break;
 
     // TODO: All the filepaths should be inserted into verilogFiles while this only takes in folders.
-    case 'u': *opts->unitFolderPaths->PushElem() = STRING(arg); break;
+    case 'u': *opts->unitFolderPaths->PushElem() = arg; break;
 
-    case 'b': opts->options->databusDataSize = ParseInt(STRING(arg)); break;
+    case 'b': opts->options->databusDataSize = ParseInt(arg); break;
 
     case 'd': opts->options->useDMA = true; break;
     case 'D': opts->options->architectureHasDatabus = true; break;
     case 's': opts->options->addInputAndOutputsToTop = true; break;
 
-    case 'L': opts->options->generetaSourceListName = STRING(arg); break;
+    case 'L': opts->options->generetaSourceListName = arg; break;
 
-    case 'p': opts->options->prefixIObPort = STRING(arg); break;
+    case 'p': opts->options->prefixIObPort = arg; break;
 
     case 'T': opts->options->opMode = VersatOperationMode_GENERATE_TESTBENCH; break;
 
@@ -191,12 +192,12 @@ parse_opt (int key, char *arg,
       opts->options->useSymbolAddress = true;
     } break;
       
-    case 'g': opts->options->debugPath = STRING(arg); opts->options->debug = true; break;
-    case 't': opts->options->topName = STRING(arg); break;
-    case 'o': opts->options->hardwareOutputFilepath = STRING(arg); break;
-    case 'O': opts->options->softwareOutputFilepath = STRING(arg); break;
+    case 'g': opts->options->debugPath = arg; opts->options->debug = true; break;
+    case 't': opts->options->topName = arg; break;
+    case 'o': opts->options->hardwareOutputFilepath = arg; break;
+    case 'O': opts->options->softwareOutputFilepath = arg; break;
       
-    case ARGP_KEY_ARG: opts->options->specificationFilepath = STRING(arg); break;
+    case ARGP_KEY_ARG: opts->options->specificationFilepath = arg; break;
     case ARGP_KEY_END: break;
     }
   return 0;
@@ -312,15 +313,15 @@ int main(int argc,char* argv[]){
   
   // We need to do this after parsing the modules because the majority of these special types come from verilog files
   // NOTE: This should never fail since the verilog files are embedded into the exe. A fail in here means that we failed to embed the necessary files at build time
-  BasicDeclaration::buffer = GetTypeByNameOrFail(S8("Buffer"));
-  BasicDeclaration::fixedBuffer = GetTypeByNameOrFail(S8("FixedBuffer"));
-  BasicDeclaration::pipelineRegister = GetTypeByNameOrFail(S8("PipelineRegister"));
-  BasicDeclaration::multiplexer = GetTypeByNameOrFail(S8("Mux2"));
-  BasicDeclaration::combMultiplexer = GetTypeByNameOrFail(S8("CombMux2"));
-  BasicDeclaration::stridedMerge = GetTypeByNameOrFail(S8("StridedMerge"));
-  BasicDeclaration::timedMultiplexer = GetTypeByNameOrFail(S8("TimedMux"));
-  BasicDeclaration::input = GetTypeByNameOrFail(S8("CircuitInput"));
-  BasicDeclaration::output = GetTypeByNameOrFail(S8("CircuitOutput"));
+  BasicDeclaration::buffer = GetTypeByNameOrFail("Buffer");
+  BasicDeclaration::fixedBuffer = GetTypeByNameOrFail("FixedBuffer");
+  BasicDeclaration::pipelineRegister = GetTypeByNameOrFail("PipelineRegister");
+  BasicDeclaration::multiplexer = GetTypeByNameOrFail("Mux2");
+  BasicDeclaration::combMultiplexer = GetTypeByNameOrFail("CombMux2");
+  BasicDeclaration::stridedMerge = GetTypeByNameOrFail("StridedMerge");
+  BasicDeclaration::timedMultiplexer = GetTypeByNameOrFail("TimedMux");
+  BasicDeclaration::input = GetTypeByNameOrFail("CircuitInput");
+  BasicDeclaration::output = GetTypeByNameOrFail("CircuitOutput");
 
   // Collect all user verilog source files.
   bool error = false;
@@ -342,10 +343,10 @@ int main(int argc,char* argv[]){
         Opt<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
         if(!res){
           error = true;
-          printf("\n\nCannot open dir: %.*s\n\n",UNPACK_SS(path));
+          printf("\n\nCannot open dir: %.*s\n\n",UN(path));
         } else {
           for(String& str : res.value()){
-            String fullPath = PushString(perm,"%.*s/%.*s",UNPACK_SS(path),UNPACK_SS(str));
+            String fullPath = PushString(perm,"%.*s/%.*s",UN(path),UN(str));
             allVerilogFilesSet->Insert(fullPath);
           }
         }
@@ -368,7 +369,7 @@ int main(int argc,char* argv[]){
     String content = PushFile(temp,filepath);
     
     if(Empty(content)){
-      printf("Failed to open file %.*s\n. Exiting\n",UNPACK_SS(filepath));
+      printf("Failed to open file %.*s\n. Exiting\n",UN(filepath));
       exit(-1);
     }
 
@@ -396,6 +397,7 @@ int main(int argc,char* argv[]){
     return -1;
   }
 
+  // TODO: The testbench logic is kinda addhoc right now. Need to join together the other logic and them create a proper switch between these two.
   if(globalOptions.opMode == VersatOperationMode_GENERATE_TESTBENCH){
     String topLevelUnit = globalOptions.topName;
 
@@ -427,7 +429,7 @@ int main(int argc,char* argv[]){
   FUDeclaration* simpleType = GetTypeByName(topLevelTypeStr);
 
   if(!simpleType && specFilepath.size && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
-    String content = PushFile(temp,StaticFormat("%.*s",UNPACK_SS(specFilepath)));
+    String content = PushFile(temp,StaticFormat("%.*s",UN(specFilepath)));
     
     Array<ConstructDef> types = ParseVersatSpecification(content,temp);
 
@@ -466,7 +468,7 @@ int main(int argc,char* argv[]){
     }
     
     if(!typeToId->Exists(topLevelTypeStr)){
-      printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
+      printf("Did not find the top level type: %.*s\n",UN(topLevelTypeStr));
       return -1;
     }
     
@@ -635,11 +637,19 @@ int main(int argc,char* argv[]){
       }
 #endif
 
+#if 0
+      if(work.definition.type == ConstructType_MODULE && work.definition.module.name == "ModuleWithExtra"){
+        auto p = FlattenWithMerge(decl->baseCircuit,0);
+
+        DebugRegionOutputDotGraph(p.accel,"FlattenReconAttemp0");
+      }
+#endif
+      
       // Flatten with mapping seems to be specific to modules.
       // Merge circuits are already flatten by the way the merge is performed.
       if(work.definition.type != ConstructType_MERGE && work.flattenWithMapping){
         Pair<Accelerator*,SubMap*> p = Flatten(decl->baseCircuit,99);
-  
+        
         decl->flattenedBaseCircuit = p.first;
         decl->flattenMapping = p.second;
       }
@@ -648,7 +658,7 @@ int main(int argc,char* argv[]){
 
   FUDeclaration* type = GetTypeByName(topLevelTypeStr);
   if(!type && !CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
-    printf("Did not find the top level type: %.*s\n",UNPACK_SS(topLevelTypeStr));
+    printf("Did not find the top level type: %.*s\n",UN(topLevelTypeStr));
     return -1;
   }
 
@@ -657,10 +667,10 @@ int main(int argc,char* argv[]){
 
   bool isSimple = false;
   if(CompareString(topLevelTypeStr,"VERSAT_RESERVED_ALL_UNITS")){
-    accel = CreateAccelerator(STRING("allVersatUnits"),AcceleratorPurpose_MODULE);
+    accel = CreateAccelerator("allVersatUnits",AcceleratorPurpose_MODULE);
     
-    FUDeclaration* constType = GetTypeByName(STRING("Const"));
-    FUDeclaration* regType = GetTypeByName(STRING("Reg"));
+    FUDeclaration* constType = GetTypeByName("Const");
+    FUDeclaration* regType = GetTypeByName("Reg");
 
     int constsAdded = 0;
     int regsAdded = 0;
@@ -691,14 +701,14 @@ int main(int argc,char* argv[]){
     type->singleInterfaces |= SingleInterfaces_SIGNAL_LOOP;
 
     accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
-    TOP = CreateFUInstance(accel,type,STRING("TOP"));
+    TOP = CreateFUInstance(accel,type,"TOP");
   } else if(globalOptions.addInputAndOutputsToTop && !(type->NumberInputs() == 0 && type->NumberOutputs() == 0)){
     // TODO: This process needs to be simplified and more integrated with the approach used by versat spec.
     //       Instead of doing everything manually.
     isSimple = true;
 
-    const char* name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
+    const char* name = StaticFormat("%.*s_Simple",UN(topLevelTypeStr));
+    accel = CreateAccelerator(name,AcceleratorPurpose_MODULE);
     
     int input = type->NumberInputs();
     int output = type->NumberOutputs();
@@ -706,8 +716,8 @@ int main(int argc,char* argv[]){
     Array<FUInstance*> inputs = PushArray<FUInstance*>(perm,input);
     Array<FUInstance*> outputs = PushArray<FUInstance*>(perm,output);
 
-    FUDeclaration* constType = GetTypeByName(STRING("TestConst"));
-    FUDeclaration* regType = GetTypeByName(STRING("Reg"));
+    FUDeclaration* constType = GetTypeByName("TestConst");
+    FUDeclaration* regType = GetTypeByName("Reg");
     
     // We need to create input and outputs first before instance
     // to guarantee that the configs and states are at the beginning of the accelerator structs
@@ -720,7 +730,7 @@ int main(int argc,char* argv[]){
       outputs[i] = CreateFUInstance(accel,regType,name);
     }
 
-    TOP = CreateFUInstance(accel,type,STRING("simple"));
+    TOP = CreateFUInstance(accel,type,"simple");
 
     for(int i = 0; i < input; i++){
       ConnectUnits(inputs[i],0,TOP,i);
@@ -731,27 +741,31 @@ int main(int argc,char* argv[]){
     
     type = RegisterSubUnit(accel);
     type->definitionArrays = PushArray<Pair<String,int>>(perm,2);
-    type->definitionArrays[0] = (Pair<String,int>){STRING("input"),input};
-    type->definitionArrays[1] = (Pair<String,int>){STRING("output"),output};
+    type->definitionArrays[0] = (Pair<String,int>){"input",input};
+    type->definitionArrays[1] = (Pair<String,int>){"output",output};
 
     type->singleInterfaces |= SingleInterfaces_SIGNAL_LOOP;
     
-    name = StaticFormat("%.*s_Simple",UNPACK_SS(topLevelTypeStr));
-    accel = CreateAccelerator(STRING(name),AcceleratorPurpose_MODULE);
-    TOP = CreateFUInstance(accel,type,STRING("TOP"));
+    name = StaticFormat("%.*s_Simple",UN(topLevelTypeStr));
+    accel = CreateAccelerator(name,AcceleratorPurpose_MODULE);
+    TOP = CreateFUInstance(accel,type,"TOP");
   } else {
+    // TODO: I think that the rest of the code is good enough that we do not need to do this extra step.
+    //       
     accel = CreateAccelerator(topLevelTypeStr,AcceleratorPurpose_MODULE);
 
-    TOP = CreateFUInstance(accel,type,STRING("TOP"));
+    TOP = CreateFUInstance(accel,type,"TOP");
 
     for(int i = 0; i < type->NumberInputs(); i++){
       String name = PushString(perm,"input%d",i);
       FUInstance* input = CreateOrGetInput(accel,name,i);
       ConnectUnits(input,0,TOP,i);
     }
-    FUInstance* output = CreateOrGetOutput(accel);
-    for(int i = 0; i < type->NumberOutputs(); i++){
-      ConnectUnits(TOP,i,output,i);
+    if(type->NumberOutputs() > 0){
+      FUInstance* output = CreateOrGetOutput(accel);
+      for(int i = 0; i < type->NumberOutputs(); i++){
+        ConnectUnits(TOP,i,output,i);
+      }
     }
   }
 
@@ -826,21 +840,21 @@ int main(int argc,char* argv[]){
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
 
-      if(globalOptions.debug){
+      if(globalOptions.debug && decl->fixedDelayCircuit){
         GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp);
         String repr = GenerateDotGraph(content,temp);
-        String debugPath = PushDebugPath(temp,decl->name,STRING("NormalGraph.dot"));
+        String debugPath = PushDebugPath(temp,decl->name,"NormalGraph.dot");
 
-        FILE* file = OpenFile(debugPath,"w",FilePurpose_DEBUG_INFO);
+        FILE* file = OpenFileAndCreateDirectories(debugPath,"w",FilePurpose_DEBUG_INFO);
         DEFER_CLOSE_FILE(file);
         if(!file){
-          printf("Error opening file for debug outputting: %.*s\n",UNPACK_SS(debugPath));
+          printf("Error opening file for debug outputting: %.*s\n",UN(debugPath));
         } else {
           fwrite(repr.data,sizeof(char),repr.size,file);
         }
       }
 
-      String path = PushString(temp,"%.*s/%.*s.v",UNPACK_SS(globalOptions.hardwareOutputFilepath),UNPACK_SS(decl->name));
+      String path = PushString(temp,"%.*s/%.*s.v",UN(globalOptions.hardwareOutputFilepath),UN(decl->name));
       
       FILE* sourceCode = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
       DEFER_CLOSE_FILE(sourceCode);
@@ -863,10 +877,10 @@ int main(int argc,char* argv[]){
   }
   
   // TODO: We probably need to move this to a better place
-  fs::path hardwareDestinationPath(StaticFormat("%.*s",UNPACK_SS(globalOptions.hardwareOutputFilepath)));
+  fs::path hardwareDestinationPath(StaticFormat("%.*s",UN(globalOptions.hardwareOutputFilepath)));
   auto options = fs::copy_options::update_existing;
   for(String filepath : globalOptions.verilogFiles){
-    fs::path path(StaticFormat("%.*s",UNPACK_SS(filepath)));
+    fs::path path(StaticFormat("%.*s",UN(filepath)));
     
     fs::copy(path,hardwareDestinationPath,options);
   }
@@ -874,8 +888,8 @@ int main(int argc,char* argv[]){
   // This should be the last thing that we do, no further file creation can occur after this point
   for(FileInfo f : CollectAllFilesInfo(temp)){
     if(f.purpose != FilePurpose_DEBUG_INFO && f.mode == FileOpenMode_WRITE){
-      const char* type = FilePurpose_Name(f.purpose);
-      printf("Filename: %.*s Type: %s\n",UNPACK_SS(f.filepath),type);
+      String type = FilePurpose_Name(f.purpose);
+      printf("Filename: %.*s Type: %.*s\n",UN(f.filepath),UN(type));
     }
   }
   
@@ -884,9 +898,23 @@ int main(int argc,char* argv[]){
   return 0;
 }
 
-/*
+/* ============================================================================
+// Major todo:
 
-// ============================================================================
+1. Need to change memories to keep a symbolic expression. Remove the
+uglyness that is present in the memories, the memory template and the
+different memory structs for int and range and whatnot. Just use
+symbolic expressions. We might still want to have the expression range
+in the parser, but we convert to a symbolic expression when
+registering the module.
+
+2. The merge stuff is causing troubles and we need to cleanup that part of the code. Also need to make the code robust and clean enough so that we can implement some optimizations, like not using a different multiplexer port for every merge type (reusing merge ports if possible) and maybe some other optimizations related to the insertion of buffers and the likes.
+
+2.1 - I remember that we never found a good proper way of doing the recon stuff. Since we have more tests and a fast way of testing stuff out, we might be able to change this stuff very fast.
+
+*/
+
+/* ============================================================================
 // Major changes
 
 Overall of versat spec usability and accelerator programming.
@@ -943,6 +971,8 @@ Module Test(){
 
 // ============================================================================
 // Bugs
+
+BUG: localOrder appears to be broken. 
 
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
 
@@ -1135,7 +1165,6 @@ Generated code does not take into account parameters when it should.
 */
 
 /*
-
 
 TODO: Need to check the isSource member of ModuleInfo and so on. 
 

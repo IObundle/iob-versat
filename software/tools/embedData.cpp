@@ -23,21 +23,21 @@
 
 // TODO: We are currently doing everything manually in terms of instantiating C auxiliary arrays and that kinda sucks. I should be able to make it more automatic, I should be able to generalize it somewhat.
 
-void ReportError(String content,Token faultyToken,const char* error){
+void ReportError(String content,Token faultyToken,String error){
   TEMP_REGION(temp,nullptr);
 
   String loc = GetRichLocationError(content,faultyToken,temp);
 
   printf("\n");
-  printf("%.*s\n",UNPACK_SS(faultyToken));
-  printf("%s\n",error);
-  printf("%.*s\n",UNPACK_SS(loc));
+  printf("%.*s\n",UN(faultyToken));
+  printf("%.*s\n",UN(error));
+  printf("%.*s\n",UN(loc));
   printf("\n");
 
   DEBUG_BREAK();
 }
 
-void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
+void ReportError(Tokenizer* tok,Token faultyToken,String error){
   String content = tok->GetContent();
   ReportError(content,faultyToken,error);
 }
@@ -67,15 +67,14 @@ static bool IsValidIdentifier(String str){
 
 #define CheckIdentifier(ID) \
   if(!IsValidIdentifier(ID)){ \
-    ReportError(tok,ID,StaticFormat("identifier '%.*s' is not a valid name",UNPACK_SS(ID))); \
+    ReportError(tok,ID,StaticFormat("identifier '%.*s' is not a valid name",UN(ID))); \
     return {}; \
   }
 
-bool _ExpectError(Tokenizer* tok,const char* str){
+bool _ExpectError(Tokenizer* tok,String expected){
   TEMP_REGION(temp,nullptr);
 
   Token got = tok->NextToken();
-  String expected = STRING(str);
   if(!CompareString(got,expected)){
     
     auto builder = StartString(temp);
@@ -86,7 +85,7 @@ bool _ExpectError(Tokenizer* tok,const char* str){
     builder->PushString(PushEscapedString(temp,got,' '));
     builder->PushString("\n");
     String text = EndString(temp,builder);
-    ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
+    ReportError(tok,got,StaticFormat("%*s",UN(text))); \
     return true;
   }
   return false;
@@ -132,6 +131,12 @@ struct DataValue{
     Array<DataValue*> asArray;
     FunctionValue asFunc;
   };
+};
+
+struct ArrayDef{
+  Token name;
+  Token type;
+  DataValue* val;
 };
 
 struct Parameter{
@@ -206,6 +211,7 @@ Pool<TableDef> tables = {};
 Pool<MapDef> maps = {};
 Pool<FileDef> files = {};
 Pool<FileGroupDef> fileGroups = {};
+Pool<ArrayDef> arrays = {};
 
 // TODO: Weird way of doing things but works for now.
 GenericDef GetDefinition(Token name){
@@ -239,7 +245,7 @@ GenericDef GetDefinition(Token name){
     }
   }
   
-  printf("Type '%.*s' does not exist\n",UNPACK_SS(name));
+  printf("Type '%.*s' does not exist\n",UN(name));
   Assert(false);
   return {};
 }
@@ -417,10 +423,32 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
   }
   
   if(!tok->IfNextToken("{")){
+    // Parsing a simple value here
     DataValue* val = PushStruct<DataValue>(out);
     val->type = DataValueType_SINGLE;
-    val->asStr = tok->NextToken();
-    return val;
+
+    Token peek = tok->PeekToken();
+    if(peek == "\""){
+      tok->AdvancePeek();
+      TokenizerMark mark = tok->Mark();
+
+      while(true){
+        Token peek = tok->PeekToken();
+        if(peek == "\""){
+          break;
+        }
+        tok->AdvancePeek();
+      }
+
+      Token fullValue = tok->Point(mark);
+      tok->AdvancePeek();
+
+      val->asStr = fullValue;
+      return val;
+    } else {
+      val->asStr = tok->NextToken();
+      return val;
+    }
   }
 
   // Parsing an array here.
@@ -629,6 +657,31 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
   return nullptr;
 }
 
+ArrayDef* ParseArray(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  AssertToken(tok,"array");
+
+  Token arrayType = tok->NextToken();
+  CheckIdentifier(arrayType);
+
+  Token arrayName = tok->NextToken();
+  CheckIdentifier(arrayName);
+  
+  AssertToken(tok,"=");
+
+  DataValue* val = ParseValue(tok,out);
+  Assert2(val->type == DataValueType_ARRAY,"Array cannot handle single values. Pass an array of values using {}");
+  
+  AssertToken(tok,";");
+
+  ArrayDef* res = arrays.Alloc();
+  res->name = arrayName;
+  res->type = arrayType;
+  res->val = val;
+
+  return res;
+}
+
 void ParseContent(String content,Arena* out){
   TEMP_REGION(temp,out);
   Tokenizer tokInst(content,"!@#$%^&*()-+={[}]\\|~`;:'\",./?",{"//","/*","*/"});
@@ -641,6 +694,8 @@ void ParseContent(String content,Arena* out){
       ParseEnum(tok,out);
     } else if(CompareString(peek,"struct")){
       ParseStruct(tok,out);
+    } else if(CompareString(peek,"array")){
+      ParseArray(tok,out);
     } else if(CompareString(peek,"table")){
       ParseTable(tok,out);
     } else if(CompareString(peek,"file")){
@@ -657,10 +712,10 @@ void ParseContent(String content,Arena* out){
 }
 
 String DefaultRepr(DataValue* val,TypeDef* type,Arena* out){
-  if(IsEnum(type->name)){
+  if(type && IsEnum(type->name)){
     return val->asStr;
   } else if(val->type == DataValueType_SINGLE){
-    return PushString(out,"STRING(\"%.*s\")",UNPACK_SS(val->asStr));
+    return PushString(out,"String(\"%.*s\")",UN(val->asStr));
   }
 
   NOT_IMPLEMENTED("yet");
@@ -718,7 +773,7 @@ static DataValue* EvaluateFunction(FunctionValue func,Arena* out){
     } break;
     }
   } else {
-    printf("Did not find a function named %.*s\n",UNPACK_SS(func.name));
+    printf("Did not find a function named %.*s\n",UN(func.name));
   }
 
   return nullptr;
@@ -759,7 +814,7 @@ int main(int argc,const char* argv[]){
   
   const char* defFilePath = argv[1];
   const char* outputPath = argv[2];
-
+ 
   // Initialize context arenas
   Arena inst1 = InitArena(Megabyte(64));
   contextArenas[0] = &inst1;
@@ -780,7 +835,7 @@ int main(int argc,const char* argv[]){
 
   // TODO: Because we are implementing more logic, we probably want to have two steps, specially because we have things like FileGroups and so on.
   if(argc == 4){
-    if(CompareString(S8(argv[3]),S8("-d"))){
+    if(CompareString(argv[3],"-d")){
       // Generate the .d file.
 
       String dFileName = PushString(temp,"%s.d",outputPath);
@@ -834,7 +889,7 @@ int main(int argc,const char* argv[]){
   {
     FILE* header = fopen(CS(headerName),"w");
     if(!header){
-      printf("Error opening file for output: %.*s",UNPACK_SS(headerName));
+      printf("Error opening file for output: %.*s",UN(headerName));
       return -1;
     }
 
@@ -842,12 +897,12 @@ int main(int argc,const char* argv[]){
 
     CEmitter* h = StartCCode(temp);
   
-    h->Comment(S8("File auto generated by embedData tool"));
+    h->Comment("File auto generated by embedData tool");
     h->Once();
     h->Include("utilsCore.hpp");
 
     h->Line();
-    h->Comment(STRING("Structs definitions"));
+    h->Comment("Structs definitions");
     
     for(StructDef* def : structs){
       h->Struct(def->name);
@@ -859,7 +914,7 @@ int main(int argc,const char* argv[]){
       h->Extern("Array<String>",SF("META_%.*s_Members",UN(def->name)));
     }
 
-    h->Comment(S8("Enum definition"));
+    h->Comment("Enum definition");
     for(EnumDef* def : enums){
       h->Enum(def->name);
       for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
@@ -867,12 +922,12 @@ int main(int argc,const char* argv[]){
       }
       h->EndEnum();
 
-      h->FunctionDeclOnlyBlock(S8("String"),S8("META_Repr"));
-      h->Argument(def->name,S8("val"));
+      h->FunctionDeclOnlyBlock("String","META_Repr");
+      h->Argument(def->name,"val");
       h->EndBlock();
     }
 
-    h->Comment(S8("Table definition"));
+    h->Comment("Table definition");
 
     for(TableDef* def : tables){
       h->Struct(PushString(temp,"%.*s_GenType",UN(def->structTypename)));
@@ -891,13 +946,18 @@ int main(int argc,const char* argv[]){
       h->EndStruct();
     }
 
-    h->Comment(S8("Tables"));
-    
-    for(TableDef* def : tables){
-      h->Extern(SF("Array<%.*s_GenType>",UN(def->structTypename)),CS(def->structTypename));
+    h->Comment("Arrays");
+    for(ArrayDef* def : arrays){
+      h->Extern(SF("Array<%.*s>",UN(def->type)),def->name);
     }
     
-    h->Comment(S8("Define Maps (the arrays store the data, not the keys)"));
+    h->Comment("Tables");
+    
+    for(TableDef* def : tables){
+      h->Extern(SF("Array<%.*s_GenType>",UN(def->structTypename)),def->structTypename);
+    }
+    
+    h->Comment("Define Maps (the arrays store the data, not the keys)");
     
     for(MapDef* def : maps){
       if(!def->isDefineMap){
@@ -908,13 +968,13 @@ int main(int argc,const char* argv[]){
         // TODO: Only implement for single type. What would an array define map look like?
         
         Assert(p[1]->type == DataValueType_SINGLE);
-        h->RawLine(PushString(temp,"#define %.*s STRING(\"%.*s\")",UNPACK_SS(p[0]->asStr),UNPACK_SS(p[1]->asStr)));
+        h->RawLine(PushString(temp,"#define %.*s \"%.*s\"",UN(p[0]->asStr),UN(p[1]->asStr)));
       }
 
-      h->Extern("Array<String>",CS(def->name));
+      h->Extern("Array<String>",def->name);
     }
 
-    h->Comment(S8("Normal Maps"));
+    h->Comment("Normal Maps");
     for(MapDef* def : maps){
       if(def->isDefineMap || !def->isEnumMap || !def->isBijection){
         continue;
@@ -927,8 +987,8 @@ int main(int argc,const char* argv[]){
         Parameter pFrom = def->parameterList[from];
         Parameter pTo = def->parameterList[to];
 
-        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_Map",UNPACK_SS(def->name)));
-        h->Argument(pFrom.type->name,S8("val"));
+        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_Map",UN(def->name)));
+        h->Argument(pFrom.type->name,"val");
         h->EndBlock(); // Function
       }
       {
@@ -938,28 +998,28 @@ int main(int argc,const char* argv[]){
         Parameter pFrom = def->parameterList[from];
         Parameter pTo = def->parameterList[to];
 
-        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UNPACK_SS(def->name)));
-        h->Argument(pFrom.type->name,S8("val"));
+        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UN(def->name)));
+        h->Argument(pFrom.type->name,"val");
         h->EndBlock();
       }
     }
     
-    h->Comment(S8("File content"));
+    h->Comment("File content");
     
     for(FileDef* def : files){
       h->Extern("String",SF("META_%.*s_Content",UN(def->name)));
     }
 
-    h->Struct(S8("FileContent"));
-    h->Member(S8("String"),S8("fileName"));
-    h->Comment(S8("Without filename"));
-    h->Member(S8("String"),S8("originalRelativePath"));
-    h->Member(S8("String"),S8("commonFolder")); // TODO: We could push this outwards, since right now this is common to all the files.
-    h->Member(S8("String"),S8("content"));
+    h->Struct("FileContent");
+    h->Member("String","fileName");
+    h->Comment("Without filename");
+    h->Member("String","originalRelativePath");
+    h->Member("String","commonFolder"); // TODO: We could push this outwards, since right now this is common to all the files.
+    h->Member("String","content");
     h->EndStruct();
 
     for(FileGroupDef* def : fileGroups){
-      h->Extern("Array<FileContent>",CS(def->name));
+      h->Extern("Array<FileContent>",def->name);
     }
     
     CAST* end = EndCCode(h);
@@ -972,7 +1032,7 @@ int main(int argc,const char* argv[]){
   {
     FILE* source = fopen(CS(sourceName),"w");
     if(!source){
-      printf("Error opening file for output: %.*s",UNPACK_SS(sourceName));
+      printf("Error opening file for output: %.*s",UN(sourceName));
       return -1;
     }
     DEFER_CLOSE_FILE(source);
@@ -984,18 +1044,18 @@ int main(int argc,const char* argv[]){
     
     String headerFilenameOnly = ExtractFilenameOnly(headerName);
 
-    c->Include(CS(headerFilenameOnly));
+    c->Include(headerFilenameOnly);
 
     // Enum stuff
-    c->Comment(S8("Enum representation"));
+    c->Comment("Enum representation");
     for(EnumDef* def : enums){
-      c->FunctionBlock(S8("String"),S8("META_Repr"));
-      c->Argument(def->name,S8("val"));
+      c->FunctionBlock("String","META_Repr");
+      c->Argument(def->name,"val");
 
-      c->SwitchBlock(S8("val"));
+      c->SwitchBlock("val");
       for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
         String name = p.first;
-        String val = PushString(temp,"S8(\"%.*s\");",UN(name));
+        String val = PushString(temp,"String(\"%.*s\");",UN(name));
 
         c->CaseBlock(name);
         c->Return(val);
@@ -1003,13 +1063,13 @@ int main(int argc,const char* argv[]){
       }
       c->EndBlock();
 
-      c->Statement(S8("Assert(false)"));
-      c->Return(S8("{}"));
+      c->Statement("Assert(false)");
+      c->Return("{}");
       c->EndBlock();
     }
       
     // Declare auxiliary data arrays
-    c->Comment(S8("Raw c array auxiliary to Struct data"));
+    c->Comment("Raw c array auxiliary to Struct data");
     for(StructDef* def : structs){
       c->ArrayDeclareBlock("String",SF("%.*s_MemberNames",UN(def->name)),true);
       for(auto p : def->typeAndName){
@@ -1018,7 +1078,7 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
     }
 
-    c->Comment(S8("Struct data"));
+    c->Comment("Struct data");
     for(StructDef* def : structs){
       c->VarDeclareBlock("Array<String>",SF("META_%.*s_Members",UN(def->name)));
       c->Elem(PushString(temp,"%.*s_MemberNames",UN(def->name)));
@@ -1026,7 +1086,7 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
     }    
     
-    c->Comment(S8("Raw C array auxiliary to tables"));
+    c->Comment("Raw C array auxiliary to tables");
     for(TableDef* def : tables){
       for(int i = 0; i <  def->dataTable.size; i++){
         Array<DataValue*> row  =  def->dataTable[i];
@@ -1043,7 +1103,7 @@ int main(int argc,const char* argv[]){
           }
           
           if(val->type == DataValueType_ARRAY){
-            c->ArrayDeclareBlock(CS(typeDef->name),SF("%.*s_%.*s_aux%d",UN(def->structTypename),UN(name),i));
+            c->ArrayDeclareBlock(typeDef->name,SF("%.*s_%.*s_aux%d",UN(def->structTypename),UN(name),i));
             
             for(DataValue* child : val->asArray){
               c->StringElem(child->asStr);
@@ -1053,10 +1113,35 @@ int main(int argc,const char* argv[]){
         }
       }
     }
-    
-    fprintf(source,"\n// Raw C array Tables\n\n");
 
-    c->Comment(S8("Raw C array Tables"));
+    c->Comment("Raw C array Arrays");
+
+    auto EmitRawArray = [](CEmitter* m,String arrayName){
+      TEMP_REGION(temp,m->arena);
+      m->Elem(PushString(temp,"%.*s_Raw",UN(arrayName)));
+      m->Elem(PushString(temp,"ARRAY_SIZE(%.*s_Raw)",UN(arrayName)));
+    };
+
+    for(ArrayDef* def : arrays){
+      Assert(def->val->type == DataValueType_ARRAY);
+
+      c->ArrayDeclareBlock(def->type,SF("%.*s_Raw",UN(def->name)),true);
+
+      for(int i = 0; i < def->val->asArray.size; i++){
+        DataValue* val  = def->val->asArray[i];
+        Assert(val->type == DataValueType_SINGLE);
+        
+        c->Elem(DefaultRepr(val,nullptr,temp));
+      }
+
+      c->EndBlock();
+
+      c->VarDeclareBlock(SF("Array<%.*s>",UN(def->type)),def->name);
+      EmitRawArray(c,def->name);
+      c->EndBlock();
+    }
+      
+    c->Comment("Raw C array Tables");
 
     for(TableDef* def : tables){
       c->ArrayDeclareBlock(SF("%.*s_GenType",UN(def->structTypename)),SF("%.*s_Raw",UN(def->structTypename)),true);
@@ -1092,22 +1177,16 @@ int main(int argc,const char* argv[]){
       c->EndBlock(); // Array block
     }
     
-    c->Comment(S8("Tables"));
-
-    auto EmitRawArray = [](CEmitter* m,String arrayName){
-      TEMP_REGION(temp,m->arena);
-      m->Elem(PushString(temp,"%.*s_Raw",UN(arrayName)));
-      m->Elem(PushString(temp,"ARRAY_SIZE(%.*s_Raw)",UN(arrayName)));
-    };
+    c->Comment("Tables");
     
     for(TableDef* def : tables){
       String n = def->structTypename;
-      c->VarDeclareBlock(SF("Array<%.*s_GenType>",UN(n)),CS(n));
+      c->VarDeclareBlock(SF("Array<%.*s_GenType>",UN(n)),n);
       EmitRawArray(c,n);
       c->EndBlock();
     }
 
-    c->Comment(S8("Define Maps arrays"));
+    c->Comment("Define Maps arrays");
 
     for(MapDef* def : maps){
       if(!def->isDefineMap){
@@ -1123,12 +1202,12 @@ int main(int argc,const char* argv[]){
       
       c->EndBlock();
       
-      c->VarDeclareBlock("Array<String>",CS(def->name));
+      c->VarDeclareBlock("Array<String>",def->name);
       EmitRawArray(c,def->name);
       c->EndBlock();
     }
 
-    c->Comment(S8("Normal Maps"));
+    c->Comment("Normal Maps");
     
     for(MapDef* def : maps){
       // TODO: All these exist because we are just trying to implement something quickly right now, but when the time comes implement this.
@@ -1149,10 +1228,10 @@ int main(int argc,const char* argv[]){
 
         // TODO: Check if the table members are actually values of the enum or not.
 
-        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_Map",UNPACK_SS(def->name)));
-        c->Argument(pFrom.type->name,S8("val"));
+        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_Map",UN(def->name)));
+        c->Argument(pFrom.type->name,"val");
         
-        c->SwitchBlock(S8("val"));
+        c->SwitchBlock("val");
         for(Array<DataValue*> rows : def->dataTable){
           DataValue* fFrom = rows[from];
           DataValue* fTo = rows[to];
@@ -1165,7 +1244,7 @@ int main(int argc,const char* argv[]){
           c->EndBlock();
         }
         c->EndBlock();
-        c->Return(S8("{}"));
+        c->Return("{}");
 
         c->EndBlock(); // Function
       }
@@ -1176,8 +1255,8 @@ int main(int argc,const char* argv[]){
         Parameter pFrom = def->parameterList[from];
         Parameter pTo = def->parameterList[to];
 
-        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UNPACK_SS(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UNPACK_SS(def->name)));
-        c->Argument(pFrom.type->name,S8("val"));
+        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UN(def->name)));
+        c->Argument(pFrom.type->name,"val");
         
         //c->SwitchBlock(S8("val"));
         for(Array<DataValue*> rows : def->dataTable){
@@ -1192,12 +1271,12 @@ int main(int argc,const char* argv[]){
           c->EndIf();
         }
 
-        c->Return(S8("{}"));
+        c->Return("{}");
         c->EndBlock(); // Function
       }
     }
 
-    c->Comment(S8("Embedded Files"));
+    c->Comment("Embedded Files");
 
     for(FileDef* def : files){
       String path = def->filepathFromRoot;
@@ -1210,7 +1289,7 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
     }
 
-    c->Comment(S8("Embed File Groups"));
+    c->Comment("Embed File Groups");
 
     for(FileGroupDef* def : fileGroups){
       auto list = PushArenaList<FileGroupInfo>(temp);
@@ -1275,7 +1354,7 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
 
       // Emit array
-      c->VarDeclareBlock("Array<FileContent>",CS(def->name));
+      c->VarDeclareBlock("Array<FileContent>",def->name);
       EmitRawArray(c,def->name);
       c->EndBlock();
     }

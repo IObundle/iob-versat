@@ -16,41 +16,40 @@
 
 
 // TODO: This functions could show more lines of code before and after so we can actually see where the problem is.
-void ReportError(String content,Token faultyToken,const char* error){
+void ReportError(String content,Token faultyToken,String error){
   TEMP_REGION(temp,nullptr);
 
   String loc = GetRichLocationError(content,faultyToken,temp);
 
   printf("[Error]\n");
-  printf("%s:\n",error);
-  printf("%.*s\n",UNPACK_SS(loc));
+  printf("%.*s:\n",UN(error));
+  printf("%.*s\n",UN(loc));
   printf("\n");
 }
 
-void ReportError2(String content,Token faultyToken,Token goodToken,const char* faultyError,const char* good){
+void ReportError2(String content,Token faultyToken,Token goodToken,String faultyError,String good){
   TEMP_REGION(temp,nullptr);
 
   String loc = GetRichLocationError(content,faultyToken,temp);
   String loc2 = GetRichLocationError(content,goodToken,temp);
   
   printf("[Error]\n");
-  printf("%s:\n",faultyError);
-  printf("%.*s\n",UNPACK_SS(loc));
-  printf("%s:\n",good);
-  printf("%.*s\n",UNPACK_SS(loc2));
+  printf("%.*s:\n",UN(faultyError));
+  printf("%.*s\n",UN(loc));
+  printf("%.*s:\n",UN(good));
+  printf("%.*s\n",UN(loc2));
   printf("\n");
 }
 
-void ReportError(Tokenizer* tok,Token faultyToken,const char* error){
+void ReportError(Tokenizer* tok,Token faultyToken,String error){
   String content = tok->GetContent();
   ReportError(content,faultyToken,error);
 }
 
-bool _ExpectError(Tokenizer* tok,const char* str){
+bool _ExpectError(Tokenizer* tok,String expected){
   TEMP_REGION(temp,nullptr);
 
   Token got = tok->NextToken();
-  String expected = STRING(str);
   if(!CompareString(got,expected)){
     
     auto builder = StartString(temp);
@@ -61,7 +60,7 @@ bool _ExpectError(Tokenizer* tok,const char* str){
     builder->PushString(PushEscapedString(temp,got,' '));
     builder->PushString("\n");
     String text = EndString(temp,builder);
-    ReportError(tok,got,StaticFormat("%*s",UNPACK_SS(text))); \
+    ReportError(tok,got,StaticFormat("%*s",UN(text))); \
     return true;
   }
   return false;
@@ -69,8 +68,8 @@ bool _ExpectError(Tokenizer* tok,const char* str){
 
 void _UnexpectError(Token token){
   TEMP_REGION(temp,nullptr);
-  String content = PushString(temp,"At pos: %d:%d, did not expect to get: \"%.*s\"",token.loc.start.line,token.loc.start.column,UNPACK_SS(token));  
-  printf("%.*s\n",UNPACK_SS(content));
+  String content = PushString(temp,"At pos: %d:%d, did not expect to get: \"%.*s\"",token.loc.start.line,token.loc.start.column,UN(token));  
+  printf("%.*s\n",UN(content));
 }
 
 static bool IsValidIdentifier(String str){
@@ -113,7 +112,7 @@ static bool IsValidIdentifier(String str){
 
 #define CHECK_IDENTIFIER(ID) \
   if(!IsValidIdentifier(ID)){ \
-    ReportError(tok,ID,StaticFormat("type name '%.*s' is not a valid name",UNPACK_SS(ID))); \
+    ReportError(tok,ID,StaticFormat("type name '%.*s' is not a valid name",UN(ID))); \
     return {}; \
   }
 
@@ -129,7 +128,7 @@ Opt<int> ParseNumber(Tokenizer* tok){
 
   for(int i = 0; i < number.size; i++){
     if(!(number[i] >= '0' && number[i] <= '9')){
-      ReportError(tok,number,StaticFormat("%.*s is not a valid number",UNPACK_SS(number)));
+      ReportError(tok,number,StaticFormat("%.*s is not a valid number",UN(number)));
       return {};
     }
   }
@@ -335,7 +334,7 @@ String GetUniqueName(String name,Arena* out,InstanceName* names){
   auto mark = MarkArena(out);
   while(names->Exists(uniqueName)){
     PopMark(mark);
-    uniqueName = PushString(out,"%.*s_%d",UNPACK_SS(name),counter++);
+    uniqueName = PushString(out,"%.*s_%d",UN(name),counter++);
   }
 
   names->Insert(uniqueName);
@@ -344,7 +343,7 @@ String GetUniqueName(String name,Arena* out,InstanceName* names){
 }
 
 String GetActualArrayName(String baseName,int index,Arena* out){
-  return PushString(out,"%.*s_%d",UNPACK_SS(baseName),index);
+  return PushString(out,"%.*s_%d",UN(baseName),index);
 }
 
 // Right now, not using the full portion of PortExpression because technically we would need to instantiate multiple things. Not sure if there is a need, when a case occurs then make the change then
@@ -364,10 +363,10 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     FUInstance** found = table->Get(toSearch);
 
     if(!found){
-      String permName = PushString(perm,"%.*s",UNPACK_SS(toSearch));
+      String permName = PushString(perm,"%.*s",UN(toSearch));
       String uniqueName = GetUniqueName(permName,perm,names);
 
-      FUInstance* digitInst = (FUInstance*) CreateFUInstance(circuit,GetTypeByName(STRING("Literal")),uniqueName);
+      FUInstance* digitInst = (FUInstance*) CreateFUInstance(circuit,GetTypeByName("Literal"),uniqueName);
       digitInst->literal = number;
       table->Insert(permName,digitInst);
       res.inst = digitInst;
@@ -402,10 +401,10 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
 
       switch(root->op[0]){
       case '~':{
-        typeName = STRING("NOT");
+        typeName = "NOT";
       }break;
       case '-':{
-        typeName = STRING("NEG");
+        typeName = "NEG";
       }break;
       }
 
@@ -429,7 +428,7 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
     Assert(expr1.extra.port.start == expr1.extra.port.end);
     Assert(expr1.extra.delay.start == expr1.extra.delay.end);
 
-    String op = STRING(root->op);
+    String op = root->op;
     const char* typeName;
     if(CompareString(op,"&")){
       typeName = "AND";
@@ -451,11 +450,11 @@ PortExpression InstantiateSpecExpression(SpecExpression* root,Accelerator* circu
       typeName = "SUB";
     } else {
       // TODO: Proper error reporting
-      printf("%.*s\n",UNPACK_SS(op));
+      printf("%.*s\n",UN(op));
       Assert(false);
     }
 
-    String typeStr = STRING(typeName);
+    String typeStr = typeName;
     FUDeclaration* type = GetTypeByName(typeStr);
     String uniqueName = GetUniqueName(type->name,perm,names);
 
@@ -901,8 +900,8 @@ FUDeclaration* ParseIterative(Tokenizer* tok){
 
     if(CompareString(end.name,"out")){
       if(!outputInstance){
-        outputInstance = (FUInstance*) CreateFUInstance(iterative,BasicDeclaration::output,STRING("out"));
-        table->Insert(STRING("out"),outputInstance);
+        outputInstance = (FUInstance*) CreateFUInstance(iterative,BasicDeclaration::output,"out");
+        table->Insert("out",outputInstance);
       }
 
       inst2 = outputInstance;
@@ -924,14 +923,14 @@ FUDeclaration* ParseIterative(Tokenizer* tok){
     GetOrAllocateResult<FUInstance*> res = portInstanceToMux->GetOrAllocate(instance);
     
     if(!res.alreadyExisted){
-      static String names[] = {STRING("Merge0"),
-                               STRING("Merge1"),
-                               STRING("Merge2"),
-                               STRING("Merge3"),
-                               STRING("Merge4"),
-                               STRING("Merge5"),
-                               STRING("Merge6"),
-                               STRING("Merge7")};
+      static String names[] = {"Merge0",
+                               "Merge1",
+                               "Merge2",
+                               "Merge3",
+                               "Merge4",
+                               "Merge5",
+                               "Merge6",
+                               "Merge7"};
 
       *res.data = CreateFUInstance(iterative,type,names[index]);
       table->Insert(names[index],*res.data);
@@ -1124,7 +1123,7 @@ FUDeclaration* InstantiateMerge(MergeDef def){
     Opt<MergeModifier> parsed = META_mergeModifiers_ReverseMap(t);
 
     if(!parsed.has_value()){
-      printf("Error, merge does not support option: %.*s\n",UNPACK_SS(t));
+      printf("Error, merge does not support option: %.*s\n",UN(t));
       error = true;
     }
 
@@ -1267,7 +1266,7 @@ FUInstance* CreateFUInstanceWithParameters(Accelerator* accel,FUDeclaration* typ
     bool result = SetParameter(inst,pair.first,pair.second);
 
     if(!result){
-      printf("Warning: Parameter %.*s for instance %.*s in module %.*s does not exist\n",UNPACK_SS(pair.first),UNPACK_SS(inst->name),UNPACK_SS(accel->name));
+      printf("Warning: Parameter %.*s for instance %.*s in module %.*s does not exist\n",UN(pair.first),UN(inst->name),UN(accel->name));
     }
   }
 
@@ -1288,7 +1287,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   // TODO: Need to detect when multiple instances with same name
   int insertedInputs = 0;
   for(VarDeclaration& decl : def.inputs){
-    if(CompareString(decl.name,STRING("out"))){
+    if(CompareString(decl.name,"out")){
       ReportError(content,decl.name,"Cannot use special out unit as module input");
       error = true;
     }
@@ -1311,7 +1310,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   int shareIndex = 0;
   for(InstanceDeclaration& decl : def.declarations){
     for(VarDeclaration& var : decl.declarations){
-      if(CompareString(var.name,STRING("out"))){
+      if(CompareString(var.name,"out")){
         ReportError(content,var.name,"Cannot use special out unit as module input");
         error = true;
         break;
@@ -1354,7 +1353,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
 
               if(!foundOne){
                 // TODO: Add location to the warnings using the data stored in the tokens.
-                printf("Warning, inst '%.*s' of type '%.*s' does not have configuration of name '%.*s' to share\n",UNPACK_SS(inst->name),UNPACK_SS(inst->declaration->name),UNPACK_SS(partialShareName));
+                printf("Warning, inst '%.*s' of type '%.*s' does not have configuration of name '%.*s' to share\n",UN(inst->name),UN(inst->declaration->name),UN(partialShareName));
               }
             }
           }
@@ -1388,7 +1387,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
           table->Insert(actualName,inst);
 
           if(decl.modifier == InstanceDeclarationType_STATIC){
-            SetStatic(circuit,inst);
+            SetStatic(inst);
           }
         }
       } else {
@@ -1398,7 +1397,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         table->Insert(varDecl.name,inst);
 
         if(decl.modifier == InstanceDeclarationType_STATIC){
-          SetStatic(circuit,inst);
+          SetStatic(inst);
         }
       }
     } break;
@@ -1417,7 +1416,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
       Assert(decl.output.vars.size == 1); // Only allow one for equality, for now
       Var outVar = decl.output.vars[0];
 
-      if(CompareString(outVar.name,STRING("out"))){
+      if(CompareString(outVar.name,"out")){
         ReportError(content,outVar.name,"Cannot use special out unit as input in an equality");
         error = true;
         break;
@@ -1469,7 +1468,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
           inName = GetActualArrayName(inName,inVar.index.low,temp);
         }
 
-        if(CompareString(outName,STRING("out"))){
+        if(CompareString(outName,"out")){
           ReportError(content,outVar.name,"Cannot use special out unit as an input");
           error = true;
           break;
@@ -1486,7 +1485,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
 
         if(CompareString(inName,"out")){
           if(!outputInstance){
-            outputInstance = (FUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,STRING("out"));
+            outputInstance = (FUInstance*) CreateFUInstance(circuit,BasicDeclaration::output,"out");
           }
 
           optInInstance = &outputInstance;
@@ -1518,7 +1517,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   }
   
   // Care to never put 'out' inside the table
-  FUInstance** outInTable = table->Get(STRING("out"));
+  FUInstance** outInTable = table->Get("out");
   Assert(!outInTable);
   
   FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
@@ -1526,11 +1525,11 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   return res;
 }
 
-void Synchronize(Tokenizer* tok,BracketList<const char*> syncPoints){
+void Synchronize(Tokenizer* tok,BracketList<String> syncPoints){
   while(!tok->Done()){
     Token peek = tok->PeekToken();
 
-    for(const char* point : syncPoints){
+    for(String point : syncPoints){
       if(CompareString(peek,point)){
         return;
       }
@@ -1596,7 +1595,7 @@ Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
   }
 
   if(anyError){
-    printf("Error parsing versat spec\n");
+    // NOTE: Error messages have already been printed at this point. Just terminate the program 
     exit(-1);
   }
 

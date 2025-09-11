@@ -10,7 +10,7 @@
 
 typedef void (*TaskFunction)(int id,void* args);
 
-#define TASK_FUNCTION (TaskFunction*)
+#define TASK_FUNCTION(FUNC) ((TaskFunction*) (FUNC))
 
 struct Task{
    TaskFunction function;

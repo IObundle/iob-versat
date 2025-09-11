@@ -29,7 +29,7 @@ FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose pu
 
   FILE* file = OpenFile(path,format,purpose);
   if(file == nullptr){
-    printf("Failed to open file (%d): %.*s\n",errno,UNPACK_SS(path));
+    printf("Failed to open file (%d): %.*s\n",errno,UN(path));
     NOT_IMPLEMENTED("Probably better to return null and let code handle it");
     exit(-1);
   }
@@ -124,7 +124,7 @@ String OS_NormalizePath(String in,Arena* out){
 }
 
 Opt<Array<String>> GetAllFilesInsideDirectory(String dirPath,Arena* out){
-   DIR* dir = opendir(StaticFormat("%.*s",UNPACK_SS(dirPath))); // Make sure it's zero terminated
+   DIR* dir = opendir(StaticFormat("%.*s",UN(dirPath))); // Make sure it's zero terminated
 
    if(dir == nullptr){
       return {};
@@ -182,14 +182,14 @@ String PushEscapedString(Arena* out,String toEscape,char spaceSubstitute){
 
   for(int i = 0; i < toEscape.size; i++){
     switch(toEscape[i]){
-    case '\a': builder->PushString(STRING("\\a")); break;
-    case '\b': builder->PushString(STRING("\\b")); break;
-    case '\r': builder->PushString(STRING("\\r")); break;
-    case '\f': builder->PushString(STRING("\\f")); break;
-    case '\t': builder->PushString(STRING("\\t")); break;
-    case '\n': builder->PushString(STRING("\\n")); break;
-    case '\0': builder->PushString(STRING("\\0")); break;
-    case '\v': builder->PushString(STRING("\\v")); break;
+    case '\a': builder->PushString("\\a"); break;
+    case '\b': builder->PushString("\\b"); break;
+    case '\r': builder->PushString("\\r"); break;
+    case '\f': builder->PushString("\\f"); break;
+    case '\t': builder->PushString("\\t"); break;
+    case '\n': builder->PushString("\\n"); break;
+    case '\0': builder->PushString("\\0"); break;
+    case '\v': builder->PushString("\\v"); break;
     case ' ': builder->PushChar(spaceSubstitute); break;
     default:  builder->PushChar(toEscape[i]); break;
     }
@@ -218,7 +218,7 @@ void PrintEscapedString(String toEscape,char spaceSubstitute){
 
 String GetAbsolutePath(String path,Arena* out){
   char buffer[PATH_MAX+1];
-  char* ptr = realpath(StaticFormat("%.*s",UNPACK_SS(path)),buffer);
+  char* ptr = realpath(StaticFormat("%.*s",UN(path)),buffer);
 
   String res = PushString(out,"%s",ptr);
   return res;

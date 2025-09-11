@@ -2,6 +2,12 @@
 
 `verilator_config
 
+// Unused module input: keep to match Native Interface
+lint_off -rule UNUSEDSIGNAL -file "**/OnlyOutputMem.v" -match "Signal is not used: 'rvalid'"
+
+// Unused module input: keep to match Native Interface
+lint_off -rule UNUSEDSIGNAL -file "**/OnlyOutputMem.v" -match "Signal is not used: 'rdata'"
+
 // Unused submodule output
 lint_off -rule PINCONNECTEMPTY -file "**/OnlyOutputMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
 

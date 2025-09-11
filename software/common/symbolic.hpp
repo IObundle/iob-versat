@@ -154,3 +154,18 @@ SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
 void Print(LoopLinearSum* sum,bool printNewLine = false);
 void Repr(StringBuilder* builder,LoopLinearSum* sum);
+
+// ============================================================================
+// Global special Symbolic Expressions 
+
+extern SymbolicExpression* SYM_zero;
+extern SymbolicExpression* SYM_one;
+extern SymbolicExpression* SYM_eight;
+extern SymbolicExpression* SYM_dataW;
+extern SymbolicExpression* SYM_addrW;
+extern SymbolicExpression* SYM_axiAddrW;
+extern SymbolicExpression* SYM_axiDataW;
+extern SymbolicExpression* SYM_delayW;
+extern SymbolicExpression* SYM_lenW;
+extern SymbolicExpression* SYM_axiStrobeW;
+extern SymbolicExpression* SYM_dataStrobeW;

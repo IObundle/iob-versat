@@ -5,11 +5,11 @@
 // ============================================================================
 // Verilog module interface manipulation
 
-void VerilogModuleBuilder::StartGroup(const char* name){
+void VerilogModuleBuilder::StartGroup(String name){
   Assert(currentPorts == nullptr);
 
-  if(name != nullptr){
-    currentPortGroupName = PushString(arena,"%s",name);
+  if(!Empty(name)){
+    currentPortGroupName = PushString(arena,name);
   }
   currentPorts = PushArenaList<VerilogPortSpec>(arena);
 }
@@ -26,7 +26,7 @@ void VerilogModuleBuilder::EndGroup(bool preserveEmptyGroup){
   this->currentPorts = nullptr;
 }
 
-void VerilogModuleBuilder::AddPort(const char* name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props){
+void VerilogModuleBuilder::AddPort(String name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props){
   bool endGroup = false;
   if(!this->currentPorts){
     StartGroup(nullptr);
@@ -35,7 +35,7 @@ void VerilogModuleBuilder::AddPort(const char* name,SymbolicExpression* expr,Wir
   
   VerilogPortSpec* spec = this->currentPorts->PushElem();
 
-  spec->name = PushString(arena,"%s",name);
+  spec->name = PushString(arena,name);
   spec->size = expr;
   spec->dir = dir;
   spec->props = props;
@@ -165,9 +165,9 @@ Array<VerilogPortSpec> AddDirectionToName(Array<VerilogPortSpec> in,Arena* out){
   for(int i = 0; i < in.size; i++){
     res[i] = in[i];
 
-    String directionAsName = S8("i");
+    String directionAsName = "i";
     if(in[i].dir == WireDir_OUTPUT){
-      directionAsName = S8("o");
+      directionAsName = "o";
     }
     
     res[i].size = SymbolicDeepCopy(in[i].size,out);
@@ -434,10 +434,10 @@ VAST* VEmitter::FindFirstVASTType(VASTType type,bool errorIfNotFound){
   }
 
   if(errorIfNotFound){
-    printf("Did not find VAST of type: %.*s\n",UNPACK_SS(Repr(type)));
+    printf("Did not find VAST of type: %.*s\n",UN(Repr(type)));
     printf("Emitter stack currently has %d levels and is, from zero:\n",top);
     for(int i = 0; i < top; i++){
-      printf("%.*s\n",UNPACK_SS(Repr(buffer[i]->type)));
+      printf("%.*s\n",UN(Repr(buffer[i]->type)));
     }
     DEBUG_BREAK();
   }
@@ -445,12 +445,12 @@ VAST* VEmitter::FindFirstVASTType(VASTType type,bool errorIfNotFound){
   return nullptr;
 }
 
-void VEmitter::Timescale(const char* timeUnit,const char* timePrecision){
-  topLevel->top.timescaleExpression = PushString(arena,"%s / %s",timeUnit,timePrecision);
+void VEmitter::Timescale(String timeUnit,String timePrecision){
+  topLevel->top.timescaleExpression = PushString(arena,"%.*s / %.*s",UN(timeUnit),UN(timePrecision));
 }
 
-void VEmitter::Include(const char* name){
-  *topLevel->top.includes->PushElem() = PushString(arena,"%s",name);
+void VEmitter::Include(String name){
+  *topLevel->top.includes->PushElem() = PushString(arena,"%.*s",UN(name));
 }
 
 void VEmitter::Module(String name){
@@ -465,19 +465,19 @@ void VEmitter::Module(String name){
   PushLevel(decl);
 }
 
-void VEmitter::ModuleParam(const char* name,int value){
+void VEmitter::ModuleParam(String name,int value){
   VAST* decl = FindFirstVASTType(VASTType_MODULE_DECL,true);
 
   Pair<String,String>* p = decl->module.parameters->PushElem();
-  p->first = PushString(arena,"%s",name);
+  p->first = PushString(arena,"%.*s",UN(name));
   p->second = PushString(arena,"%d",value);
 }
 
-void VEmitter::ModuleParam(const char* name,String value){
+void VEmitter::ModuleParam(String name,String value){
   VAST* decl = FindFirstVASTType(VASTType_MODULE_DECL,true);
 
   Pair<String,String>* p = decl->module.parameters->PushElem();
-  p->first = PushString(arena,"%s",name);
+  p->first = PushString(arena,"%.*s",UN(name));
   p->second = PushString(arena,value);
 }
 
@@ -519,92 +519,100 @@ void VEmitter::EndPortGroup(){
   PopLevel();
 }
 
-void VEmitter::Input(const char* name,int bitsize){
+void VEmitter::Input(String name,int bitsize){
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
-  decl->portDecl.name = PushString(arena,"%s",name);
+  decl->portDecl.name = PushString(arena,name);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%d-1:0]",bitsize);
   decl->portDecl.isInput = true;
 
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::Input(String name,int bitsize){
-  Input(StaticFormat("%.*s",UNPACK_SS(name)),bitsize);
-}
-
-void VEmitter::Input(const char* name,const char* expr){
+void VEmitter::Input(String name,String expr){
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
-  decl->portDecl.name = PushString(arena,"%s",name);
-  decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expr);
+  decl->portDecl.name = PushString(arena,name);
+  decl->portDecl.bitSizeExpr = PushString(arena,"[%.*s-1:0]",UN(expr));
   decl->portDecl.isInput = true;
 
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::Input(const char* name,SymbolicExpression* expr){
+void VEmitter::Input(String name,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
 
   String repr = PushRepresentation(expr,temp);
-  Input(name,CS(repr));
+  Input(name,repr);
 }
 
 void VEmitter::InputIndexed(const char* format,int index,int bitsize){
   Input(StaticFormat(format,index),bitsize);
 }
 
-void VEmitter::InputIndexed(const char* format,int index,const char* expression){
+void VEmitter::InputIndexed(const char* format,int index,String expression){
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
   decl->portDecl.name = PushString(arena,format,index);
-  decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expression);
+  decl->portDecl.bitSizeExpr = PushString(arena,"[%.*s-1:0]",UN(expression));
   decl->portDecl.isInput = true;
 
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::Output(const char* name,int bitsize){
-  VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
-  decl->portDecl.name = PushString(arena,"%s",name);
-  decl->portDecl.bitSizeExpr = PushString(arena,"[%d-1:0]",bitsize);
-  decl->portDecl.isInput = false;
+void VEmitter::InputIndexed(const char* format,int index,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+  String repr = PushRepresentation(expr,temp);
 
-  InsertPortDeclaration(decl);
-}
-
-void VEmitter::Output(const char* name,const char* expr){
-  VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
-  decl->portDecl.name = PushString(arena,"%s",name);
-  decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expr);
-  decl->portDecl.isInput = false;
-
-  InsertPortDeclaration(decl);
+  InputIndexed(format,index,repr);
 }
 
 void VEmitter::Output(String name,int bitsize){
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
-  decl->portDecl.name = PushString(arena,"%.*s",UNPACK_SS(name));
+  decl->portDecl.name = PushString(arena,name);
   decl->portDecl.bitSizeExpr = PushString(arena,"[%d-1:0]",bitsize);
   decl->portDecl.isInput = false;
 
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::OutputIndexed(const char* format,int index,int bitsize){
-  Output(StaticFormat(format,index),bitsize);
-}
-
-void VEmitter::OutputIndexed(const char* format,int index,const char* expression){
+void VEmitter::Output(String name,String expr){
   VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
-  decl->portDecl.name = PushString(arena,format,index);
-  decl->portDecl.bitSizeExpr = PushString(arena,"[%s-1:0]",expression);
+  decl->portDecl.name = PushString(arena,name);
+  decl->portDecl.bitSizeExpr = PushString(arena,"[%.*s-1:0]",UN(expr));
   decl->portDecl.isInput = false;
 
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::Wire(const char* name,int bitsize){
+void VEmitter::Output(String name,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+  String repr = PushRepresentation(expr,temp);
+
+  Output(name,repr);
+}
+  
+void VEmitter::OutputIndexed(const char* format,int index,int bitsize){
+  Output(StaticFormat(format,index),bitsize);
+}
+
+void VEmitter::OutputIndexed(const char* format,int index,String expression){
+  VAST* decl = PushVAST(VASTType_PORT_DECL,arena);
+  decl->portDecl.name = PushString(arena,format,index);
+  decl->portDecl.bitSizeExpr = PushString(arena,"[%.*s-1:0]",UN(expression));
+  decl->portDecl.isInput = false;
+
+  InsertPortDeclaration(decl);
+}
+
+void VEmitter::OutputIndexed(const char* format,int index,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+  String repr = PushRepresentation(expr,temp);
+
+  OutputIndexed(format,index,repr);
+}
+
+void VEmitter::Wire(String name,int bitsize){
   VAST* wireDecl = PushVAST(VASTType_VAR_DECL,arena);
 
-  wireDecl->varDecl.name = PushString(arena,"%s",name);
+  wireDecl->varDecl.name = PushString(arena,name);
   wireDecl->varDecl.arrayDim = {};
   wireDecl->varDecl.bitSize = PushString(arena,"%d",bitsize);
   wireDecl->varDecl.isWire = true;
@@ -612,21 +620,28 @@ void VEmitter::Wire(const char* name,int bitsize){
   InsertDeclaration(wireDecl);
 }
 
-void VEmitter::Wire(const char* name,const char* bitsizeExpr){
+void VEmitter::Wire(String name,String bitsizeExpr){
   VAST* wireDecl = PushVAST(VASTType_VAR_DECL,arena);
 
-  wireDecl->varDecl.name = PushString(arena,"%s",name);
+  wireDecl->varDecl.name = PushString(arena,name);
   wireDecl->varDecl.arrayDim = {};
-  wireDecl->varDecl.bitSize = PushString(arena,"%s",bitsizeExpr);
+  wireDecl->varDecl.bitSize = PushString(arena,"%.*s",UN(bitsizeExpr));
   wireDecl->varDecl.isWire = true;
   
   InsertDeclaration(wireDecl);
 }
 
-void VEmitter::WireArray(const char* name,int count,int bitsize){
+void VEmitter::Wire(String name,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+  String repr = PushRepresentation(expr,temp);
+
+  Wire(name,repr);
+}
+  
+void VEmitter::WireArray(String name,int count,int bitsize){
   VAST* wireArray = PushVAST(VASTType_VAR_DECL,arena);
 
-  wireArray->varDecl.name = PushString(arena,"%s",name);
+  wireArray->varDecl.name = PushString(arena,name);
   wireArray->varDecl.arrayDim = PushString(arena,"%d",count);
   wireArray->varDecl.bitSize = PushString(arena,"%d",bitsize);
   wireArray->varDecl.isWire = true;
@@ -634,68 +649,73 @@ void VEmitter::WireArray(const char* name,int count,int bitsize){
   InsertDeclaration(wireArray);
 }
 
-void VEmitter::WireArray(const char* name,int count,const char* bitsizeExpr){
+void VEmitter::WireArray(String name,int count,String bitsizeExpr){
   VAST* wireArray = PushVAST(VASTType_VAR_DECL,arena);
 
-  wireArray->varDecl.name = PushString(arena,"%s",name);
+  wireArray->varDecl.name = PushString(arena,name);
   wireArray->varDecl.arrayDim = PushString(arena,"%d",count);
-  wireArray->varDecl.bitSize = PushString(arena,"%s",bitsizeExpr);
+  wireArray->varDecl.bitSize = PushString(arena,bitsizeExpr);
   wireArray->varDecl.isWire = true;
   
   InsertDeclaration(wireArray);
 }
 
-void VEmitter::WireAndAssignJoinBlock(const char* name,const char* joinElem,int bitsize){
+void VEmitter::WireArray(String name,int count,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+  String repr = PushRepresentation(expr,temp);
+
+  WireArray(name,count,repr);
+}
+
+void VEmitter::WireAndAssignJoinBlock(String name,String joinElem,int bitsize){
   VAST* wireAssignBlock = PushVAST(VASTType_WIRE_ASSIGN_BLOCK,arena);
 
-  wireAssignBlock->wireAssignBlock.name = PushString(arena,"%s",name);
+  wireAssignBlock->wireAssignBlock.name = PushString(arena,name);
   wireAssignBlock->wireAssignBlock.bitSize = PushString(arena,"%d",bitsize);
   wireAssignBlock->wireAssignBlock.expressions = PushArenaList<VAST*>(arena);
-  wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,"%s",joinElem);
+  wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,joinElem);
   
   InsertDeclaration(wireAssignBlock);
   PushLevel(wireAssignBlock);
 }
 
-void VEmitter::WireAndAssignJoinBlock(const char* name,const char* joinElem,const char* bitsize){
+void VEmitter::WireAndAssignJoinBlock(String name,String joinElem,String bitsize){
   VAST* wireAssignBlock = PushVAST(VASTType_WIRE_ASSIGN_BLOCK,arena);
 
-  wireAssignBlock->wireAssignBlock.name = PushString(arena,"%s",name);
-  wireAssignBlock->wireAssignBlock.bitSize = PushString(arena,"%s",bitsize);
+  wireAssignBlock->wireAssignBlock.name = PushString(arena,name);
+  wireAssignBlock->wireAssignBlock.bitSize = PushString(arena,bitsize);
   wireAssignBlock->wireAssignBlock.expressions = PushArenaList<VAST*>(arena);
-  wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,"%s",joinElem);
+  wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,joinElem);
   
   InsertDeclaration(wireAssignBlock);
   PushLevel(wireAssignBlock);
 }
 
-void VEmitter::Reg(const char* name,int bitsize){
+void VEmitter::Reg(String name,int bitsize){
   VAST* regDecl = PushVAST(VASTType_VAR_DECL,arena);
 
-  regDecl->varDecl.name = PushString(arena,"%s",name);
+  regDecl->varDecl.name = PushString(arena,name);
   regDecl->varDecl.bitSize = PushString(arena,"%d",bitsize);
   regDecl->varDecl.isWire = false;
   
   InsertDeclaration(regDecl);
 }
 
-void VEmitter::Reg(const char* name,String bitsize){
+void VEmitter::Reg(String name,String bitsize){
   VAST* regDecl = PushVAST(VASTType_VAR_DECL,arena);
 
-  regDecl->varDecl.name = PushString(arena,"%s",name);
+  regDecl->varDecl.name = PushString(arena,name);
   regDecl->varDecl.bitSize = PushString(arena,bitsize);
   regDecl->varDecl.isWire = false;
   
   InsertDeclaration(regDecl);
 }
 
-void VEmitter::Assign(const char* name,const char* expr){
-  VAST* assignDecl = PushVAST(VASTType_ASSIGN_DECL,arena);
-  
-  assignDecl->assignOrSet.name = PushString(arena,"%s",name);
-  assignDecl->assignOrSet.expr = PushString(arena,"%s",expr);
+void VEmitter::Reg(String name,SymbolicExpression* expr){
+  TEMP_REGION(temp,arena);
+  String repr = PushRepresentation(expr,temp);
 
-  InsertDeclaration(assignDecl);
+  Reg(name,repr);
 }
 
 void VEmitter::Assign(String name,String expr){
@@ -707,10 +727,10 @@ void VEmitter::Assign(String name,String expr){
   InsertDeclaration(assignDecl);
 }
 
-void VEmitter::Integer(const char* name){
+void VEmitter::Integer(String name){
   VAST* decl = PushVAST(VASTType_INTEGER_DECL,arena);
 
-  decl->name = PushString(arena,"%s",name);
+  decl->name = PushString(arena,name);
 
   InsertDeclaration(decl);
 }
@@ -738,16 +758,16 @@ void VEmitter::Blank(){
   InsertDeclaration(blank);
 }
 
-void VEmitter::Comment(const char* expr){
+void VEmitter::Comment(String expr){
   VAST* commentDecl = PushVAST(VASTType_COMMENT,arena);
-  commentDecl->comment = PushString(arena,"%s",expr);
+  commentDecl->comment = PushString(arena,expr);
 
   InsertDeclaration(commentDecl);
 }
 
-void VEmitter::Expression(const char* expr){
+void VEmitter::Expression(String expr){
   VAST* exprDecl = PushVAST(VASTType_EXPR,arena);
-  exprDecl->expr.content = PushString(arena,"%s",expr);
+  exprDecl->expr.content = PushString(arena,expr);
 
   VAST* assignBlock = FindFirstVASTType(VASTType_WIRE_ASSIGN_BLOCK,true);
   *assignBlock->wireAssignBlock.expressions->PushElem() = exprDecl;
@@ -761,12 +781,12 @@ void VEmitter::RawStatement(String stmt){
   InsertDeclaration(stmtDecl);
 }
 
-void VEmitter::AlwaysBlock(const char* posedge1,const char* posedge2){
+void VEmitter::AlwaysBlock(String posedge1,String posedge2){
   VAST* combDecl = PushVAST(VASTType_ALWAYS_BLOCK,arena);
 
   combDecl->alwaysBlock.sensitivity = PushArray<String>(arena,2);
-  combDecl->alwaysBlock.sensitivity[0] = PushString(arena,"%s",posedge1);
-  combDecl->alwaysBlock.sensitivity[1] = PushString(arena,"%s",posedge2);
+  combDecl->alwaysBlock.sensitivity[0] = PushString(arena,posedge1);
+  combDecl->alwaysBlock.sensitivity[1] = PushString(arena,posedge2);
 
   combDecl->alwaysBlock.declarations = PushArenaList<VAST*>(arena);
   
@@ -793,15 +813,6 @@ void VEmitter::CombBlock(){
   PushLevel(combDecl);
 }
 
-void VEmitter::Set(const char* identifier,const char* expr){
-  VAST* setDecl = PushVAST(VASTType_SET,arena);
-  
-  setDecl->assignOrSet.name = PushString(arena,"%s",identifier);
-  setDecl->assignOrSet.expr = PushString(arena,"%s",expr);
-
-  InsertDeclaration(setDecl);
-}
-
 void VEmitter::Set(String identifier,String expr){
   VAST* setDecl = PushVAST(VASTType_SET,arena);
   
@@ -811,18 +822,18 @@ void VEmitter::Set(String identifier,String expr){
   InsertDeclaration(setDecl);
 }
 
-void VEmitter::Set(const char* identifier,int val){
+void VEmitter::Set(String identifier,int val){
   Set(identifier,StaticFormat("%d",val));
 }
 
-void VEmitter::If(const char* expression){
+void VEmitter::If(String expression){
   VAST* ifAST = PushVAST(VASTType_IF,arena);
 
   ifAST->ifExpr.ifExpressions = PushArenaList<VASTIf>(arena);
   
   // Pushes the first expr+statement combo
   VASTIf expr = {};
-  expr.ifExpression = PushString(arena,"%s",expression);
+  expr.ifExpression = PushString(arena,expression);
   expr.statements = PushArenaList<VAST*>(arena);
 
   *ifAST->ifExpr.ifExpressions->PushElem() = expr;
@@ -831,7 +842,7 @@ void VEmitter::If(const char* expression){
   PushLevel(ifAST);
 }
 
-void VEmitter::ElseIf(const char* expression){
+void VEmitter::ElseIf(String expression){
   while(buffer[top-1]->type != VASTType_IF){
     EndBlock();
   }
@@ -839,7 +850,7 @@ void VEmitter::ElseIf(const char* expression){
   VAST* ifAst = buffer[top-1];
 
   VASTIf expr = {};
-  expr.ifExpression = PushString(arena,"%s",expression);
+  expr.ifExpression = PushString(arena,expression);
   expr.statements = PushArenaList<VAST*>(arena);
 
   *ifAst->ifExpr.ifExpressions->PushElem() = expr;
@@ -873,13 +884,13 @@ void VEmitter::EndIf(){
   PopLevel();
 }
 
-void VEmitter::Loop(const char* start,const char* loop,const char* incr){
+void VEmitter::Loop(String start,String loop,String incr){
   VAST* loopAST = PushVAST(VASTType_LOOP,arena);
 
   loopAST->loopExpr.statements = PushArenaList<VAST*>(arena);
-  loopAST->loopExpr.initExpr = PushString(arena,"%s",start);
-  loopAST->loopExpr.loopExpr = PushString(arena,"%s",loop);
-  loopAST->loopExpr.incrExpr = PushString(arena,"%s",incr);
+  loopAST->loopExpr.initExpr = PushString(arena,start);
+  loopAST->loopExpr.loopExpr = PushString(arena,loop);
+  loopAST->loopExpr.incrExpr = PushString(arena,incr);
     
   InsertDeclaration(loopAST);
   PushLevel(loopAST);
@@ -896,23 +907,11 @@ void VEmitter::EndBlock(){
   PopLevel();
 }
 
-void VEmitter::StartInstance(const char* moduleName,const char* instanceName){
-  VAST* instanceAST = PushVAST(VASTType_INSTANCE,arena);
-
-  instanceAST->instance.moduleName = PushString(arena,"%s",moduleName);
-  instanceAST->instance.name = PushString(arena,"%s",instanceName);
-  instanceAST->instance.parameters = PushArenaList<Pair<String,String>>(arena);
-  instanceAST->instance.portConnections = PushArenaList<VAST*>(arena);
-  
-  InsertDeclaration(instanceAST);
-  PushLevel(instanceAST);
-}
-
-void VEmitter::StartInstance(String moduleName,const char* instanceName){
+void VEmitter::StartInstance(String moduleName,String instanceName){
   VAST* instanceAST = PushVAST(VASTType_INSTANCE,arena);
 
   instanceAST->instance.moduleName = PushString(arena,moduleName);
-  instanceAST->instance.name = PushString(arena,"%s",instanceName);
+  instanceAST->instance.name = PushString(arena,instanceName);
   instanceAST->instance.parameters = PushArenaList<Pair<String,String>>(arena);
   instanceAST->instance.portConnections = PushArenaList<VAST*>(arena);
 
@@ -920,42 +919,33 @@ void VEmitter::StartInstance(String moduleName,const char* instanceName){
   PushLevel(instanceAST);
 }
 
-void VEmitter::InstanceParam(const char* paramName,int paramValue){
+void VEmitter::InstanceParam(String paramName,int paramValue){
   VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
 
   Pair<String,String>* p = decl->instance.parameters->PushElem();
-  p->first = PushString(arena,"%s",paramName);
+  p->first = PushString(arena,paramName);
   p->second = PushString(arena,"%d",paramValue);
 }
 
-void VEmitter::InstanceParam(const char* paramName,const char* paramValue){
+void VEmitter::InstanceParam(String paramName,String paramValue){
   VAST* decl = FindFirstVASTType(VASTType_INSTANCE,true);
 
   Pair<String,String>* p = decl->instance.parameters->PushElem();
-  p->first = PushString(arena,"%s",paramName);
-  p->second = PushString(arena,"%s",paramValue);
+  p->first = PushString(arena,paramName);
+  p->second = PushString(arena,paramValue);
 }
-  
-void VEmitter::PortConnect(const char* portName,const char* connectionExpr){
-  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
-  portInfo->portConnect.portName = PushString(arena,"%s",portName);
-  portInfo->portConnect.connectExpr = PushString(arena,"%s",connectionExpr);
 
-  InsertPortConnect(portInfo);
+void VEmitter::InstanceParam(String paramName,SymbolicExpression* sym){
+  TEMP_REGION(temp,arena);
+
+  String repr = PushRepresentation(sym,temp);
+  InstanceParam(paramName,CS(repr));
 }
 
 void VEmitter::PortConnect(String portName,String connectionExpr){
   VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
   portInfo->portConnect.portName = PushString(arena,portName);
   portInfo->portConnect.connectExpr = PushString(arena,connectionExpr);
-
-  InsertPortConnect(portInfo);
-}
-
-void VEmitter::PortConnectIndexed(const char* portFormat,int index,const char* connectionExpr){
-  VAST* portInfo = PushVAST(VASTType_PORT_CONNECT,arena);
-  portInfo->portConnect.portName = PushString(arena,portFormat,index);
-  portInfo->portConnect.connectExpr = PushString(arena,"%s",connectionExpr);
 
   InsertPortConnect(portInfo);
 }
@@ -1064,11 +1054,11 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   FULL_SWITCH(top->type){
   case VASTType_TOP_LEVEL:{
     if(!Empty(top->top.timescaleExpression)){
-      b->PushString("`timescale %.*s\n\n",UNPACK_SS(top->top.timescaleExpression));
+      b->PushString("`timescale %.*s\n\n",UN(top->top.timescaleExpression));
     }
 
     for(String name : top->top.includes){
-      b->PushString("`include \"%.*s\"\n",UNPACK_SS(name));
+      b->PushString("`include \"%.*s\"\n",UN(name));
     }
     
     EmitStatementList(b,top->top.declarations,state,level);
@@ -1109,7 +1099,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   
   case VASTType_MODULE_DECL:{
     b->PushSpaces(level * 2);
-    b->PushString("module %.*s ",UNPACK_SS(top->module.name));
+    b->PushString("module %.*s ",UN(top->module.name));
 
     if(!Empty(top->module.parameters)){
       b->PushString("#(\n");
@@ -1122,7 +1112,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
         
         b->PushSpaces((level + 1) * 2);
 
-        b->PushString("parameter %.*s = %.*s",UNPACK_SS(p.first),UNPACK_SS(p.second));
+        b->PushString("parameter %.*s = %.*s",UN(p.first),UN(p.second));
         first = false;
       }
       b->PushString("\n");
@@ -1154,9 +1144,9 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushSpaces(level * 2);
 
     if(Empty(top->task.portDeclarations)){
-      b->PushString("task %.*s;\n",UNPACK_SS(top->task.name));
+      b->PushString("task %.*s;\n",UN(top->task.name));
     } else {
-      b->PushString("task %.*s (",UNPACK_SS(top->task.name));
+      b->PushString("task %.*s (",UN(top->task.name));
 
       bool first = true;
       for(VAST* ast : top->task.portDeclarations){
@@ -1185,7 +1175,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   case VASTType_INSTANCE:{
     b->PushSpaces(level * 2);
     
-    b->PushString("%.*s ",UNPACK_SS(top->instance.moduleName));
+    b->PushString("%.*s ",UN(top->instance.moduleName));
     
     if(!Empty(top->instance.parameters)){
       b->PushString("#(\n");
@@ -1197,7 +1187,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
         
         b->PushSpaces((level + 1) * 2);
 
-        b->PushString(".%.*s(%.*s)",UNPACK_SS(p.first),UNPACK_SS(p.second));
+        b->PushString(".%.*s(%.*s)",UN(p.first),UN(p.second));
         first = false;
       }
       b->PushString("\n");
@@ -1205,7 +1195,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       b->PushString(") ");
     }
     
-    b->PushString("%.*s (\n",UNPACK_SS(top->instance.name));
+    b->PushString("%.*s (\n",UN(top->instance.name));
 
     bool first = true;
     for(VAST* ast : top->instance.portConnections){
@@ -1257,12 +1247,12 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       b->PushString("reg ");
     }
 
-    b->PushString("[%.*s-1:0] ",UNPACK_SS(top->varDecl.bitSize));
+    b->PushString("[%.*s-1:0] ",UN(top->varDecl.bitSize));
 
     b->PushString(top->varDecl.name);
 
     if(!Empty(top->varDecl.arrayDim)){
-      b->PushString("[%.*s]",UNPACK_SS(top->varDecl.arrayDim));
+      b->PushString("[%.*s]",UN(top->varDecl.arrayDim));
     }
     b->PushString(";");
   } break;
@@ -1302,14 +1292,14 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushSpaces(level * 2);
     b->PushString("wire ");
 
-    b->PushString("[%.*s-1:0] ",UNPACK_SS(top->wireAssignBlock.bitSize));
+    b->PushString("[%.*s-1:0] ",UN(top->wireAssignBlock.bitSize));
 
-    b->PushString("%.*s = (",UNPACK_SS(top->wireAssignBlock.name));
+    b->PushString("%.*s = (",UN(top->wireAssignBlock.name));
     
     bool first = true;
     for(VAST* vast : top->wireAssignBlock.expressions){
       if(!first){
-        b->PushString(" %.*s ",UNPACK_SS(top->wireAssignBlock.joinElem));
+        b->PushString(" %.*s ",UN(top->wireAssignBlock.joinElem));
       }
 
       Repr(vast,b,state,level);
@@ -1321,7 +1311,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   
   case VASTType_ASSIGN_DECL:{
     b->PushSpaces(level * 2);
-    b->PushString("assign %.*s = %.*s;",UNPACK_SS(top->assignOrSet.name),UNPACK_SS(top->assignOrSet.expr));
+    b->PushString("assign %.*s = %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
   } break;
   
   case VASTType_IF:{
@@ -1331,11 +1321,11 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushSpaces(level * 2);
 
     if(OnlyOneElement(ifExpr.statements) && OnlyOneElement(top->ifExpr.ifExpressions) && Empty(top->ifExpr.elseStatements)){
-      b->PushString("if(%.*s) begin ",UNPACK_SS(ifExpr.ifExpression));
+      b->PushString("if(%.*s) begin ",UN(ifExpr.ifExpression));
       Repr(ifExpr.statements->head->elem,b,state,0);
       b->PushString(" end ");
     } else {
-      b->PushString("if(%.*s) begin\n",UNPACK_SS(ifExpr.ifExpression));
+      b->PushString("if(%.*s) begin\n",UN(ifExpr.ifExpression));
 
       EmitStatementList(b,ifExpr.statements,state,level + 1);
       
@@ -1346,7 +1336,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     for(SingleLink<VASTIf>* otherIter = iter->next; otherIter; otherIter = otherIter->next){
       VASTIf ifExpr = otherIter->elem;
       
-      b->PushString("else if(%.*s) begin\n",UNPACK_SS(ifExpr.ifExpression));
+      b->PushString("else if(%.*s) begin\n",UN(ifExpr.ifExpression));
 
       EmitStatementList(b,ifExpr.statements,state,level + 1);
         
@@ -1382,9 +1372,9 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
   case VASTType_SET:{
     b->PushSpaces(level * 2);
     if(state->isComb){
-      b->PushString("%.*s = %.*s;",UNPACK_SS(top->assignOrSet.name),UNPACK_SS(top->assignOrSet.expr));
+      b->PushString("%.*s = %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
     } else {
-      b->PushString("%.*s <= %.*s;",UNPACK_SS(top->assignOrSet.name),UNPACK_SS(top->assignOrSet.expr));
+      b->PushString("%.*s <= %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
     }
   } break;
   
@@ -1394,16 +1384,16 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
   case VASTType_PORT_CONNECT: {
     b->PushSpaces(level * 2);
-    b->PushString(".%.*s(%.*s)",UNPACK_SS(top->portConnect.portName),UNPACK_SS(top->portConnect.connectExpr));
+    b->PushString(".%.*s(%.*s)",UN(top->portConnect.portName),UN(top->portConnect.connectExpr));
   } break;
   
   case VASTType_EXPR:{
-    b->PushString("%.*s",UNPACK_SS(top->expr.content));
+    b->PushString("%.*s",UN(top->expr.content));
   } break;
 
   case VASTType_RAW_STATEMENT: {
     b->PushSpaces(level * 2);
-    b->PushString("%.*s;",UNPACK_SS(top->rawStatement));
+    b->PushString("%.*s;",UN(top->rawStatement));
   } break;
   
   case VASTType_ALWAYS_BLOCK:{

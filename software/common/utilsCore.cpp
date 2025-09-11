@@ -183,26 +183,6 @@ void CreateDirectories(const char* path){
   }
 }
 
-String PathGoUp(char* pathBuffer){
-  String content = STRING(pathBuffer);
-
-  int i = content.size - 1;
-  for(; i >= 0; i--){
-    if(content[i] == '/'){
-      break;
-    }
-  }
-
-  if(content[i] != '/'){
-    return content;
-  }
-
-  pathBuffer[i] = '\0';
-  content.size = i;
-
-  return content;
-}
-
 static char* GetNumberRepr(u64 number){
   static char buffer[32];
 
@@ -682,34 +662,6 @@ bool CompareString(String str1,String str2){
 
   bool res = (memcmp(str1.data,str2.data,str1.size) == 0);
 
-#if 0
-  if(str1.data == str2.data){
-    return true;
-  }
-
-  for(int i = 0; i < str1.size; i++){
-    if(str1[i] != str2[i]){
-      return false;
-    }
-  }
-#endif
-
-  return res;
-}
-
-bool CompareString(const char* str1,String str2){
-  // Slower but do not care for now
-  bool res = CompareString(STRING(str1),str2);
-  return res;
-}
-
-bool CompareString(String str1,const char* str2){
-  bool res = CompareString(str2,str1);
-  return res;
-}
-
-bool CompareString(const char* str1,const char* str2){
-  bool res = (strcmp(str1,str2) == 0);
   return res;
 }
 

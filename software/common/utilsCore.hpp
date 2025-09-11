@@ -128,7 +128,7 @@ const char* GetFilename(const char* fullpath);
 #define NEWLINE() do{ printf("\n"); fflush(stdout);} while(0)
 #define LOCATION() do{ printf("%s:%d\n",GetFilename(__FILE__),__LINE__); fflush(stdout);} while(0)
 #define PRINTF_WITH_LOCATION(...) do{ printf("%s:%d-",__FILE__,__LINE__); printf(__VA_ARGS__); fflush(stdout);} while(0)
-#define PRINT_STRING(STR) do{ printf("%.*s\n",UNPACK_SS((STR))); fflush(stdout);} while(0)
+#define PRINT_STRING(STR) do{ printf("%.*s\n",UN((STR))); fflush(stdout);} while(0)
 
 // Use when debugging, easier to search due to the 'd' at the beginning, less confusion with non-debugging printfs
 int dprintf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
@@ -150,6 +150,7 @@ if(_){ \
     } \
   } while(0)
 
+// NOTE: Use assert2 to print a helpful message
 //#if defined(VERSAT_DEBUG)
 #define Assert2(EXPR,...) \
   do { \
@@ -368,21 +369,41 @@ struct Array{
 };
 
 // NOTE: Every String is also a C string since every string allocator function appends a final null byte
-typedef Array<const char> String;
+//typedef Array<const char> String;
+
+static constexpr int MyStrLen(const char* str){
+  int i = 0;
+  while(str[i] != '\0') i++;
+  return i;
+}
+
+class StringIterator{
+public:
+   const char* ptr;
+
+   inline bool operator!=(const StringIterator& iter){return ptr != iter.ptr;};
+   inline StringIterator& operator++(){++ptr; return *this;};
+   inline const char& operator*(){return *ptr;};
+};
+
+struct String{
+  const char* data;
+  int size;
+
+  String() = default;
+  constexpr String(const char* in):data(in),size(MyStrLen(in)){};
+  constexpr String(const char* in,int s):data(in),size(s){};
+
+  inline const char& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
+  StringIterator begin() const{return StringIterator{data};};
+  StringIterator end() const{return StringIterator{data + size};};
+};
 
 #define C_ARRAY_TO_ARRAY(C_ARRAY) {C_ARRAY,sizeof(C_ARRAY) / sizeof(C_ARRAY[0])}
 
-#define UNPACK_SS(STR) (STR).size,(STR).data
-#define UNPACK_SS_REVERSE(STR) (STR).data,(STR).size
-
-#define UN(STR) UNPACK_SS(STR)
-
-inline String STRING(const char* str){if(str == nullptr) return {}; return (String){str,(int) strlen(str)};}
-inline String STRING(const char* str,int size){return (String){str,size};}
-inline String STRING(const unsigned char* str){return (String){(const char*)str,(int) strlen((const char*) str)};}
-inline String STRING(const unsigned char* str,int size){return (String){(const char*)str,size};}
-
-#define S8(...) STRING(__VA_ARGS__)
+// Shorthand for UNPACK
+#define UN(STR) (STR).size,(STR).data
+#define UN_REVERSE(STR) (STR).data,(STR).size
 
 String Offset(String base,int amount);
 
@@ -401,6 +422,19 @@ public:
    return res;
    }
 };
+
+inline bool operator==(String first,String second){
+   if(first.size != second.size){
+      return false;
+   }
+
+   for(int i = 0; i < first.size; i++){
+      if(!(first.data[i] == second.data[i])){
+         return false;
+      }
+   }
+   return true;
+}
 
 template<typename T>
 bool operator==(Array<T> first,Array<T> second){
@@ -472,6 +506,8 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
 // TODO: I wonder if it would be better to have a arena backed region where we can dump strings and it acts globally, meaning that we must call functions to init it and to clear it everytime we want to use it.
 // TODO: It would be better if we just have a malloc failsafe where we allocate more memory if needed.
 char* StaticFormat(const char* format,...) __attribute__ ((format (printf, 1, 2)));;
+char* StaticFormat(String format,...);
+
 // Shorthand
 #define SF(...) StaticFormat(__VA_ARGS__) 
 
@@ -534,15 +570,11 @@ char* GetCurrentDirectory();
 void MakeDirectory(const char* path);
 void CreateDirectories(const char* path);
 String ExtractFilenameOnly(String filepath);
-String PathGoUp(char* pathBuffer);
 
 void FixedStringCpy(char* dest,String src);
 
 // Compare strings regardless of implementation
 bool CompareString(String str1,String str2);
-bool CompareString(const char* str1,String str2);
-bool CompareString(String str1,const char* str2);
-bool CompareString(const char* str1,const char* str2);
 
 // If strings are equal up until a given size, returns a order so that smallest comes first
 int CompareStringOrdered(String str1,String str2);

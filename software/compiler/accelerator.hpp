@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VerilogEmitter.hpp"
 #include "utils.hpp"
 #include "memory.hpp"
 #include "verilogParsing.hpp"
@@ -13,13 +14,35 @@ struct AccelInfo;
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
 
+enum Direction{
+  Direction_NONE,
+  Direction_OUTPUT,
+  Direction_INPUT
+};
+
 struct PortInstance{
   FUInstance* inst;
   int port;
+  Direction dir; // NOTE: At the moment a Direction_NONE is most likely an error. TODO: Does it make sense to remove this and just have two different types, a InputPortInstance and an OutputPortInstance?
 };
 
+static inline PortInstance MakePortOut(FUInstance* inst,int port){
+  PortInstance res = {};
+  res.inst = inst;
+  res.port = port;
+  res.dir = Direction_OUTPUT;
+  return res;
+}
+static inline PortInstance MakePortIn(FUInstance* inst,int port){
+  PortInstance res = {};
+  res.inst = inst;
+  res.port = port;
+  res.dir = Direction_INPUT;
+  return res;
+}
+
 inline bool operator==(const PortInstance& p1,const PortInstance& p2){
-  bool res = (p1.inst == p2.inst && p1.port == p2.port);
+  bool res = (p1.inst == p2.inst && p1.port == p2.port && p1.dir == p2.dir);
   return res;
 }
 
@@ -32,8 +55,9 @@ template<> class std::hash<PortInstance>{
 public:
   std::size_t operator()(PortInstance const& s) const noexcept{
     std::size_t res = std::hash<FUInstance*>()(s.inst);
+    res *= ((int) s.dir) + 1;
     res += s.port;
-
+    
     return res;
   }
 };
@@ -50,6 +74,31 @@ struct Edge{ // A edge in a graph
   int delay;
   Edge* next;
 };
+
+static inline Edge MakeEdge(FUInstance* out,int outPort,FUInstance* in,int inPort,int delay = 0){
+  Edge edge = {};
+  edge.out.inst = out;
+  edge.out.port = outPort;
+  edge.out.dir = Direction_OUTPUT;
+  edge.in.inst = in;
+  edge.in.port = inPort;
+  edge.in.dir = Direction_INPUT;
+  edge.delay = delay;
+  
+  return edge;
+}
+
+static inline Edge MakeEdge(PortInstance out,PortInstance in,int delay = 0){
+  Assert(out.dir == Direction_OUTPUT);
+  Assert(in.dir == Direction_INPUT);
+
+  Edge edge = {};
+  edge.out = out;
+  edge.in = in;
+  edge.delay = delay;
+
+  return edge;
+}
 
 bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1);
 
@@ -213,6 +262,7 @@ struct AcceleratorMapping{
   int firstId;
   int secondId;
 
+  // After port instance change, do not need two maps for input/output differences. Should be able to only use 1.
   TrieMap<PortInstance,PortInstance>* inputMap;
   TrieMap<PortInstance,PortInstance>* outputMap;
 };
@@ -313,9 +363,8 @@ public:
 
 typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
 
-//
+// ============================================================================
 // Accelerator creation
-//
 
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
 Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds);
@@ -331,7 +380,7 @@ bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
 
 int GetFreeShareIndex(Accelerator* accel);
 void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
-void SetStatic(Accelerator* accel,FUInstance* instance);
+void SetStatic(FUInstance* instance);
 
 // 
 // Edge iteration and edge operations, including connecting units
@@ -339,6 +388,7 @@ Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
 EdgeIterator IterateEdges(Accelerator* accel);
 
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+Opt<Edge> FindEdge(PortInstance out,PortInstance in,int delay);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
@@ -348,8 +398,8 @@ void ConnectUnits(PortInstance out,PortInstance in,int delay);
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
 
 // Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnit);
-
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnitOutput,PortInstance newUnitInput,int delay = 0);
+void RemoveFUInstance(Accelerator* accel,FUInstance* toRemove);
 //
 // Graph info and connection calculations
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
@@ -359,7 +409,6 @@ Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
 // If we have A:X -> B:Y and we give this function B:Y, it returns A:X
 PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
-
 
 //
 // Graph fixes and operations
@@ -405,3 +454,14 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
 Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 void PrintSubMappingInfo(SubMap* info);
+
+// ============================================================================
+// MARKED
+
+struct FlattenWithMergeResult{
+  Accelerator* accel;
+  AcceleratorMapping* reconToFlattenInst;
+};
+
+bool CanBeFlattened(Accelerator* accel);
+FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex);

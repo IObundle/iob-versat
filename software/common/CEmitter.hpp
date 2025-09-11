@@ -163,7 +163,7 @@ struct CEmitter{
   String EndExpressionAsString(Arena* out);
   
   void Once(); // Insert preprocessor directive so that file is only processed once
-  void Include(const char* filename);
+  void Include(String filename);
   void RawLine(String content);
 
   void Define(String name);
@@ -180,7 +180,7 @@ struct CEmitter{
   void EnumMember(String name,String value = {});
   void EndEnum();
   
-  void Extern(const char* typeName,const char* name);
+  void Extern(String typeName,String name);
 
   // Only declares a function, no body
   void FunctionDeclOnlyBlock(String returnType,String functionName);
@@ -191,8 +191,8 @@ struct CEmitter{
   // TODO: Var block + Var element + EndBlock
   void VarDeclare(String type,String name,String initialValue = {});
   
-  void ArrayDeclareBlock(const char* type,const char* name,bool isStatic = false);
-  void VarDeclareBlock(const char* type,const char* name,bool isStatic = false);
+  void ArrayDeclareBlock(String type,String name,bool isStatic = false);
+  void VarDeclareBlock(String type,String name,bool isStatic = false);
 
   // Declaration of variable blocks (multiple elements inside a '{}');
   void VarBlock();

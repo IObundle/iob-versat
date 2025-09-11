@@ -1,6 +1,7 @@
 #pragma once
 
 #include "configurations.hpp"
+#include "addressGen.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
@@ -23,22 +24,6 @@ enum DelayType {
 inline DelayType operator|(DelayType a, DelayType b)
 {return static_cast<DelayType>(static_cast<int>(a) | static_cast<int>(b));}
 
-/*
-// TODO: Finish making a FUType. FUDeclaration should be the instance of a type and should contain a pointer to the type that contains all the non parameterizable values.
-// NOTE: Inputs and outputs should also be parameterizable. Think multiplexers and stuff.
-  struct FUType{
-  String name;
-
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
-
-  Array<WireExpression> configs;
-  Array<WireExpression> states;
-
-  Array<ExternalMemoryInterfaceExpression> externalMemory;
-  }
-*/
-
 enum FUDeclarationType{
   FUDeclarationType_SINGLE,
   FUDeclarationType_COMPOSITE,
@@ -56,6 +41,8 @@ struct Parameter{
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
 //       the FUDeclaration should be composed of something that is in common to all of them.
+// NOTE: A FUDeclaration represents a concrete type, although the size of stuff might depend on parameters.
+//       The general structure is fixed (amount of inputs/outputs and so on) but the size is not.
 struct FUDeclaration{
   String name;
 
@@ -68,23 +55,26 @@ struct FUDeclaration{
   int numberDelays;
   Array<Parameter> parameters;
 
-  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression
+  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression at this point.
   Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
   int nIOs;
 
+  // TODO: Eventually remove external expression and external memory and only keep externalMemorySymbol
   Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
-
-  // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
-  Accelerator* baseCircuit;
-  Accelerator* fixedDelayCircuit;
-  Accelerator* flattenedBaseCircuit;
+  Array<ExternalMemorySymbolic> externalMemorySymbol;
   
-  const char* operation;
+  // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
+  Accelerator* baseCircuit; // For merge, baseCircuit contains muxes but not buffers.
+  Accelerator* fixedDelayCircuit;
+  Accelerator* flattenedBaseCircuit
+;
+  
+  String operation;
 
   SubMap* flattenMapping;
 
-  AddressGenType supportedAddressGenType;
+  AddressGenInst supportedAddressGen;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
@@ -97,7 +87,7 @@ struct FUDeclaration{
 
   SingleInterfaces singleInterfaces;
   bool isOperation;
-
+  
   // Simple access functions
   int NumberInputs(){
     if(info.infos.size > 0){
@@ -115,9 +105,6 @@ struct FUDeclaration{
     }
   };
 
-  // This only works for base units.
-  // TODO: When things start settling in, need to move all these calculations to a specific file.
-  //       Any data that needs to be computed should have a simple function and all off these should be organized to be all in one file.
   int NumberConfigs(){return configs.size;}
   int NumberStates(){return states.size;}
   int NumberDelays(){return numberDelays;};
@@ -127,6 +114,7 @@ struct FUDeclaration{
   };
 
   // TODO: Probably better to see all the outputs and all the infos, at the very least in Debug mode.
+  // NOTE: This only works because operations only have one output.
   bool IsCombinatorialOperation(){
     bool res = (isOperation && info.infos[0].outputLatencies[0] == 0);
     return res;

@@ -1,5 +1,6 @@
 #include "versat.hpp"
 
+#include "embeddedData.hpp"
 #include "globals.hpp"
 
 #include "declaration.hpp"
@@ -33,7 +34,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   // Check same name
   for(FUDeclaration* decl : globalDeclarations){
     if(CompareString(decl->name,info->name)){
-      printf("Found a module with a same name (%.*s). Cannot proceed",UNPACK_SS(info->name));
+      printf("Found a module with a same name (%.*s). Cannot proceed",UN(info->name));
       return {};
     }
   }
@@ -43,6 +44,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   Array<Wire> configs = PushArray<Wire>(perm,info->configs.size);
   Array<Wire> states = PushArray<Wire>(perm,info->states.size);
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(perm,info->externalInterfaces.size);
+  Array<ExternalMemorySymbolic> extSym = PushArray<ExternalMemorySymbolic>(perm,info->externalInterfaces.size);
   
   Array<ParameterExpression> instantiated = PushArray<ParameterExpression>(perm,info->defaultParameters.size);
 
@@ -57,7 +59,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
 
     // TODO: We cannot remove this because the external memories are instantiated based on this value and we currently have no way of exporting this value.
     //       This essentially means that the accelerator is still dependent on the setup phase, but this only affects the datapath size and the datapath size is mostly a setup phase thing anyway, so it is not the worst. 
-    if(CompareString(def.name,STRING("AXI_DATA_W"))){
+    if(CompareString(def.name,"AXI_DATA_W")){
       Expression* expr = PushStruct<Expression>(temp);
 
       expr->type = Expression::LITERAL;
@@ -102,6 +104,9 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     external[i].interface = expr.interface;
     external[i].type = expr.type;
 
+    extSym[i].interface = expr.interface;
+    extSym[i].type = expr.type;
+    
     switch(expr.type){
     case ExternalMemoryType::ExternalMemoryType_2P:{
       external[i].tp.bitSizeIn = EvalRange(expr.tp.bitSizeIn,instantiated);
@@ -117,6 +122,22 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
       }
     }break;
     }
+
+    switch(expr.type){
+    case ExternalMemoryType::ExternalMemoryType_2P:{
+      extSym[i].tp.bitSizeIn = SymbolicExpressionFromVerilog(expr.tp.bitSizeIn,out);
+      extSym[i].tp.bitSizeOut = SymbolicExpressionFromVerilog(expr.tp.bitSizeOut,out);
+      extSym[i].tp.dataSizeIn = SymbolicExpressionFromVerilog(expr.tp.dataSizeIn,out);
+      extSym[i].tp.dataSizeOut = SymbolicExpressionFromVerilog(expr.tp.dataSizeOut,out);
+    }break;
+    case ExternalMemoryType::ExternalMemoryType_DP:{
+      for(int ii = 0; ii < 2; ii++){
+        extSym[i].dp[ii].bitSize = SymbolicExpressionFromVerilog(expr.dp[ii].bitSize,out);
+        extSym[i].dp[ii].dataSizeIn = SymbolicExpressionFromVerilog(expr.dp[ii].dataSizeIn,out);
+        extSym[i].dp[ii].dataSizeOut = SymbolicExpressionFromVerilog(expr.dp[ii].dataSizeOut,out);
+      }
+    }break;
+    }
   }
   
   decl.name = info->name;
@@ -128,6 +149,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   decl.configs = configs;
   decl.states = states;
   decl.externalMemory = external;
+  decl.externalMemorySymbol = extSym;
   decl.numberDelays = info->nDelays;
   decl.nIOs = info->nIO;
 
@@ -164,18 +186,49 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     return true;
   };
   
-  bool isGenLike = FollowsInterface(configs,META_AddressGenParameters_Members);
+  bool isGenLike = FollowsInterface(configs,META_AddressGenBaseParameters_Members);
   bool isExternLike = FollowsInterface(configs,META_AddressVParameters_Members);
   bool isMemLike = FollowsInterface(configs,META_AddressMemParameters_Members);
 
+  Array<String> configNames = Extract(configs,temp,&Wire::name);
+
+  auto CountLoops = [configNames](Array<String> extraLoopsFormats){
+    TEMP_REGION(temp,nullptr);
+    
+    int loops = 2;
+
+    while(true){
+      bool containsAllNames = true;
+      for(String format : extraLoopsFormats){
+        String inst = PushString(temp,format.data,loops);
+
+        if(!Contains(configNames,inst)){
+          containsAllNames = false;
+          break;
+        }
+      }
+
+      if(containsAllNames){
+        loops += 1;
+      } else {
+        break;
+      }
+    }
+
+    return loops - 1;
+  };
+
   if(isExternLike){
-    decl.supportedAddressGenType = AddressGenType_READ;
+    decl.supportedAddressGen.type = AddressGenType_READ;
+    decl.supportedAddressGen.loopsSupported = CountLoops(AddressGenExtraFormat);
   } else if(isGenLike){
-    decl.supportedAddressGenType = AddressGenType_GEN;
+    decl.supportedAddressGen.type = AddressGenType_GEN;
+    decl.supportedAddressGen.loopsSupported = CountLoops(AddressGenExtraFormat);
   } else if(isMemLike){
-    decl.supportedAddressGenType = AddressGenType_MEM;
+    decl.supportedAddressGen.type = AddressGenType_MEM;
+    decl.supportedAddressGen.loopsSupported = CountLoops(AddressGenMemExtraFormat);
   }
-  
+
   FUDeclaration* res = RegisterFU(decl);
 
   return res;
@@ -198,7 +251,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
-#if 1
   // All the single interfaces are simple of propagating. We can just do an OR of everything.
   for(FUInstance* ptr : accel->allocated){
     decl->singleInterfaces |= ptr->declaration->singleInterfaces;
@@ -210,7 +262,6 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   decl->singleInterfaces |= SingleInterfaces_RUNNING;
   decl->singleInterfaces |= SingleInterfaces_CLK;
   decl->singleInterfaces |= SingleInterfaces_RESET;
-#endif
   
   decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int externalIndex = 0;
@@ -253,7 +304,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
 
       // TODO: We need to do this for state as well. And we probably want to make this more explicit.
       decl->configs[configIndex].sizeExpr = ReplaceVariables(wire.sizeExpr,params,out);
-      decl->configs[configIndex++].name = PushString(out,"%.*s_%.*s",UNPACK_SS(unit->name),UNPACK_SS(wire.name));
+      decl->configs[configIndex++].name = PushString(out,"%.*s_%.*s",UN(unit->name),UN(wire.name));
     }
   }
   
@@ -267,7 +318,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     for(Wire& wire : d->states){
       decl->states[stateIndex] = wire;
 
-      decl->states[stateIndex].name = PushString(out,"%.*s_%.2d",UNPACK_SS(wire.name),stateIndex);
+      decl->states[stateIndex].name = PushString(out,"%.*s_%.2d",UN(wire.name),stateIndex);
       stateIndex += 1;
     }
   }
@@ -318,6 +369,9 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
 }
 
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
+  DEBUG_PATH("RegisterSubUnit");
+  DEBUG_PATH(circuit->name);
+
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
@@ -339,12 +393,23 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   // Default parameters given to all modules. Parameters need a proper revision, but need to handle parameters going up in the hierarchy
 
   res->parameters = PushArray<Parameter>(permanent,6);
-  res->parameters[0] = {STRING("ADDR_W"),PushLiteral(permanent,32)};
-  res->parameters[1] = {STRING("DATA_W"),PushLiteral(permanent,32)};
-  res->parameters[2] = {STRING("DELAY_W"),PushLiteral(permanent,7)};
-  res->parameters[3] = {STRING("AXI_ADDR_W"),PushLiteral(permanent,32)};
-  res->parameters[4] = {STRING("AXI_DATA_W"),PushLiteral(permanent,32)};
-  res->parameters[5] = {STRING("LEN_W"),PushLiteral(permanent,20)};
+  res->parameters[0] = {"ADDR_W",PushLiteral(permanent,32)};
+  res->parameters[1] = {"DATA_W",PushLiteral(permanent,32)};
+  res->parameters[2] = {"DELAY_W",PushLiteral(permanent,7)};
+  res->parameters[3] = {"AXI_ADDR_W",PushLiteral(permanent,32)};
+  res->parameters[4] = {"AXI_DATA_W",PushLiteral(permanent,32)};
+  res->parameters[5] = {"LEN_W",PushLiteral(permanent,20)};
+  
+  bool containsMerge = false;
+
+  for(FUInstance* inst : circuit->allocated){
+    if(inst->declaration->type == FUDeclarationType_MERGED){
+      containsMerge = true;
+    }
+  }
+
+  if(containsMerge)
+    printf("Contains Merged\n");
   
   if(circuit->allocated.Size() == 0){
     res->baseCircuit = circuit;
@@ -387,7 +452,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     // TODO: Maybe this check should be done elsewhere
     for(FUInstance* ptr : circuit->allocated){
       if(ptr->multipleSamePortInputs){
-        printf("Multiple inputs: %.*s\n",UNPACK_SS(name));
+        printf("Multiple inputs: %.*s\n",UN(name));
         break;
       }
     }
@@ -425,9 +490,17 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
     }
   }
 
+  if(res->baseCircuit)
+    DebugRegionOutputDotGraph(res->baseCircuit,"BaseCircuit");
+  if(res->fixedDelayCircuit)
+    DebugRegionOutputDotGraph(res->fixedDelayCircuit,"FixedDelay");
+  if(res->flattenedBaseCircuit)
+    DebugRegionOutputDotGraph(res->flattenedBaseCircuit,"FlattenedBase");
+
   return res;
 }
 
+#if 0
 struct Connection{
   FUInstance* input;
   FUInstance* mux;
@@ -449,16 +522,19 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
     Assert(arr.size <= 2); // Do not know what to do if size bigger than 2.
   }
 
-  static String muxNames[] = {STRING("Mux1"),STRING("Mux2"),STRING("Mux3"),STRING("Mux4"),STRING("Mux5"),STRING("Mux6"),STRING("Mux7"),
-                               STRING("Mux8"),STRING("Mux9"),STRING("Mux10"),STRING("Mux11"),STRING("Mux12"),STRING("Mux13"),STRING("Mux14"),STRING("Mux15"),
-                               STRING("Mux16"),STRING("Mux17"),STRING("Mux18"),STRING("Mux19"),STRING("Mux20"),STRING("Mux21"),STRING("Mux22"),STRING("Mux23"),
-                               STRING("Mux24"),STRING("Mux25"),STRING("Mux26"),STRING("Mux27"),STRING("Mux28"),STRING("Mux29"),STRING("Mux30"),STRING("Mux31"),STRING("Mux32"),STRING("Mux33"),STRING("Mux34"),
-                               STRING("Mux35"),STRING("Mux36"),STRING("Mux37"),STRING("Mux38"),STRING("Mux39"),STRING("Mux40"),STRING("Mux41"),STRING("Mux42"),STRING("Mux43"),STRING("Mux44"),STRING("Mux45"),STRING("Mux46"),STRING("Mux47"),STRING("Mux48"),STRING("Mux49"),STRING("Mux50"),STRING("Mux51"),STRING("Mux52"),STRING("Mux53"),STRING("Mux54"),STRING("Mux55")};
+  // TODO: Very crude hack.
+  static String muxNames[] = {"Mux1","Mux2","Mux3","Mux4","Mux5","Mux6","Mux7",
+                               "Mux8","Mux9","Mux10","Mux11","Mux12","Mux13","Mux14","Mux15",
+                               "Mux16","Mux17","Mux18","Mux19","Mux20","Mux21","Mux22","Mux23",
+                               "Mux24","Mux25","Mux26","Mux27","Mux28","Mux29","Mux30","Mux31","Mux32","Mux33","Mux34"
+                               ,"Mux35","Mux36","Mux37","Mux38","Mux39","Mux40","Mux41","Mux42","Mux43","Mux44"
+                               ,"Mux45","Mux46","Mux47","Mux48","Mux49","Mux50","Mux51","Mux52","Mux53"
+                               ,"Mux54","Mux55"};
 
   FUDeclaration* type = BasicDeclaration::timedMultiplexer;
 
 #if 0
-  String beforePath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
+  String beforePath = PushDebugPath(temp,name,"iterativeBefore.dot");
   OutputGraphDotFile(accel,false,beforePath,temp);
 #endif
   
@@ -522,7 +598,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
   }
 
 #if 0
-  String afterPath = PushDebugPath(temp,name,STRING("iterativeBefore.dot"));
+  String afterPath = PushDebugPath(temp,name,"iterativeBefore.dot");
   OutputGraphDotFile(accel,true,afterPath,temp);
 #endif
   
@@ -586,6 +662,7 @@ FUDeclaration* RegisterIterativeUnit(Accelerator* accel,FUInstance* inst,int lat
 
   return registeredType;
 }
+#endif
 
 FUInstance* CreateOrGetInput(Accelerator* accel,String name,int portNumber){
   for(FUInstance* ptr : accel->allocated){
@@ -609,7 +686,7 @@ FUInstance* CreateOrGetOutput(Accelerator* accel){
     }
   }
 
-  FUInstance* inst = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::output,STRING("out"));
+  FUInstance* inst = (FUInstance*) CreateFUInstance(accel,BasicDeclaration::output,"out");
   return inst;
 }
 
@@ -714,13 +791,13 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
 
       WireInformation info = {};
       info.wire = wire;
-      info.wire.sizeExpr = PushVariable(out,S8("DELAY_W"));
+      info.wire.sizeExpr = PushVariable(out,"DELAY_W");
       
       info.addr = 4 * addr++;
 
       info.bitExpr = Normalize(expr,out);
 
-      expr = SymbolicAdd(info.bitExpr,PushVariable(temp,S8("DELAY_W")),temp);
+      expr = SymbolicAdd(info.bitExpr,PushVariable(temp,"DELAY_W"),temp);
 
       *list->PushElem() = info;
     }

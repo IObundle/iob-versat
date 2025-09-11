@@ -157,7 +157,7 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
   //bind = true;
   switch(expr->type){
   case SymbolicExpressionType_FUNC: {
-    builder->PushString("%.*s(",UNPACK_SS(expr->name));
+    builder->PushString("%.*s(",UN(expr->name));
 
     bool first = true;
     for(SymbolicExpression* terms : expr->terms){
@@ -171,7 +171,7 @@ static void BuildRepresentation(StringBuilder* builder,SymbolicExpression* expr,
     builder->PushString(")");
   } break;
   case SymbolicExpressionType_VARIABLE: {
-    builder->PushString("%.*s",UNPACK_SS(expr->variable));
+    builder->PushString("%.*s",UN(expr->variable));
   } break;
   case SymbolicExpressionType_LITERAL: {
     builder->PushString("%d",expr->literal);
@@ -241,7 +241,7 @@ void Print(SymbolicExpression* expr,bool printNewLine){
   TEMP_REGION(temp,nullptr);
   
   String res = PushRepresentation(expr,temp);
-  printf("%.*s",UNPACK_SS(res));
+  printf("%.*s",UN(res));
 
   if(printNewLine){
     printf("\n");
@@ -274,10 +274,10 @@ static void PrintAST(SymbolicExpression* expr,int level = 0){
     printf("LIT: %d",expr->literal);
   } break;
   case SymbolicExpressionType_VARIABLE: {
-    printf("VAR: %.*s",UNPACK_SS(expr->variable));
+    printf("VAR: %.*s",UN(expr->variable));
   } break;
   case SymbolicExpressionType_FUNC: {
-    printf("FUNC: %.*s {\n",UNPACK_SS(expr->name));
+    printf("FUNC: %.*s {\n",UN(expr->name));
     for(SymbolicExpression* child : expr->terms){
       PrintAST(child,level + 1);
       printf("\n");
@@ -336,9 +336,7 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
     if(right == 0){
       PRINTF_WITH_LOCATION("Division by zero\n");
       DEBUG_BREAK();
-      //WARN_CODE();
       return 0;
-      //DEBUG_BREAK();
     }
 
     val = (left / right);
@@ -1729,9 +1727,9 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
   TEMP_REGION(temp,out);
   switch(expr->type){
   case SymbolicExpressionType_FUNC:{
-    //WARN_CODE();
-
-    return PushLiteral(out,0); // Treating this as a literal.
+    // TODO: This is being hit. Versat is working but need to check this more thoroughly
+    // WARN_CODE(); // Functions are a very special case that we insert ourselves and derivate is only used to transform the initial expression into multiple individual loops so we should never reach this point. If this triggers, do a more careful analysis to what is happening.
+    return PushLiteral(out,0); // Treating all functions as a literal.
   } break;
   case SymbolicExpressionType_LITERAL:
     return PushLiteral(out,0);
@@ -1779,13 +1777,12 @@ SymbolicExpression* Derivate(SymbolicExpression* expr,String base,Arena* out){
       SymbolicExpression* addExpr = PushAddBase(out);
       addExpr->terms = addTerms;
 
-      //Print(addExpr);
       return addExpr;
     }
   } break;
   case SymbolicExpressionType_DIV:{
+    // Assuming that divisions are only done by constants. Address gen cannot handle otherwise.
     return PushLiteral(out,0);
-    //NOT_IMPLEMENTED("yet"); // Only care about divisions by constants, since other divisions we probably cannot handle in the address gen.
   } break;
   }
 
@@ -2162,24 +2159,24 @@ void TestSymbolic(){
   TEMP_REGION(temp,nullptr);
 
   TestCase cases[] = {
-    {STRING("a+b+c+d"),STRING("a+b+c+d")},
-    {STRING("a-a-b-b-2*c-c"),STRING("-(2*b)-(3*c)")},
-    {STRING("a+a+b+b+2*c+c"),STRING("2*a+2*b+3*c")},
-    {STRING("a*b + a * b"),STRING("2*a*b")},
-    {STRING("-a * b - a * b"),STRING("-(2*a*b)")},
-    {STRING("-((1*x)*(3-1))+1*y"),STRING("-(2*x)+y")},
-    {STRING("-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))"),STRING("-(a)-(b)")},
-    {STRING("(a-b)*(a-b)"),STRING("a*a-(2*a*b)+b*b")},
-    {STRING("a*b + a*b + 2*a*b"),STRING("4*a*b")},
-    {STRING("1+2+3+1*20*30"),STRING("606")},
-    {STRING("a * (x + y)"),STRING("a*x+a*y")},
-    {STRING("(0+2*x)+(2*a-1)*y"),STRING("2*x+2*a*y-(y)")},
-    {STRING("-6*(4-1)+5"),STRING("-13")},
-    {STRING("-(1*(x-1))+0"),STRING("-(x)+1")},
-    {STRING("ALIGN(1,2)"),STRING("ALIGN(1,2)")},
-    {STRING("1/x * y"),STRING("y/x")},
-    {STRING("x/x"),STRING("1")},
-    {STRING("(x*y)/x"),STRING("y")},
+    {"a+b+c+d","a+b+c+d"},
+    {"a-a-b-b-2*c-c","-(2*b-(3*c))"},
+    {"a+a+b+b+2*c+c","2*a+2*b+3*c"},
+    {"a*b + a * b","2*a*b"},
+    {"-a * b - a * b","-(2*a*b)"},
+    {"-((1*x)*(3-1))+1*y","-(2*x+y)"},
+    {"-a-b-(a-b)-(-a+b)-(-(a-b)-(-a+b)+(a-b) + (-a+b))","-(a)-(b)"},
+    {"(a-b)*(a-b)","a*a-(2*a*b)+b*b"},
+    {"a*b + a*b + 2*a*b","4*a*b"},
+    {"1+2+3+1*20*30","606"},
+    {"a * (x + y)","a*x+a*y"},
+    {"(0+2*x)+(2*a-1)*y","2*x+2*a*y-(y)"},
+    {"-6*(4-1)+5","-13"},
+    {"-(1*(x-1))+0","-(x)+1"},
+    {"ALIGN(1,2)","ALIGN(1,2)"},
+    {"1/x * y","y/x"},
+    {"x/x","1"},
+    {"(x*y)/x","y"},
   };
 
   bool printNormalizeProcess = true;
@@ -2203,7 +2200,7 @@ void TestSymbolic(){
       Print(normalized);
 
 #if 1
-      printf("\nExpec:%.*s\n",UNPACK_SS(c.expectedNormalized));
+      printf("\nExpec:%.*s\n",UN(c.expectedNormalized));
       PrintAST(normalized);
 
       if(printNormalizeProcess){
@@ -2462,7 +2459,7 @@ void Print(LoopLinearSum* sum,bool printNewLine){
   int size = sum->terms.size;
 
   for(int i = size - 1; i >= 0; i--){
-    printf("for %.*s ",UNPACK_SS(sum->terms[i].var));
+    printf("for %.*s ",UN(sum->terms[i].var));
     Print(sum->terms[i].loopStart);
     printf("..");
     Print(sum->terms[i].loopEnd);
@@ -2483,7 +2480,7 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum){
   int size = sum->terms.size;
 
   for(int i = size - 1; i >= 0; i--){
-    builder->PushString("for %.*s ",UNPACK_SS(sum->terms[i].var));
+    builder->PushString("for %.*s ",UN(sum->terms[i].var));
     Repr(builder,sum->terms[i].loopStart);
     builder->PushString("..");
     Repr(builder,sum->terms[i].loopEnd);
@@ -2494,3 +2491,34 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum){
   Repr(builder,fullExpression);
   
 }
+
+// ============================================================================
+// Global special Symbolic Expressions 
+
+static SymbolicExpression SYM_INST_zero  = {.type = SymbolicExpressionType_LITERAL,.literal = 0};
+static SymbolicExpression SYM_INST_one   = {.type = SymbolicExpressionType_LITERAL,.literal = 1};
+static SymbolicExpression SYM_INST_eight = {.type = SymbolicExpressionType_LITERAL,.literal = 8};
+
+static SymbolicExpression SYM_INST_dataW    = {.type = SymbolicExpressionType_VARIABLE,.variable = "DATA_W"};
+static SymbolicExpression SYM_INST_addrW    = {.type = SymbolicExpressionType_VARIABLE,.variable = "ADDR_W"};
+static SymbolicExpression SYM_INST_axiAddrW = {.type = SymbolicExpressionType_VARIABLE,.variable = "AXI_ADDR_W"};
+static SymbolicExpression SYM_INST_axiDataW = {.type = SymbolicExpressionType_VARIABLE,.variable = "AXI_DATA_W"};
+static SymbolicExpression SYM_INST_delayW   = {.type = SymbolicExpressionType_VARIABLE,.variable = "DELAY_W"};
+static SymbolicExpression SYM_INST_lenW     = {.type = SymbolicExpressionType_VARIABLE,.variable = "LEN_W"};
+
+SymbolicExpression* SYM_zero = &SYM_INST_zero;
+SymbolicExpression* SYM_one = &SYM_INST_one;
+SymbolicExpression* SYM_eight = &SYM_INST_eight;
+
+SymbolicExpression* SYM_dataW = &SYM_INST_dataW;
+SymbolicExpression* SYM_addrW = &SYM_INST_addrW;
+SymbolicExpression* SYM_axiAddrW = &SYM_INST_axiAddrW;
+SymbolicExpression* SYM_axiDataW = &SYM_INST_axiDataW;
+SymbolicExpression* SYM_delayW = &SYM_INST_delayW;
+SymbolicExpression* SYM_lenW = &SYM_INST_lenW;
+
+static SymbolicExpression  SYM_INST_axiStrobeW  = {.type = SymbolicExpressionType_DIV,.top = SYM_axiDataW,.bottom = SYM_eight};
+static SymbolicExpression  SYM_INST_dataStrobeW = {.type = SymbolicExpressionType_DIV,.top = SYM_dataW,.bottom = SYM_eight};
+
+SymbolicExpression* SYM_axiStrobeW = &SYM_INST_axiStrobeW;
+SymbolicExpression* SYM_dataStrobeW = &SYM_INST_dataStrobeW;

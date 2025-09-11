@@ -156,8 +156,8 @@ struct SymbolicExpression;
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
-void ReportError(String content,Token faultyToken,const char* error);
-void ReportError2(String content,Token faultyToken,Token goodToken,const char* faultyError,const char* good);
+void ReportError(String content,Token faultyToken,String error);
+void ReportError2(String content,Token faultyToken,Token goodToken,String faultyError,String good);
 
 bool IsModuleLike(ConstructDef def);
 Array<Token> TypesUsed(ConstructDef def,Arena* out);

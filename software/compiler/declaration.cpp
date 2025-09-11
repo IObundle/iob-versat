@@ -23,7 +23,7 @@ static int zeros[99] = {};
 static FUDeclaration* RegisterCircuitInput(){
   FUDeclaration decl = {};
 
-  decl.name = STRING("CircuitInput");
+  decl.name = "CircuitInput";
 
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
   decl.info.infos[0].inputDelays = Array<int>{zeros,0};
@@ -37,7 +37,7 @@ static FUDeclaration* RegisterCircuitInput(){
 static FUDeclaration* RegisterCircuitOutput(){
   FUDeclaration decl = {};
 
-  decl.name = STRING("CircuitOutput");
+  decl.name = "CircuitOutput";
 
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
   decl.info.infos[0].inputDelays = Array<int>{zeros,50};
@@ -51,7 +51,7 @@ static FUDeclaration* RegisterCircuitOutput(){
 static FUDeclaration* RegisterLiteral(){
   FUDeclaration decl = {};
 
-  decl.name = STRING("Literal");
+  decl.name = "Literal";
 
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
   decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
@@ -61,8 +61,8 @@ static FUDeclaration* RegisterLiteral(){
 
 static void RegisterOperators(){
   struct Operation{
-    const char* name;
-    const char* operation;
+    String name;
+    String operation;
   };
 
   Operation unary[] =  {{"NOT" ,"~{0}"},
@@ -85,7 +85,7 @@ static void RegisterOperators(){
     decl.info.infos[0].inputDelays = Array<int>{zeros,1};
     decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
 
-    decl.name = STRING(unary[i].name);
+    decl.name = unary[i].name;
     decl.operation = unary[i].operation;
     RegisterFU(decl);
   }
@@ -95,7 +95,7 @@ static void RegisterOperators(){
     decl.info.infos[0].inputDelays = Array<int>{zeros,2};
     decl.info.infos[0].outputLatencies = Array<int>{zeros,1};
 
-    decl.name = STRING(binary[i].name);
+    decl.name = binary[i].name;
     decl.operation = binary[i].operation;
     RegisterFU(decl);
   }

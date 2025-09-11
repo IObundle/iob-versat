@@ -212,7 +212,7 @@ Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out){
     if(!in.isComposite && in.statePos.has_value()){
       FUDeclaration* decl = in.decl;
       for(Wire& wire : decl->states){
-        res[index++] = PushString(out,"%.*s_%.*s",UNPACK_SS(in.fullName),UNPACK_SS(wire.name)); 
+        res[index++] = PushString(out,"%.*s_%.*s",UN(in.fullName),UN(wire.name)); 
       }
     }
   }
@@ -232,7 +232,7 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
   int index = 0;
   for(InstanceInfo& in : info){
     if(!in.isComposite && in.memMapped.has_value()){
-      String name = PushString(out,"%.*s_addr",UNPACK_SS(in.fullName)); 
+      String name = PushString(out,"%.*s_addr",UN(in.fullName)); 
       res[index++] = {name,(int) in.memMapped.value()};
     }
   }
@@ -241,7 +241,7 @@ Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out){
 }
 
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out){
-  String identifier = PushString(out,"%.*s_%.*s_%.*s",UNPACK_SS(id.parent->name),UNPACK_SS(id.name),UNPACK_SS(wire->name));
+  String identifier = PushString(out,"%.*s_%.*s_%.*s",UN(id.parent->name),UN(id.name),UN(wire->name));
 
   return identifier;
 }
@@ -510,7 +510,7 @@ void FillInstanceInfo(AccelInfoIterator initialIter,Arena* out){
       continue;
     }
 
-    unit->fullName = PushString(out,"%.*s_%.*s",UNPACK_SS(parent->fullName),UNPACK_SS(unit->name));
+    unit->fullName = PushString(out,"%.*s_%.*s",UN(parent->fullName),UN(unit->name));
   }
 
   // TODO: Move to a better place

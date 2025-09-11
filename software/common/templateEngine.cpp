@@ -105,7 +105,7 @@ void ProcessTemplateSimple(FILE* outputFile,String tmpl){
 
   String content = EndString(temp,b);
   
-  fprintf(outputFile,"%.*s",UNPACK_SS(content));
+  fprintf(outputFile,"%.*s",UN(content));
   fflush(outputFile);
 
   ClearTemplateEngine();
@@ -198,45 +198,33 @@ Value MakeValue(bool b){
   return val;
 }
 
-void TemplateSetCustom(const char* id,Value val){
-  SetValue(globalFrame,STRING(id),val);
+void TemplateSetNumber(String id,int number){
+  SetValue(globalFrame,id,MakeValue(number));
 }
 
-void TemplateSetNumber(const char* id,int number){
-  SetValue(globalFrame,STRING(id),MakeValue(number));
-}
-
-void TemplateSetString(const char* id,const char* str){
-  Value val = {};
-  val.type = ValueType_STRING;
-  val.str = STRING(str);
-
-  SetValue(globalFrame,STRING(id),val);
-}
-
-void TemplateSetString(const char* id,String str){
+void TemplateSetString(String id,String str){
   Value val = {};
   val.type = ValueType_STRING;
   val.str = str;
 
-  SetValue(globalFrame,STRING(id),val);
+  SetValue(globalFrame,id,val);
 }
 
-void TemplateSetHex(const char* id,int number){
+void TemplateSetHex(String id,int number){
   // TODO: Need to indicate that this is a hexadecimal number
   Value val = {};
   val.type = ValueType_NUMBER;
   val.number = number;
   
-  SetValue(globalFrame,STRING(id),val);
+  SetValue(globalFrame,id,val);
 }
 
-void TemplateSetBool(const char* id,bool boolean){
+void TemplateSetBool(String id,bool boolean){
   Value val = {};
   val.type = ValueType_BOOLEAN;
   val.boolean = boolean;
   
-  SetValue(globalFrame,STRING(id),val);
+  SetValue(globalFrame,id,val);
 }
 
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail

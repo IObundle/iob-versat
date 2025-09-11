@@ -1,6 +1,5 @@
 #pragma once
 
-#include "dotGraphPrinting.hpp"
 #include "configurations.hpp"
 
 // TODO: Maybe it would be best if we just made the change to versat to do delay calculation in a port by port basis instead of just looking at the units themselves. This would extract a little bit more performace, use less hardware since we can have better fixed buffer allocations and we could even simplify a bit of the code, since the "out" unit already requires port based delay calculations.
@@ -39,7 +38,5 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out);
 //       Also, cannot call this function for merge accelerators, most of them will lead to errors.
 //       Need to simplefy further (Replace CalculateDelayResult with the simple version).
 CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out);
-
-GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,Arena* out);
 
 Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out);

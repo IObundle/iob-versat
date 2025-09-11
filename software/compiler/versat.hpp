@@ -106,11 +106,6 @@ inline int Hash(T const& t){
    return res;
 }
 
-inline bool operator==(const String& lhs,const String& rhs){
-   bool res = CompareString(lhs,rhs);
-   return res;
-}
-
 inline bool operator==(const StaticId& id1,const StaticId& id2){
    bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
    return res;
