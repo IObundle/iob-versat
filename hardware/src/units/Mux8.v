@@ -8,7 +8,6 @@ module Mux8 #(
    input rst,
 
    input running,
-   input run,
 
    //input / output data
    input [DATA_W-1:0] in0,
@@ -42,10 +41,11 @@ module Mux8 #(
    always @(posedge clk,posedge rst) begin
       if(rst) begin
          out0 <= 0;
-      end else begin
+      end else if (running) begin
          out0 <= out;         
+      end else begin
+        out0 <= 0;
       end
-
    end
 
 endmodule

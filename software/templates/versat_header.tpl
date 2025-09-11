@@ -61,7 +61,8 @@ int GetAcceleratorCyclesElapsed();
 void RunAccelerator(int times);
 void StartAccelerator();
 void EndAccelerator();
-void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size);
+void ResetAccelerator();
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int byteSize);
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val);
 int VersatUnitRead(volatile const void* baseaddr,int index);
 float VersatUnitReadFloat(volatile const void* baseaddr,int index);
@@ -142,6 +143,9 @@ extern volatile AcceleratorStatic* accelStatic;
 @{simpleStuff}
 
 @{mergeStuff}
+
+static bool forceDoubleLoop = false;
+static bool forceSingleLoop = false;
 
 @{allAddrGen}
 

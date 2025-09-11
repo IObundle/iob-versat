@@ -17,10 +17,11 @@ struct AddressGenDef;
 // NOTE: Majority of the approach taken in relation to memory allocations and how much we mutate data is not final, we do not care about things like that currently. More important is to start making the code correct and producing the correct data and later we can rewrite the code to be better in this aspect if needed.
 
 struct AddressAccess{
-  AddressGenType type;
   String name;
   LoopLinearSum* internal;
   LoopLinearSum* external;
+
+  SymbolicExpression* dutyDivExpr; // Any expression of the form (A/B) is broken up, this var saves B and the internal/external LoopLinearSum take the A part (otherwise this is nullptr). This simplifies a lot of things, since we only care about B at the very end. 
   
   Array<String> inputVariableNames;
 };
@@ -44,10 +45,15 @@ struct InternalMemoryAccess{
   String shiftWithoutRemovingIncrement; // Shift as if period did not change addr. Useful for current implementation of VRead/VWrites
 };
 
+struct CompiledAccess{
+  Array<InternalMemoryAccess> internalAccess;
+  String dutyDivExpression;
+};
+
 void Repr(StringBuilder* builder,AddressAccess* access);
 void Print(AddressAccess* access);
 
-AddressAccess* ConvertAddressGenDef(AddressGenDef* def,String content);
+AddressAccess* CompileAddressGen(AddressGenDef* def,String content);
 
 AddressAccess* GetAddressGenOrFail(String name);
 
@@ -56,4 +62,8 @@ AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopInd
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
 
-AddressVParameters InstantiateAccess(AddressAccess* access,int highestExternalLoop,bool doubleLoop,Arena* out);
+// Code generation functions
+String GenerateAddressGenCompilationFunction(AddressAccess* initial,AddressGenType type,Arena* out);
+String GenerateAddressLoadingFunction(String structName,AddressGenType type,Arena* out);
+String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenType type,Arena* out);
+String GenerateAddressPrintFunction(AddressAccess* initial,Arena* out);

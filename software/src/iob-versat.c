@@ -72,6 +72,11 @@ void EndAccelerator(){
   } 
 }
 
+void ResetAccelerator(){
+  MEMSET(versat_base,0x0,0x80000000); // Soft reset
+  VersatLoadDelay(delayBuffer);
+}
+
 static inline void RunAcceleratorOnce(int times){ // times inside value amount
    MEMSET(versat_base,0x0,times);
    EndAccelerator();

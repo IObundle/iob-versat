@@ -2,7 +2,6 @@
 
 module Store #(
    parameter DELAY_W = 7,
-   parameter ADDR_W  = 1,
    parameter DATA_W  = 32
 ) (
    //control
@@ -25,18 +24,18 @@ module Store #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         currentValue <= 0;
-         delay        <= 0;
-         done         <= 1;
+         currentValue <= {DATA_W{1'b0}};
+         delay        <= {DELAY_W{1'b0}};
+         done         <= 1'b1;
       end else if (run) begin
-         done  <= 0;
+         done  <= 1'b0;
          delay <= delay0;
-      end else begin
+      end else if (running) begin
          if (|delay) delay <= delay - 1;
 
          if (delay == 0) begin
             currentValue <= in0;
-            done         <= 1;
+            done         <= 1'b1;
          end
       end
    end

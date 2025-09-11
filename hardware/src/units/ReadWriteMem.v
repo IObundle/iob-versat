@@ -4,7 +4,6 @@
 
 // Probably could be implemented using Mem.v but for now simplify
 (* source *) module ReadWriteMem #(
-   parameter MEM_INIT_FILE = "none",
    parameter DATA_W        = 32,
    parameter DELAY_W       = 7,
    parameter SIZE_W        = 32,
@@ -92,7 +91,6 @@
    //mem enables output by addr gen
    wire enA_int;
    wire enA = enA_int | valid;
-   wire enB;
 
    //write enables
    wire wrA = valid ? we : (enA_int & in0_wr & ~extA); //addrgen on & input on & input isn't address
@@ -116,13 +114,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perA),
+      .per_i(perA),
       .start_i (startA),
       .incr_i  (incrA),
       .delay_i (delay0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
+      .iter_i(iterA),
       .duty_i      (dutyA),
       .shift_i     (shiftA),
 `endif
@@ -146,19 +144,19 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perB),
+      .per_i(perB),
       .start_i (startB),
       .incr_i  (incrB),
       .delay_i (0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterB),
+      .iter_i(iterB),
       .duty_i      (dutyB),
       .shift_i     (shiftB),
 `endif
 
       //outputs 
-      .valid_o(enB),
+      .valid_o(),
       .ready_i(1'b1),
       .addr_o (addrB_int),
       .store_o(), // TODO: Handle duty

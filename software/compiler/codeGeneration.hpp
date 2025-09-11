@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "utilsCore.hpp"
@@ -147,12 +148,27 @@ static bool operator==(StructInfo& l,StructInfo& r){
   return true;
 }
 
-struct VerilogInterfaceSpec{
-  String name;
-  String sizeExpr;
-  bool isInput;
-  bool isShared; // For unpacking, share wires are replicated accross every interface (think rdata and the like)
+struct AddressAccess;
+
+struct AccessAndType{
+  AddressAccess* access;
+  AddressGenType type;
 };
+
+template<> struct std::hash<AccessAndType>{
+   std::size_t operator()(AccessAndType const& s) const noexcept{
+     std::size_t res = std::hash<void*>()(s.access) * (int) s.type;
+     return res;
+   }
+};
+
+static bool operator==(const AccessAndType& l,const AccessAndType& r){
+  if(l.access == r.access && l.type == r.type){
+    return true;
+  }
+  
+  return false;
+}
 
 // TODO: Maybe move this to a better place. Probably merge.hpp
 struct AccelInfoIterator;
@@ -166,3 +182,5 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file);
 // Versat_instance, all external memory files, makefile for pc-emul, basically everything that is only generated once.
 // For the top instance and support files.
 void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);
+
+void OutputTestbench(FUDeclaration* decl,FILE* file);

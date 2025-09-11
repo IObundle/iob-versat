@@ -3,12 +3,7 @@
 module SwapEndian #(
    parameter DATA_W = 32
 ) (
-   //control
-   input clk,
-   input rst,
-
    input running,
-   input run,
 
    (* versat_latency = 0 *) input [DATA_W-1:0] in0,
 
@@ -19,12 +14,28 @@ module SwapEndian #(
 );
 
    always @* begin
-      out0 = in0;
-      if (enabled) begin
-         out0[0+:8]  = in0[24+:8];
-         out0[8+:8]  = in0[16+:8];
-         out0[16+:8] = in0[8+:8];
-         out0[24+:8] = in0[0+:8];
+      out0 = {DATA_W{1'b0}};
+      if (running) begin
+          out0 = in0;
+          if (enabled) begin
+             out0[0+:8]  = in0[24+:8];
+             out0[8+:8]  = in0[16+:8];
+             out0[16+:8] = in0[8+:8];
+             out0[24+:8] = in0[0+:8];
+          end
+      end
+   end
+
+   integer i;
+   always @* begin
+      out0 = {DATA_W{1'b0}};
+      if (running) begin
+          out0 = in0;
+          if (enabled) begin
+            for(i=0; i<DATA_W; i=i+8) begin
+               out0[i +: 8] = in0[(DATA_W-8-i) +: 8];
+            end
+          end
       end
    end
 

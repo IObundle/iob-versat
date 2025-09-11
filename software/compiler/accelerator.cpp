@@ -127,7 +127,7 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
   // Copy of instances
   for(FUInstance* inst : accel->allocated){
     FUInstance* newInst = CopyInstance(newAccel,inst,preserveIds,inst->name);
-
+    
     MappingInsertEqualNode(map,inst,newInst);
   }
 
@@ -174,6 +174,7 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   }
   newInst->isMergeMultiplexer = oldInstance->isMergeMultiplexer;
   newInst->addressGenUsed = oldInstance->addressGenUsed;
+  newInst->debug = oldInstance->debug;
   
   return newInst;
 }
@@ -549,10 +550,10 @@ bool VerifyExternalMemory(ExternalMemoryInterface* inter){
   bool res = false;
 
   switch(inter->type){
-  case ExternalMemoryType::TWO_P:{
+  case ExternalMemoryType::ExternalMemoryType_2P:{
     res = (inter->tp.bitSizeIn == inter->tp.bitSizeOut);
   }break;
-  case ExternalMemoryType::DP:{
+  case ExternalMemoryType::ExternalMemoryType_DP:{
     res = (inter->dp[0].bitSize == inter->dp[1].bitSize);
   }break;
   }
@@ -584,11 +585,11 @@ int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
   int addressBitSize = 0;
   int byteOffset = 0;
   switch(inter->type){
-  case ExternalMemoryType::TWO_P:{
+  case ExternalMemoryType::ExternalMemoryType_2P:{
     addressBitSize = inter->tp.bitSizeIn;
     byteOffset = std::min(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
   }break;
-  case ExternalMemoryType::DP:{
+  case ExternalMemoryType::ExternalMemoryType_DP:{
     addressBitSize = inter->dp[0].bitSize;
     byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
   }break;
@@ -666,7 +667,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
       builder.PushArray(decl->externalMemory);
     }
 
-    if(decl->implementsDone){
+    if(decl->singleInterfaces & SingleInterfaces_DONE){
       numberDones += 1;
     }
   }

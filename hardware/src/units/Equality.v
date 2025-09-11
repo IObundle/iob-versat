@@ -8,7 +8,6 @@ module Equality #(
    input rst,
 
    input running,
-   input run,
 
    //input / output data
    input [DATA_W-1:0] in0,
@@ -19,9 +18,11 @@ module Equality #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         out0 <= 0;
+         out0 <= {DATA_W{1'b0}};
+      end else if (running) begin
+         out0 <= (in0 == in1) ? {DATA_W{1'b1}} : {DATA_W{1'b0}};
       end else begin
-         out0 <= (in0 == in1) ? ~0 : 0;
+         out0 <= {DATA_W{1'b0}};
       end
    end
 

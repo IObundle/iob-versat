@@ -19,7 +19,7 @@ module VRead #(
    // Databus interface
    input                         databus_ready_0,
    output                        databus_valid_0,
-   output reg [  AXI_ADDR_W-1:0] databus_addr_0,
+   output     [  AXI_ADDR_W-1:0] databus_addr_0,
    input      [  AXI_DATA_W-1:0] databus_rdata_0,
    output     [  AXI_DATA_W-1:0] databus_wdata_0,
    output     [AXI_DATA_W/8-1:0] databus_wstrb_0,
@@ -133,7 +133,6 @@ module VRead #(
 
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
-      .AXI_DATA_W(AXI_DATA_W),
       .LEN_W(LEN_W),
       .COUNT_W(ADDR_W),
       .ADDR_W(ADDR_W),
@@ -148,23 +147,23 @@ module VRead #(
 
       .ignore_first_i(1'b0),
 
-      .period_i({PERIOD_W{1'b0}}),
+      .per_i({PERIOD_W{1'b0}}),
       .delay_i (1'b0),
       .start_i ({ADDR_W{1'b0}}),
       .incr_i  ({ADDR_W{1'b0}}),
 
-      .iterations_i({ADDR_W{1'b0}}),
+      .iter_i({ADDR_W{1'b0}}),
       .duty_i      ({PERIOD_W{1'b0}}),
       .shift_i     ({ADDR_W{1'b0}}),
 
-      .period2_i({PERIOD_W{1'b0}}),
+      .per2_i({PERIOD_W{1'b0}}),
       .incr2_i({ADDR_W{1'b0}}),
-      .iterations2_i({ADDR_W{1'b0}}),
+      .iter2_i({ADDR_W{1'b0}}),
       .shift2_i({ADDR_W{1'b0}}),
 
-      .period3_i({PERIOD_W{1'b0}}),
+      .per3_i({PERIOD_W{1'b0}}),
       .incr3_i({ADDR_W{1'b0}}),
-      .iterations3_i({ADDR_W{1'b0}}),
+      .iter3_i({ADDR_W{1'b0}}),
       .shift3_i({ADDR_W{1'b0}}),
 
       .doneDatabus(),
@@ -207,7 +206,7 @@ assign data_data = databus_rdata_0;
    wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
 
    // mem enables output by addr gen
-   wire output_enabled,output_store;
+   wire output_enabled;
 
    AddressGen3 #(
       .ADDR_W(ADDR_W),
@@ -222,45 +221,33 @@ assign data_data = databus_rdata_0;
       .ignore_first_i(ignore_first),
 
       //configurations 
-      .period_i(per),
+      .per_i(per),
       .delay_i (delay0 + extra_delay),
       .start_i ({1'b0,start[ADDR_W-2:0]}),
       .incr_i  (incr),
 
-      .iterations_i(iter),
+      .iter_i(iter),
       .duty_i      (duty),
       .shift_i     (shift),
 
-      .period2_i(per2),
+      .per2_i(per2),
       .incr2_i(incr2),
-      .iterations2_i(iter2),
+      .iter2_i(iter2),
       .shift2_i(shift2),
 
-      .period3_i(per3),
+      .per3_i(per3),
       .incr3_i(incr3),
-      .iterations3_i(iter3),
+      .iter3_i(iter3),
       .shift3_i(shift3),
 
       //outputs 
       .valid_o(output_enabled),
       .ready_i(1'b1),
       .addr_o (output_addr_temp),
-      .store_o(output_store),
+      .store_o(),
       .done_o (doneOutput_int)
    );
 
-   reg [ADDR_W-1:0] last_output_addr;
-
-   always @(posedge clk,posedge rst) begin
-      if(rst) begin
-         last_output_addr <= 0;
-      end 
-      else if(output_enabled && output_store) begin
-         last_output_addr <= output_addr_temp;
-      end
-   end
-
-   //wire [ADDR_W-1:0] true_output_addr = ignore_first ? last_output_addr : output_addr_temp;
    wire [ADDR_W-1:0] true_output_addr = output_addr_temp;
 
    /*

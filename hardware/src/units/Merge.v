@@ -59,12 +59,12 @@ module Merge #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         delay   <= 0;
-         counter <= 0;
+         delay   <= {DELAY_W{1'b0}};
+         counter <= 4'b0;
       end else if (run) begin
          delay   <= delay0;
-         counter <= 0;
-      end else begin
+         counter <= 4'b0;
+      end else if (running) begin
          if (|delay) begin
             delay <= delay - 1;
          end

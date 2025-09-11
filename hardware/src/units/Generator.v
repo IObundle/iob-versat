@@ -11,22 +11,22 @@ module Generator #(
    input run,
 
    //configurations 
-   input [          31:0] iterations,
+   input [          31:0] iter,
    input [          31:0] shift,
 
-   input [PERIOD_W - 1:0] period,
+   input [PERIOD_W - 1:0] per,
    input [          31:0] incr,
 
-   input [          31:0] iterations2,
+   input [          31:0] iter2,
    input [          31:0] shift2,
 
-   input [PERIOD_W - 1:0] period2,
+   input [PERIOD_W - 1:0] per2,
    input [          31:0] incr2,
 
-   input [          31:0] iterations3,
+   input [          31:0] iter3,
    input [          31:0] shift3,
 
-   input [PERIOD_W - 1:0] period3,
+   input [PERIOD_W - 1:0] per3,
    input [          31:0] incr3,
 
    input [PERIOD_W - 1:0] duty,
@@ -40,7 +40,6 @@ module Generator #(
 );
 
    wire [31:0] genOut;
-   wire        done;
 
    assign out0 = genOut;  //done ? off_value : genOut;
 
@@ -58,36 +57,36 @@ module Generator #(
       .ignore_first_i(0),
 
       //configurations 
-      .iterations_i(iterations),
-      .shift_i     (shift),
+      .duty_i  (duty),
+      .start_i (start),
 
-      .period_i    (period),
-      .incr_i      (incr),
+      .per_i   (per),
+      .incr_i  (incr),
 
-      .iterations2_i(iterations2),
-      .shift2_i     (shift2),
+      .iter_i  (iter),
+      .shift_i (shift),
 
-      .period2_i    (period2),
-      .incr2_i      (incr2),
+      .per2_i  (per2),
+      .incr2_i (incr2),
 
-      .iterations3_i(iterations3),
-      .shift3_i     (shift3),
+      .iter2_i (iter2),
+      .shift2_i(shift2),
 
-      .period3_i    (period3),
-      .incr3_i      (incr3),
+      .per3_i  (per3),
+      .incr3_i (incr3),
 
-      .duty_i      (duty),
-      .start_i     (start),
+      .iter3_i (iter3),
+      .shift3_i(shift3),
 
-      .delay_i     (delay0),
+      .delay_i (delay0),
 
       //outputs 
-      .valid_o(),
-      .ready_i(1'b1),
-      .addr_o (genOut),
-      .store_o(),
+      .valid_o (),
+      .ready_i (running),
+      .addr_o  (genOut),
+      .store_o (),
 
-      .done_o(done)
+      .done_o  ()
    );
 
 endmodule

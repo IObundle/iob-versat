@@ -608,12 +608,12 @@ bool Equal(Array<T> left,Array<T> right){
 
 template<typename T>
 Array<T> RemoveElement(Array<T> in,int index,Arena* out){
+  Assert(index < in.size);
+  
   if(in.size <= 1){
     return {};
   }
 
-  Assert(index < in.size);
-  
   Array<T> res = PushArray<T>(out,in.size - 1);
   
   int inserted = 0;
@@ -626,6 +626,22 @@ Array<T> RemoveElement(Array<T> in,int index,Arena* out){
   }
 
   return res;
+}
+
+template<typename T>
+Array<T> RemoveElement(Array<T> in,int index){
+  Assert(index < in.size);
+
+  if(in.size <= 1){
+    return {};
+  }
+
+  for(int i = index; i < in.size - 1; i++){
+    SWAP(in[i],in[i+1]);
+  }
+  in.size -= 1;
+
+  return in;
 }
 
 template<typename T>

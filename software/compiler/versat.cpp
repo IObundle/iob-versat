@@ -7,6 +7,7 @@
 #include "templateEngine.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
+#include "verilogParsing.hpp"
 
 int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   // TODO: Right now nullptr indicates that the wire does not exist. Do not know if it's worth to make it more explicit or not. Appears to be fine for now.
@@ -23,50 +24,7 @@ int EvalRange(ExpressionRange range,Array<ParameterExpression> expressions){
   return size;
 }
 
-SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out){
-  FULL_SWITCH(topExpr->type){
-  case Expression::UNDEFINED: {
-    Assert(false);
-  } break;
-  case Expression::OPERATION: {
-    SymbolicExpression* left = SymbolicExpressionFromVerilog(topExpr->expressions[0],out);
-    SymbolicExpression* right = SymbolicExpressionFromVerilog(topExpr->expressions[1],out);
-    
-    switch(topExpr->op[0]){
-    case '+':{
-      return SymbolicAdd(left,right,out);
-    } break;
-    case '-':{
-      return SymbolicSub(left,right,out);
-    } break;
-    case '*':{
-      return SymbolicMult(left,right,out);
-    } break;
-    case '/':{
-      return SymbolicDiv(left,right,out);
-    } break;
-    default:{
-      // TODO: Better error message
-      NOT_IMPLEMENTED("");
-    } break;
-    } 
-  } break;
-  case Expression::IDENTIFIER: {
-    return PushVariable(out,topExpr->id);
-  } break;
-  case Expression::FUNCTION: {
-    // TODO: Better error message and we probably can do more stuff here
-    NOT_IMPLEMENTED("");
-  } break;
-  case Expression::LITERAL: {
-    return PushLiteral(out,topExpr->val.number);
-  } break;
-} END_SWITCH();
-  
-  return {};
-}
-
-// TODO: Need to remake this function and probably ModuleInfo has the versat compiler change is made
+// TODO: Need to remake this function and probably ModuleInfo as the versat compiler change is made
 Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   TEMP_REGION(temp,nullptr);
 
@@ -112,8 +70,6 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     instantiated[i] = def;
   }
 
-  auto literalOne = PushLiteral(temp,1);
-  
   for(int i = 0; i < info->configs.size; i++){
     WireExpression& wire = info->configs[i];
 
@@ -124,9 +80,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     configs[i].isStatic = false;
     configs[i].stage = info->configs[i].stage;
 
-    SymbolicExpression* top = SymbolicExpressionFromVerilog(wire.bitSize.top,temp);
-    SymbolicExpression* bottom = SymbolicExpressionFromVerilog(wire.bitSize.bottom,temp);
-    configs[i].sizeExpr = Normalize(SymbolicAdd(SymbolicSub(top,bottom,temp),literalOne,temp),out);
+    configs[i].sizeExpr = SymbolicExpressionFromVerilog(wire.bitSize,out);
   }
 
   for(int i = 0; i < info->states.size; i++){
@@ -138,6 +92,8 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     states[i].bitSize = size;
     states[i].isStatic = false;
     states[i].stage = info->states[i].stage;
+
+    states[i].sizeExpr = SymbolicExpressionFromVerilog(wire.bitSize,out);
   }
 
   for(int i = 0; i < info->externalInterfaces.size; i++){
@@ -147,13 +103,13 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     external[i].type = expr.type;
 
     switch(expr.type){
-    case ExternalMemoryType::TWO_P:{
+    case ExternalMemoryType::ExternalMemoryType_2P:{
       external[i].tp.bitSizeIn = EvalRange(expr.tp.bitSizeIn,instantiated);
       external[i].tp.bitSizeOut = EvalRange(expr.tp.bitSizeOut,instantiated);
       external[i].tp.dataSizeIn = EvalRange(expr.tp.dataSizeIn,instantiated);
       external[i].tp.dataSizeOut = EvalRange(expr.tp.dataSizeOut,instantiated);
     }break;
-    case ExternalMemoryType::DP:{
+    case ExternalMemoryType::ExternalMemoryType_DP:{
       for(int ii = 0; ii < 2; ii++){
         external[i].dp[ii].bitSize = EvalRange(expr.dp[ii].bitSize,instantiated);
         external[i].dp[ii].dataSizeIn = EvalRange(expr.dp[ii].dataSizeIn,instantiated);
@@ -179,33 +135,45 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     decl.memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
   }
 
-  decl.implementsDone = info->hasDone;
-  decl.signalLoop = info->signalLoop;
-
+  decl.singleInterfaces = info->singleInterfaces;
+  
   if(info->isSource){
     decl.delayType = decl.delayType | DelayType::DelayType_SINK_DELAY;
   }
 
-  // TODO: Is this something generic that we could move into meta code?
-  for(AddressGenWireNames_GenType gen : AddressGenWireNames){
-    bool isType = true;
-    for(String str : gen.names){
-      bool foundOne = false;
-      for(Wire wire : configs){
-        if(CompareString(str,wire.name)){
-          foundOne = true;
+  auto FollowsInterface = [](Array<Wire> configs,Array<String> interfaceWireNames) -> bool{
+    // No point in even checking
+    if(configs.size < interfaceWireNames.size){
+      return false;
+    }
+    
+    for(String str : interfaceWireNames){
+      bool found = false;
+      for(Wire w : configs){
+        if(CompareString(w.name,str)){
+          found = true;
           break;
         }
       }
-      if(!foundOne){
-        isType = false;
-        break;
+
+      if(!found){
+        return false;
       }
     }
 
-    if(isType){
-      decl.supportedAddressGenType = (AddressGenType) (decl.supportedAddressGenType | gen.type);
-    }
+    return true;
+  };
+  
+  bool isGenLike = FollowsInterface(configs,META_AddressGenParameters_Members);
+  bool isExternLike = FollowsInterface(configs,META_AddressVParameters_Members);
+  bool isMemLike = FollowsInterface(configs,META_AddressMemParameters_Members);
+
+  if(isExternLike){
+    decl.supportedAddressGenType = AddressGenType_READ;
+  } else if(isGenLike){
+    decl.supportedAddressGenType = AddressGenType_GEN;
+  } else if(isMemLike){
+    decl.supportedAddressGenType = AddressGenType_MEM;
   }
   
   FUDeclaration* res = RegisterFU(decl);
@@ -213,7 +181,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   return res;
 }
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out){
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out,bool calculateOrder){
   TEMP_REGION(temp,out);
   TEMP_REGION(temp2,temp);
 
@@ -222,7 +190,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   //       (If after merge puts the correct values inside the accelInfo struct, if we can just call this function to compute the remaining data that needs to be computed).
   //       We can also move some of this computation to the accelInfo struct. Just see how things play out.
   
-  AccelInfo val = CalculateAcceleratorInfo(accel,true,out);
+  AccelInfo val = CalculateAcceleratorInfo(accel,true,out,calculateOrder);
   decl->info = val;
  
   decl->nIOs = val.nIOs;
@@ -230,6 +198,20 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     decl->memoryMapBits = val.memoryMappedBits;
   }
 
+#if 1
+  // All the single interfaces are simple of propagating. We can just do an OR of everything.
+  for(FUInstance* ptr : accel->allocated){
+    decl->singleInterfaces |= ptr->declaration->singleInterfaces;
+  }
+
+  // TODO: Check the TODO in the OutputCircuitSource. Basically, because the wrapper that interacts with the Verilated unit is not capable of handling these missing interfaces, we are forcing the modules to have them for now.
+  //       If we fix the wrapper generation to support the lack of these interfaces, we can remove this.
+  decl->singleInterfaces |= SingleInterfaces_RUN;
+  decl->singleInterfaces |= SingleInterfaces_RUNNING;
+  decl->singleInterfaces |= SingleInterfaces_CLK;
+  decl->singleInterfaces |= SingleInterfaces_RESET;
+#endif
+  
   decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
   int externalIndex = 0;
   for(FUInstance* ptr : accel->allocated){
@@ -290,7 +272,9 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
     }
   }
 
-  decl->signalLoop = val.signalLoop;
+  if(val.signalLoop){
+    decl->singleInterfaces |= SingleInterfaces_SIGNAL_LOOP;
+  }
 
   Array<bool> belongArray = PushArray<bool>(out,accel->allocated.Size());
   Memset(belongArray,true);
@@ -303,7 +287,6 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   // Type source only if a source unit is connected to out. Type sink only if there is a input to sink connection
   bool hasSourceDelay = false;
   bool hasSinkDelay = false;
-  bool implementsDone = false;
 
   for(FUInstance* ptr : decl->fixedDelayCircuit->allocated){
     FUInstance* inst = ptr;
@@ -311,9 +294,6 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
       continue;
     }
 
-    if(inst->declaration->implementsDone){
-      implementsDone = true;
-    }
     if(ptr->type == NodeType_SINK){
       // TODO: There was a problem caused by a unit getting marked as a sink and source when it should have been marked as compute.
       //       This occured in the Variety1 test. Disabled this check caused no problem in any other test and solved our Variety1 problem. We probably want to do a full check of everything related to these calculations.
@@ -335,8 +315,6 @@ void FillDeclarationWithDelayType(FUDeclaration* decl){
   if (hasSinkDelay){
     decl->delayType = (DelayType) ((int)decl->delayType | (int) DelayType::DelayType_SINK_DELAY);
   }
-
-  decl->implementsDone = implementsDone;
 }
 
 FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
@@ -404,7 +382,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
 
   FillDeclarationWithAcceleratorValues(res,res->fixedDelayCircuit,permanent);
   FillDeclarationWithDelayType(res);
-
+ 
 #if 1
     // TODO: Maybe this check should be done elsewhere
     for(FUInstance* ptr : circuit->allocated){

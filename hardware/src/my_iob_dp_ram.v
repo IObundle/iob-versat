@@ -29,8 +29,22 @@ module my_iob_dp_ram #(
    // Declare the RAM
    reg [DATA_W-1:0] ram[2**ADDR_W-1:0];
 
+`ifdef NO_X_SIM
+   integer i;
+`endif
    // Initialize the RAM
-   initial if (mem_init_file_int != "none") $readmemh(mem_init_file_int, ram, 0, 2 ** ADDR_W - 1);
+   initial begin 
+      if (mem_init_file_int != "none") begin
+         $readmemh(mem_init_file_int, ram, 0, 2 ** ADDR_W - 1);
+      end else begin
+`ifdef NO_X_SIM 
+         // We rather initialize with some dummy value than with zeroes. More likely to catch a problem.
+           for(i = 0; i < (2**ADDR_W); i = i + 1) begin
+               ram[i] = {(DATA_W/8){8'hBA}};
+           end
+`endif
+      end
+   end
 
    always @(posedge clk_i) begin  // Port A
       if (enA_i) begin

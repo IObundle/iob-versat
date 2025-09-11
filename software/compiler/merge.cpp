@@ -1,5 +1,6 @@
 #include "merge.hpp"
 
+#include "accelerator.hpp"
 #include "declaration.hpp"
 #include "textualRepresentation.hpp"
 #include "symbolic.hpp"
@@ -1128,7 +1129,7 @@ Array<int> GetPortConnections(FUInstance* node,Arena* out){
   return res;
 }
 
-Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,Arena* out){
+Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,Set<PortInstance>* seen,Arena* out){
   TEMP_REGION(temp,out);
 
   // TODO: Maybe this happens for circuits that make loops.
@@ -1146,7 +1147,12 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
   if(!outInst.inst){
     return {};
   }
-    
+
+  if(seen->Exists(outInst)){
+    return {};
+  }
+  seen->Insert(outInst);
+  
   Edge edge = {.out = outInst,.in = end};
     
   if(outInst == start){
@@ -1158,12 +1164,13 @@ Array<Edge*> GetAllPaths(Accelerator* accel,PortInstance start,PortInstance end,
     
     return result;
   }
-    
+  
+  
   ArenaList<Edge*>* allPaths = PushArenaList<Edge*>(temp);
   for(int outPort = 0; outPort < outInst.inst->inputs.size; outPort++){
     PortInstance outInputSide = {.inst = outInst.inst,.port = outPort};
     
-    Array<Edge*> subPaths = GetAllPaths(accel,start,outInputSide,out);
+    Array<Edge*> subPaths = GetAllPaths(accel,start,outInputSide,seen,out);
 
     // TODO: A little bit slow. This approach is a bit problematic.
     EdgeIterator iter = IterateEdges(accel);
@@ -1222,6 +1229,8 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
 
   FUDeclaration* muxType = GetTypeByName(STRING("CombMux8")); // TODO: Kind of an hack
 
+  Set<PortInstance>* seen = PushSet<PortInstance>(temp,merged->allocated.Size());
+  
   EdgeIterator iter = IterateEdges(base);
   while(iter.HasNext()){
     Edge edgeInst = iter.Next();
@@ -1236,7 +1245,8 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
       continue;
     }
 
-    Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp);
+    seen->map->Clear();
+    Array<Edge*> allPaths = GetAllPaths(merged,start,end,seen,temp);
 
     auto allValidPathsDyn = StartArray<Edge*>(temp);
     for(Edge* p : allPaths){
@@ -1988,7 +1998,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent);
+  FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent,false);
   FillDeclarationWithDelayType(decl);
 
   decl->type = FUDeclarationType_MERGED;
@@ -2046,7 +2056,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
     }
     decl->info.infos[i].name = EndString(globalPermanent,builder);
     
-    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,{});
+    decl->info.infos[i].info = GenerateInitialInstanceInfo(decl->fixedDelayCircuit,globalPermanent,{},false);
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.SetMergeIndex(i);
     iter.accelName = decl->info.infos[i].name;
@@ -2081,7 +2091,9 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
         FUInstance* test = MappingMapNode(inverted,ptr);
 
         if(test){
+          // TODO: This stuff is so complicated already. We need a good day of cleaning up all the merge stuff. Very hard to make any progress the way we are doing right now. This is almost collapsing as it stands and I find it hard that this is working at all.
           instance->addressGenUsed = test->addressGenUsed;
+          instance->debug = test->debug;
         }
       }
       
@@ -2166,6 +2178,8 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
 
   FillAccelInfoFromCalculatedInstanceInfo(&decl->info,decl->fixedDelayCircuit);
+
+  DEBUG_BREAK();
   
   return decl;
 }
@@ -2248,6 +2262,7 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
     }
   }
 
+  Set<PortInstance>* seen = PushSet<PortInstance>(temp,merged->allocated.Size());
   EdgeIterator iter = IterateEdges(base);
   while(iter.HasNext()){
     Edge edgeInst = iter.Next();
@@ -2262,7 +2277,8 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
       continue;
     }
 
-    Array<Edge*> allPaths = GetAllPaths(merged,start,end,temp);
+    seen->map->Clear();
+    Array<Edge*> allPaths = GetAllPaths(merged,start,end,seen,temp);
 
     auto allValidPathsDyn = StartArray<Edge*>(temp);
     for(Edge* p : allPaths){

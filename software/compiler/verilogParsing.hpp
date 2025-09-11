@@ -4,6 +4,7 @@
 
 #include "utils.hpp"
 #include "parser.hpp"
+#include "VerilogEmitter.hpp"
 
 struct Arena;
 struct SymbolicExpression;
@@ -25,7 +26,7 @@ struct PortDeclaration{
   Hashmap<String,Value>* attributes;
   ExpressionRange range;
   String name;
-  enum {INPUT,OUTPUT,INOUT} type;
+  WireDir type;
 };
 
 struct ParameterExpression{
@@ -55,9 +56,13 @@ struct WireExpression{
   bool isStatic;
 };
 
-enum ExternalMemoryType{TWO_P = 0,DP}; // Two ports: one input and one output (think FIFO). Dual port: two input or output ports (think LUT)
+enum ExternalMemoryType {
+  ExternalMemoryType_2P,  // Two ports: one input and one output each with individual address (think FIFO)
+  ExternalMemoryType_DP   // Dual port: two input or output ports (think LUT)
+}; 
 
 // TODO: Because we changed memories to be byte space instead of symbol space, maybe it would be best to change how the address bit size is stored. These structures are supposed to be clean, and so the parser should identify any differences in address size and report an error. These structures should only have one address if we keep going with the byte space memories idea and the data size is used to calculate the bitSize for each respective port
+// NOTE: Although we should do this after parsing everything. Parse first, check errors later.
 template<typename T>
 struct ExternalMemoryTwoPortsTemplate{ // tp
   T bitSizeIn;
@@ -138,6 +143,20 @@ inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
   return res;
 }
 
+enum SingleInterfaces{
+  SingleInterfaces_DONE        = (1<<1),
+  SingleInterfaces_CLK         = (1<<2),
+  SingleInterfaces_RESET       = (1<<3),
+  SingleInterfaces_RUN         = (1<<4),
+  SingleInterfaces_RUNNING     = (1<<5),
+  SingleInterfaces_SIGNAL_LOOP = (1<<6)
+};
+
+static inline SingleInterfaces& operator|=(SingleInterfaces& left,SingleInterfaces in){
+  left = (SingleInterfaces) (((int) left) | ((int) in));
+  return left;
+}
+
 struct ModuleInfo{
   String name;
   Array<ParameterExpression> defaultParameters;
@@ -150,16 +169,14 @@ struct ModuleInfo{
   int nIO;
   ExpressionRange memoryMappedBits;
   ExpressionRange databusAddrSize;
+  SingleInterfaces singleInterfaces;
   bool doesIO;
   bool memoryMapped;
-  bool hasDone;
-  bool hasClk;
-  bool hasReset;
-  bool hasRun;
-  bool hasRunning;
   bool isSource;
-  bool signalLoop;
 };
+
+SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out);
+SymbolicExpression* SymbolicExpressionFromVerilog(ExpressionRange range,Arena* out);
 
 String PreprocessVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out);
 Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths,Arena* out); // Only handles preprocessed files

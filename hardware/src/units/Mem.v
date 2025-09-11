@@ -54,10 +54,6 @@
    input              reverseA,
    input              extA,
    input              in0_wr,
-   input [ADDR_W-1:0] iter2A,
-   input [       9:0] per2A,
-   input [ADDR_W-1:0] shift2A,
-   input [ADDR_W-1:0] incr2A,
 
    input [ADDR_W-1:0] iterB,
    input [       9:0] perB,
@@ -68,10 +64,6 @@
    input              reverseB,
    input              extB,
    input              in1_wr,
-   input [ADDR_W-1:0] iter2B,
-   input [       9:0] per2B,
-   input [ADDR_W-1:0] shift2B,
-   input [ADDR_W-1:0] incr2B,
 
    input [DELAY_W-1:0] delay0,
    input [DELAY_W-1:0] delay1
@@ -82,7 +74,6 @@
    wire doneA, doneB;
 
    //output databus
-   wire [DATA_W-1:0] outA, outB;
    reg [DATA_W-1:0] outA_reg, outB_reg;
 
    reg [DELAY_W-1:0] testDelay0;
@@ -111,7 +102,6 @@
    assign out1 = (running & (|testDelay1) == 0) ? outB_reg : 0;
 
    // Delay done by 3 cycles so that pc-emul matches simulation
-   /*
    reg doneA_1,doneB_1;
    reg doneA_2,doneB_2;
    reg doneA_3,doneB_3;
@@ -131,10 +121,9 @@
          doneB_3 <= doneB_2;
       end
    end
-   */
-   //assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
+   assign done = (doneA & doneB & doneA_2 & doneB_2 & doneA_3 & doneB_3);
 
-   assign done = (doneA & doneB);
+   //assign done = (doneA & doneB);
 
    //function to reverse bits
    function [ADDR_W-1:0] reverseBits;
@@ -174,13 +163,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perA),
+      .per_i(perA),
       .start_i (startA),
       .incr_i  (incrA),
       .delay_i (delay0),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterA),
+      .iter_i(iterA),
       .duty_i      (dutyA),
       .shift_i     (shiftA),
 `endif
@@ -204,13 +193,13 @@
       .run_i(run && !disabled),
 
       //configurations 
-      .period_i(perB),
+      .per_i(perB),
       .start_i (startB),
       .incr_i  (incrB),
       .delay_i (delay1),
 
 `ifdef COMPLEX_INTERFACE
-      .iterations_i(iterB),
+      .iter_i(iterB),
       .duty_i      (dutyB),
       .shift_i     (shiftB),
 `endif

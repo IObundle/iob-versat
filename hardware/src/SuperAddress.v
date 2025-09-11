@@ -7,7 +7,6 @@
 // Take care when changing this. This unit is verilated in order to simulate address gen independently of the accelerator at pc-emul-run time.
 module SuperAddress #(
    parameter AXI_ADDR_W = 32,
-   parameter AXI_DATA_W = 32,
    parameter DATA_W   = 32,
    parameter ADDR_W   = 10,
    parameter PERIOD_W = 10,
@@ -26,22 +25,22 @@ module SuperAddress #(
    input        [  ADDR_W - 1:0] start_i,
    input        [PERIOD_W - 1:0] duty_i,
 
-   input        [PERIOD_W - 1:0] period_i,
+   input        [PERIOD_W - 1:0] per_i,
    input signed [  ADDR_W - 1:0] incr_i,
 
-   input        [  ADDR_W - 1:0] iterations_i,
+   input        [  ADDR_W - 1:0] iter_i,
    input signed [  ADDR_W - 1:0] shift_i,
 
-   input        [PERIOD_W - 1:0] period2_i,
+   input        [PERIOD_W - 1:0] per2_i,
    input signed [  ADDR_W - 1:0] incr2_i,
 
-   input        [  ADDR_W - 1:0] iterations2_i,
+   input        [  ADDR_W - 1:0] iter2_i,
    input signed [  ADDR_W - 1:0] shift2_i,
 
-   input        [PERIOD_W - 1:0] period3_i,
+   input        [PERIOD_W - 1:0] per3_i,
    input signed [  ADDR_W - 1:0] incr3_i,
 
-   input        [  ADDR_W - 1:0] iterations3_i,
+   input        [  ADDR_W - 1:0] iter3_i,
    input signed [  ADDR_W - 1:0] shift3_i,
 
    input        [ DELAY_W - 1:0] delay_i,
@@ -69,7 +68,7 @@ module SuperAddress #(
    // Only address databus values. Read vs Write implemented outside of thies unit.
    input                          databus_ready,
    output                         databus_valid,
-   output reg [  AXI_ADDR_W-1:0]  databus_addr,
+   output     [  AXI_ADDR_W-1:0]  databus_addr,
    output     [       LEN_W-1:0]  databus_len,
    input                          databus_last
 );
@@ -83,16 +82,16 @@ reg                                           [PERIOD_W - 1:0] per,per2,per3;
 
 reg [ADDR_W-1:0] addr2,addr3;
 
-wire iter3Cond = (((iter3 + 1) == iterations3_i) || (iterations3_i == 0));
-wire per3Cond = (((per3 + 1) == period3_i) || (period3_i == 0));
+wire iter3Cond = (((iter3 + 1) == iter3_i) || (iter3_i == 0));
+wire per3Cond = (((per3 + 1) == per3_i) || (per3_i == 0));
 
-wire iter2Cond = (((iter2 + 1) == iterations2_i) || (iterations2_i == 0));
-wire per2Cond = (((per2 + 1) == period2_i) || (period2_i == 0));
+wire iter2Cond = (((iter2 + 1) == iter2_i) || (iter2_i == 0));
+wire per2Cond = (((per2 + 1) == per2_i) || (per2_i == 0));
 
-//wire true_iterations = (ignore ? iterations_i + 1 : iterations_i);
+//wire true_iter = (ignore ? iter_i + 1 : iter_i);
 
-wire iterCond = (((iter + 1) == iterations_i) || (iterations_i == 0));
-wire perCond = (((per + 1) == period_i) || (period_i == 0));
+wire iterCond = (((iter + 1) == iter_i) || (iter_i == 0));
+wire perCond = (((per + 1) == per_i) || (per_i == 0));
 
 wire [5:0] cases = {iter3Cond,per3Cond,iter2Cond,per2Cond,iterCond,perCond};
 

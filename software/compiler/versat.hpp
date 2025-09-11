@@ -47,7 +47,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out);
 
 Array<WireInformation> CalculateWireInformation(Pool<FUInstance> instances,Hashmap<StaticId,StaticData>* staticUnits,int addrOffset,Arena* out);
 
-void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out);
+void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel,Arena* out,bool calculateOrder = true);
 void FillDeclarationWithDelayType(FUDeclaration* decl);
 
 // NOTE: A kinda hacky way of having to avoid doing expensive functions on graphs if they are not gonna be needed. (No point doing a flatten operation if we do not have a merge operation that makes use of it). We probably wanna replace this approach with something better, though. Very hacky currently.
