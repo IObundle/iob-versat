@@ -85,6 +85,9 @@ assign done = (!(|runCounter) && (&unitDone));
 
 wire dma_running;
 
+@{interface}
+
+/*
 // Interface does not use soft_rest
 always @(posedge clk,posedge rst) // Care, rst because writing to soft reset register
    if(rst) begin
@@ -117,6 +120,7 @@ always @(posedge clk,posedge rst) // Care, rst because writing to soft reset reg
 @{dmaRead}
       end
    end
+*/
 
 @{emitIO}
 
@@ -132,6 +136,7 @@ begin
 end
 
 @{dmaInstantiation}
+@{dmaInstantiation2}
 
 always @(posedge clk,posedge rst_int)
 begin

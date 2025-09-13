@@ -191,6 +191,10 @@ parse_opt (int key, char *arg,
       opts->options->extraIOb = true;
       opts->options->useSymbolAddress = true;
     } break;
+
+    case 128: {
+      opts->options->insertAdditionalDebugRegisters = true;
+    } break;
       
     case 'g': opts->options->debugPath = arg; opts->options->debug = true; break;
     case 't': opts->options->topName = arg; break;
@@ -206,6 +210,7 @@ parse_opt (int key, char *arg,
 // TODO: Better error handling
 struct argp_option options[] =
   {
+    { "debug", 128 ,0, 0, "Insert debug utilities on the generated accelerator"},
     { 0, 'S',"File",   0, "Extra sources"},
     { 0, 'b',"Size",   0, "Databus size connected to external RAM (8,16,default:32,64,128,256)"},
     { 0, 'd', 0,       0, "Use DMA"},
@@ -772,7 +777,7 @@ int main(int argc,char* argv[]){
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,true);
   FillStaticInfo(&info);
   
-  VersatComputedValues val = ComputeVersatValues(&info,globalOptions.useDMA,temp);
+  VersatComputedValues val = ComputeVersatValues(&info,temp);
   
   Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(temp,val.externalMemoryInterfaces);
   int externalIndex = 0;
@@ -1009,6 +1014,13 @@ An empty AddressGen is not working correctly. The address gen parser is programm
 Code generation lint friendly:
 
 - If a module is composed of units that do not contain certain signals, like clk, rst, run and the likes, then the module should not have those signals as well. The only thing missing to implement this is changing the wrapper to support the verilated unit not containing these signals.
+
+Error handling:
+
+- Versat is currently incapable of handling even the slighest deviation from good data. Very poor handling of error conditions.
+- Some stuff that we want:
+-- Parser errors and related stuff. Any problem with the input data that is related to the spec file needs to report the error with a message that identifies in the spec file the source of the problem.
+-- Problems with the graph most be reported with a good message. Missing connections might be warnings, extra connections need a location error on the spec file. Problems with delay calculations need an identification of the path that is causing the problem and stuff like that.
 
 Usability:
 

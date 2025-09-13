@@ -23,6 +23,17 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
+int GetIndex(VersatComputedValues val,VersatRegister reg){
+  for(int i = 0; i < val.registers.size; i++){
+    if(val.registers[i] == reg){
+      return (i * 4); // TODO: This multiplication in here is dangerous. We probably want to have logic in the accelerator to convert address from byte space to symbol space and then we can just remove the 4 from here.
+    }
+  }
+
+  Assert(false);
+  return -1;
+};
+
 String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out){
   TEMP_REGION(temp,out);
   fs::path source(StaticFormat("%.*s",UN(sourcePath)));
@@ -2303,6 +2314,59 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
     TemplateSetString("wireDecls",content);
   }
 
+      
+  {      
+    VEmitter* m = StartVCode(temp);
+    m->AlwaysBlock("clk","rst");
+    m->If("rst");
+    m->Set("versat_rdata","0");
+    m->Set("versat_rvalid","0");
+    m->Set("signal_loop","0");
+    m->Set("soft_reset","0");
+    m->Else();
+    m->Set("versat_rvalid","0");
+    m->Set("soft_reset","0");
+    m->Set("signal_loop","0");
+
+    m->If("csr_valid");
+      m->If("!memoryMappedAddr");
+        m->Set("versat_rdata","stateRead");
+        m->If("csr_wstrb == 0");
+          m->Set("versat_rvalid","1");
+        m->EndIf();
+      m->EndIf();
+
+      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Control)));
+        m->If("csr_wstrb == 0");
+          m->Set("versat_rvalid","1");
+        m->EndIf();
+        m->If("we");
+          m->Set("soft_reset","csr_wdata[31]");
+          m->Set("signal_loop","csr_wdata[30]");
+        m->Else();
+          m->Set("versat_rdata","{31'h0,done}");
+        m->EndIf();
+      m->EndIf();
+
+    if(globalOptions.useDMA){
+      // TODO: Bad using DmaInternalAddress read for this. We want DmaControl
+      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaInternalAddress)));
+        m->If("csr_wstrb == 0");
+          m->Set("versat_rvalid","1");
+        m->EndIf();
+        m->Set("versat_rdata","{31'h0,!dma_running}");
+      m->EndIf();
+    }
+    m->EndIf();
+
+    m->EndIf();
+
+    m->EndBlock();
+    
+    String content = EndVCodeAndPrint(m,temp);
+    TemplateSetString("interface",content);
+  }
+  
   {
     if(globalOptions.useDMA){
       String content = R"FOO(
@@ -2313,6 +2377,8 @@ reg [AXI_ADDR_W-1:0] dma_external_addr_start;
 wire dma_ready;
 wire [ADDR_W-1:0] dma_addr_in;
 wire [AXI_DATA_W-1:0] dma_rdata;
+
+wire dma_start;
 
 SimpleDMA #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_ADDR_W(AXI_ADDR_W)) dma (
   .m_databus_ready(databus_ready[`nIO - 1]),
@@ -2328,7 +2394,7 @@ SimpleDMA #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_ADDR_W(AXI_ADDR_W)) dma (
   .addr_read(dma_external_addr_start),
   .length(dma_length),
 
-  .run(csr_valid && we && csr_addr == 16),
+  .run(dma_start),
   .running(dma_running),
 
   .valid(dma_ready),
@@ -2338,25 +2404,6 @@ SimpleDMA #(.ADDR_W(ADDR_W),.DATA_W(DATA_W),.AXI_ADDR_W(AXI_ADDR_W)) dma (
   .clk(clk),
   .rst(rst_int)
 );
-
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      dma_length <= 0;
-      dma_internal_address_start <= 0;
-      dma_external_addr_start <= 0;
-   end else begin
-      if(csr_valid && we) begin
-         if(csr_addr == 4)
-            dma_internal_address_start <= csr_wdata;
-         if(csr_addr == 8)
-            dma_external_addr_start <= csr_wdata;
-         if(csr_addr == 12)
-            dma_length <= csr_wdata[LEN_W-1:0];
-         // csr_addr == 16 being used to start dma
-      end
-   end
-end
 
 JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
   .m0_valid(dma_ready),
@@ -2375,9 +2422,36 @@ JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
   .s_wstrb(data_wstrb)
 );
                            )FOO";
-        
+      
       TemplateSetString("dmaInstantiation",content);
+      {      
+        VEmitter* m = StartVCode(temp);
+        m->AlwaysBlock("clk","rst_int");
+        m->If("rst_int");
+        m->Set("dma_length","0");
+        m->Set("dma_internal_address_start","0");
+        m->Set("dma_external_addr_start","0");
+        m->Else();
+        m->If("csr_valid && we");
+        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaInternalAddress)));
+        m->Set("dma_internal_address_start","csr_wdata");
+        m->EndIf();
+        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaExternalAddress)));
+        m->Set("dma_external_addr_start","csr_wdata");
+        m->EndIf();
+        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaTransferLength)));
+        m->Set("dma_length","csr_wdata[LEN_W-1:0]");
+        m->EndIf();
+        m->EndIf();
+        m->EndIf();
+        m->EndBlock();
 
+        m->Assign("dma_start",SF("csr_valid && we && csr_addr == %d",GetIndex(val,VersatRegister_DmaControl)));
+      
+        String content3 = EndVCodeAndPrint(m,temp);
+        TemplateSetString("dmaInstantiation2",content3);
+      }
+      
       String content2 = R"FOO(
          // DMA Read
          if(csr_addr == 4) begin
@@ -4444,10 +4518,8 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   m->EndModule();
 
   VAST* ast = EndVCode(m);
-
   auto* builder = StartString(temp);
   Repr(ast,builder);
-
   String content = EndString(temp,builder);
 
   fprintf(file,"%.*s",UN(content));

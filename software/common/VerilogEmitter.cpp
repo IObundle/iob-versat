@@ -1320,19 +1320,22 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
 
     b->PushSpaces(level * 2);
 
+#if 0
     if(OnlyOneElement(ifExpr.statements) && OnlyOneElement(top->ifExpr.ifExpressions) && Empty(top->ifExpr.elseStatements)){
       b->PushString("if(%.*s) begin ",UN(ifExpr.ifExpression));
       Repr(ifExpr.statements->head->elem,b,state,0);
       b->PushString(" end ");
     } else {
+#endif
       b->PushString("if(%.*s) begin\n",UN(ifExpr.ifExpression));
 
       EmitStatementList(b,ifExpr.statements,state,level + 1);
       
       b->PushSpaces(level * 2);
       b->PushString("end ");
+#if 0
     }
-      
+#endif      
     for(SingleLink<VASTIf>* otherIter = iter->next; otherIter; otherIter = otherIter->next){
       VASTIf ifExpr = otherIter->elem;
       
@@ -1345,7 +1348,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     }
     
     if(top->ifExpr.elseStatements){
-      b->PushString("else {\n");
+      b->PushString("else begin\n");
 
       EmitStatementList(b,top->ifExpr.elseStatements,state,level + 1);
       
@@ -1442,4 +1445,15 @@ void Repr(VAST* top,StringBuilder* b){
   VState state = {};
 
   Repr(top,b,&state,0);
+}
+
+String EndVCodeAndPrint(VEmitter* v,Arena* out){
+  TEMP_REGION(temp,out);
+
+  auto* builder = StartString(temp);
+  auto* ast = EndVCode(v);
+
+  Repr(ast,builder);
+
+  return EndString(out,builder);
 }
