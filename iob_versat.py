@@ -142,7 +142,6 @@ def RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_pat
                     f"-b{axi_data_w}",
                     "-d", # DMA
                     "-t",versat_top,
-                    "-I",os.path.realpath(build_dir  + "/hardware/src/"),
                     "-o",os.path.realpath(build_dir + "/hardware/src"), # Output hardware files
                     "-O",os.path.realpath(build_dir + "/software") # Output software files
                     ]
