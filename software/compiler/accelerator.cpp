@@ -725,7 +725,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   if(globalOptions.insertAdditionalDebugRegisters){
     AddRegister(VersatRegister_Debug);
   }
-  
+
   res.nConfigs += res.versatConfigs;
   res.nStates += res.versatStates;
   res.registers = PushArrayFromList(out,registerList);
@@ -745,8 +745,6 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
   
   res.numberConnections = info->numberConnections;
-
-  //res.configExpr = Normalize(expr,out);
   
   return res;
 }

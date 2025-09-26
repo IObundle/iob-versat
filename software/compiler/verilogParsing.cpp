@@ -1,5 +1,6 @@
 #include "verilogParsing.hpp"
 
+#include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "templateEngine.hpp"
@@ -185,7 +186,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
           filepath = string + '/' + filename;
         }
 
-        file = fopen(filepath.c_str(),"r"); // For now, do not change to OpenFile. This code needs to be partially rewritten anyway.
+        file = OpenFile(filepath.c_str(),"r",FilePurpose_READ_CONTENT);
 
         if(file){
           break;

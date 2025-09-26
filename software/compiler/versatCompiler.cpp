@@ -229,6 +229,16 @@ struct argp_option options[] =
     { 0 }
   };
 
+void ReportFileCreation(bool allFiles = false){
+  TEMP_REGION(temp,nullptr);
+  for(FileInfo f : CollectAllFilesInfo(temp)){
+    if(allFiles || (f.purpose != FilePurpose_DEBUG_INFO && f.mode == FileOpenMode_WRITE)){
+      String type = FilePurpose_Name(f.purpose);
+      printf("Filename: %.*s Type: %.*s\n",UN(f.filepath),UN(type));
+    }
+  }
+}
+
 int main(int argc,char* argv[]){
 #ifdef VERSAT_DEBUG
   printf("Running in debug mode\n");
@@ -413,7 +423,7 @@ int main(int argc,char* argv[]){
       return -1;
     }
 
-    String path = PushString(temp,"%.*s/testbench.v",UN(globalOptions.hardwareOutputFilepath));
+    String path = PushString(temp,"%.*s/../%.*s_tb.v",UN(globalOptions.hardwareOutputFilepath),UN(decl->name));
     FILE* testbenchLocation = OpenFileAndCreateDirectories(path,"w",FilePurpose_VERILOG_CODE);
     DEFER_CLOSE_FILE(testbenchLocation);
 
@@ -424,6 +434,7 @@ int main(int argc,char* argv[]){
       return res;
     }
     
+    ReportFileCreation(true);
     return 0;
   }
   
@@ -845,6 +856,8 @@ int main(int argc,char* argv[]){
        decl->type == FUDeclarationType_ITERATIVE ||
        decl->type == FUDeclarationType_MERGED){
 
+      // TODO: Disabled since it was putting content on the wrong folder
+#if 0
       if(globalOptions.debug && decl->fixedDelayCircuit){
         GraphPrintingContent content = GenerateDefaultPrintingContent(decl->fixedDelayCircuit,temp);
         String repr = GenerateDotGraph(content,temp);
@@ -858,6 +871,7 @@ int main(int argc,char* argv[]){
           fwrite(repr.data,sizeof(char),repr.size,file);
         }
       }
+#endif
 
       String path = PushString(temp,"%.*s/%.*s.v",UN(globalOptions.hardwareOutputFilepath),UN(decl->name));
       
@@ -891,14 +905,7 @@ int main(int argc,char* argv[]){
   }
   
   // This should be the last thing that we do, no further file creation can occur after this point
-  for(FileInfo f : CollectAllFilesInfo(temp)){
-    if(f.purpose != FilePurpose_DEBUG_INFO && f.mode == FileOpenMode_WRITE){
-      String type = FilePurpose_Name(f.purpose);
-      printf("Filename: %.*s Type: %.*s\n",UN(f.filepath),UN(type));
-    }
-  }
-  
-  //ReportArenaUsage();
+  ReportFileCreation();
 
   return 0;
 }

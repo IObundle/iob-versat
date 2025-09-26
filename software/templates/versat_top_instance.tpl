@@ -87,41 +87,6 @@ wire dma_running;
 
 @{interface}
 
-/*
-// Interface does not use soft_rest
-always @(posedge clk,posedge rst) // Care, rst because writing to soft reset register
-   if(rst) begin
-      versat_rdata <= 32'h0;
-      versat_rvalid <= 1'b0;
-      signal_loop <= 1'b0;
-      soft_reset <= 0;
-   end else begin
-      versat_rvalid <= 1'b0;
-      soft_reset <= 1'b0;
-      signal_loop <= 1'b0;
-
-      if(csr_valid) begin 
-         // Config/State register access
-         if(!memoryMappedAddr) begin
-            if(csr_wstrb == 0) versat_rvalid <= 1'b1;
-            versat_rdata <= stateRead;
-         end
-
-         // Versat specific registers
-         if(csr_addr == 0) begin
-            if(csr_wstrb == 0) versat_rvalid <= 1'b1;
-            if(we) begin
-               soft_reset <= csr_wdata[31];
-               signal_loop <= csr_wdata[30];    
-            end else begin
-               versat_rdata <= {31'h0,done}; 
-            end
-         end
-@{dmaRead}
-      end
-   end
-*/
-
 @{emitIO}
 
 always @(posedge clk,posedge rst)

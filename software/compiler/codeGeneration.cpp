@@ -986,7 +986,7 @@ void OutputCircuitSource(FUDeclaration* module,FILE* file){
   //if(module->singleInterfaces & SingleInterfaces_RESET){
     m->Input("rst");
   //}
-
+  
   if(info.nDones){
     m->Output("done");
   }
@@ -4278,15 +4278,16 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   }
   
   Array<VerilogPortSpec> allPorts = ExtractAllPorts(interface,temp);
-  
+
+  // NOTE: Same as allPorts except we remove some wires from allPorts after this
+  //       Basically this is a clean version
   Array<VerilogPortSpec> processedPorts = ExtractAllPorts(interface,temp);
   
-  auto FindPortIndexByProperty = [](Array<VerilogPortSpec> ports,SpecialPortProperties prop) -> int{
-    int index = -1;
+  auto FindPortIndexByProperty = [](Array<VerilogPortSpec> ports,SpecialPortProperties prop) -> Opt<int>{
+    Opt<int> index = {};
     for(int i = 0; i < ports.size; i++){
       VerilogPortSpec spec = ports[i];
       if(spec.props & prop){
-        Assert(index == -1);
         index = i;
       }
     }
@@ -4294,17 +4295,26 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     return index;
   };
   
-  int clkPortIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsClock);
+  Opt<int> clkPortIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsClock);
   // TODO: Use this instead of assuming the name
-  //String clkWire = allPorts[clkPortIndex].name;
-  allPorts = RemoveElement(allPorts,clkPortIndex,temp);
+  
+  String clkName = {};
 
-  int resetWireIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsReset);
-  String resetWire = allPorts[resetWireIndex].name; 
+  if(clkPortIndex.has_value()){
+    clkName = allPorts[clkPortIndex.value()].name;
+    allPorts = RemoveElement(allPorts,clkPortIndex.value(),temp);
+  }
+
+  Opt<int> resetWireIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsReset);
+  String resetWire = {};
+  
+  if(resetWireIndex.has_value()){
+    resetWire = allPorts[resetWireIndex.value()].name; 
+  }
   
   VEmitter* m = StartVCode(temp);
   m->Timescale("1ns","1ps");
-  m->Module("Testbench");
+  m->Module(SF("%.*s_tb",UN(decl->name)));
 
   for(Parameter p : decl->parameters){
     String repr = PushRepresentation(p.valueExpr,temp);
@@ -4320,14 +4330,18 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   }
   
   m->DeclareInterface(interface,"");
-
-  m->LocalParam("CLOCK_PERIOD","10");
-  m->Blank();
-  m->RawStatement("initial clk = 0");
-  m->RawStatement("always #(CLOCK_PERIOD/2) clk = ~clk");
-  m->RawStatement("`define ADVANCE @(posedge clk) #(CLOCK_PERIOD/2)");
-  m->Blank();
   
+  if(Empty(clkName)){
+    m->RawStatement("`define ADVANCE #(10)");
+  } else {
+    m->LocalParam("CLOCK_PERIOD","10");
+    m->Blank();
+    m->RawStatement(SF("initial %.*s = 0",UN(clkName)));
+    m->RawStatement(SF("always #(CLOCK_PERIOD/2) %.*s = ~%.*s",UN(clkName),UN(clkName)));
+    m->RawStatement(SF("`define ADVANCE @(posedge %.*s) #(CLOCK_PERIOD/2)",UN(clkName)));
+    m->Blank();
+  }  
+
   m->StartInstance(decl->name,"uut");
   for(Parameter p : decl->parameters){
     m->InstanceParam(p.name,p.name);
@@ -4394,8 +4408,13 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     m->PortConnect("insertValue","insertValue");
     m->PortConnect("addrToInsert","addrToInsert");
     m->PortConnect("valueToInsert","valueToInsert");
-    m->PortConnect("clk","clk");
-    m->PortConnect("rst","rst");
+
+    if(!Empty(clkName)){
+      m->PortConnect("clk",clkName);
+    }
+    if(!Empty(resetWire)){
+      m->PortConnect("rst",resetWire);
+    }
     
     m->EndInstance();
 
@@ -4506,11 +4525,19 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     m->Set("valueToInsert",0);
   }
   
-  AdvanceClock();
-  m->Set(resetWire,"1");
-  AdvanceClock();
-  m->Set(resetWire,"0");
-  AdvanceClock();
+  if(Empty(resetWire)){
+    AdvanceClock();
+  } else {
+    AdvanceClock();
+    m->Set(resetWire,"1");
+    AdvanceClock();
+    m->Set(resetWire,"0");
+    AdvanceClock();
+  }
+  m->Comment("Insert logic after this point");
+  m->Blank();
+  m->Blank();
+  m->Blank();
   m->RawStatement("$finish()");
 
   m->EndBlock();
