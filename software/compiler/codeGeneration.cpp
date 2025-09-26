@@ -837,7 +837,7 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   m->EndGroup();
 
   m->StartGroup("Outputs");
-  for(int i = 0; i < decl->NumberInputs(); i++){
+  for(int i = 0; i < decl->NumberOutputs(); i++){
     m->AddPortIndexed("out%d",i,SYM_dataW,WireDir_OUTPUT);
   }
   m->EndGroup();
