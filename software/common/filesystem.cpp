@@ -14,6 +14,7 @@ const char* FilePurpose_Name(FilePurpose p){
   case FilePurpose_SCRIPT: return "SCRIPT";
   case FilePurpose_MISC: return "MISC";
   case FilePurpose_DEBUG_INFO: return "DEBUG_INFO";
+  case FilePurpose_READ_CONTENT: return "READ_CONTENT";
   } END_SWITCH()
   NOT_POSSIBLE();
 }

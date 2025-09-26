@@ -1,7 +1,9 @@
 #include "accelerator.hpp"
 
 #include "declaration.hpp"
+#include "embeddedData.hpp"
 #include "globals.hpp"
+#include "utils.hpp"
 #include "versat.hpp"
 
 #include "symbolic.hpp"
@@ -613,7 +615,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   return size;
 }
 
-VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out){
+VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   TEMP_REGION(temp,out);
   VersatComputedValues res = {};
 
@@ -698,22 +700,36 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
   total = SymbolicAdd(total,SymbolicMult(PushLiteral(temp,res.nDelays),PushVariable(temp,"DELAY_W"),temp),temp);
   
   res.configurationBitsExpr = Normalize(total,out);
-  
+
   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
-  res.versatConfigs = 1;
-  res.versatStates = 1;
+  auto registerList = PushArenaList<VersatRegister>(temp);
 
+  auto AddRegister = [&res,&registerList](VersatRegister reg){
+    res.versatConfigs += 1;
+    res.versatStates += 1;
+    *registerList->PushElem() = reg;
+  };
+
+  AddRegister(VersatRegister_Control);
+  
   res.nUnitsIO = info->nIOs;
-  if(useDMA){
-    res.versatConfigs += 4;
-    res.versatStates += 4;
-
+  if(globalOptions.useDMA){
+    AddRegister(VersatRegister_DmaInternalAddress);
+    AddRegister(VersatRegister_DmaExternalAddress);
+    AddRegister(VersatRegister_DmaTransferLength);
+    AddRegister(VersatRegister_DmaControl);
+    
     res.nUnitsIO += 1; // For the DMA
+  }
+
+  if(globalOptions.insertAdditionalDebugRegisters){
+    AddRegister(VersatRegister_Debug);
   }
 
   res.nConfigs += res.versatConfigs;
   res.nStates += res.versatStates;
-
+  res.registers = PushArrayFromList(out,registerList);
+  
   int nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
   res.configurationBits = configBits + staticBits + delayBits;
 
@@ -729,8 +745,6 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,bool useDMA,Arena* out)
   res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
   
   res.numberConnections = info->numberConnections;
-
-  //res.configExpr = Normalize(expr,out);
   
   return res;
 }

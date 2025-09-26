@@ -1587,7 +1587,6 @@ Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
         anyError = true;
       }
     } else {
-      // TODO: Report error, 
       ReportError(tok,peek,"Unexpected token in global scope");
       tok->AdvancePeek();
       Synchronize(tok,{"module","merge","addressGen"});

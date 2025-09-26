@@ -149,6 +149,8 @@ static bool operator==(StructInfo& l,StructInfo& r){
   return true;
 }
 
+int GetIndex(VersatComputedValues val,VersatRegister reg);
+
 // TODO: Maybe move this to a better place. Probably merge.hpp
 struct AccelInfoIterator;
 Array<Array<MuxInfo>> CalculateMuxInformation(AccelInfoIterator* iter,Arena* out);

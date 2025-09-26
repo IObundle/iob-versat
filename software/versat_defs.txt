@@ -115,6 +115,24 @@ define_map possibleAttributes{
    VERSAT_STAGE   : versat_stage
 };
 
+enum VersatRegister{
+    VersatRegister_Control,
+    VersatRegister_DmaInternalAddress,
+    VersatRegister_DmaExternalAddress,
+    VersatRegister_DmaTransferLength,
+    VersatRegister_DmaControl,
+    VersatRegister_Debug,
+};
+
+map versatRegister(VersatRegister t,String name){
+   VersatRegister_Control              : "Control",
+   VersatRegister_DmaInternalAddress   : "Dma Internal Address",
+   VersatRegister_DmaExternalAddress   : "Dma External Address",
+   VersatRegister_DmaTransferLength    : "Dma Transfer Length",
+   VersatRegister_DmaControl           : "Dma Control",
+   VersatRegister_Debug                : "Debug"
+};
+
 file ExtractVerilatedSignals = ./scripts/ExtractVerilatedSignals.py;
 file GetVerilatorRoot = ./scripts/GetVerilatorRoot.sh;
 

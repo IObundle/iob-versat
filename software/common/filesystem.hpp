@@ -16,6 +16,7 @@ enum FilePurpose{
   FilePurpose_SOFTWARE,
   FilePurpose_SCRIPT,
   FilePurpose_MISC,
+  FilePurpose_READ_CONTENT,
   FilePurpose_DEBUG_INFO
 };
 

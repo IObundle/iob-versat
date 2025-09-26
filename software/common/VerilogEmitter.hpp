@@ -114,6 +114,14 @@ bool ContainsGroup(VerilogModuleInterface* interface,String name);
 // to support VHDL, we would have the higher level generate the AST
 // for VHDL that way.
 
+// TODO: Right now we kinda are doing everything manually but there is
+// a couple of ways we can improve the Verilog emission. When
+// declaring a variable we could keep track of the size and use it to
+// simplify later code.  There are a bunch of high level methods we
+// could make, depending on how the Emitter is used and if it would
+// simplify the code or would help make it linter friendly.
+
+
 enum VASTType{
   VASTType_TOP_LEVEL,
   VASTType_MODULE_DECL,
@@ -364,3 +372,5 @@ VEmitter* StartVCode(Arena* out);
 VAST* EndVCode(VEmitter* m);
 
 void Repr(VAST* top,StringBuilder* b);
+
+String EndVCodeAndPrint(VEmitter* v,Arena* out);
