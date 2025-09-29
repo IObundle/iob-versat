@@ -53,3 +53,5 @@ debug:
 	@echo "TBS: $(TBS)"
 	@echo "F_UNITS: $(F_UNITS)"
 	@echo "COV_RPTS: $(COV_RPTS)"
+
+.PHONY: all clean coverage coverage-all-fus

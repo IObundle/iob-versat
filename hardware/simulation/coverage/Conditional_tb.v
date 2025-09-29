@@ -28,8 +28,6 @@ module Conditional_tb (
     .in1(in1),
     .in2(in2),
     .out0(out0),
-    .out1(out1),
-    .out2(out2),
     .running(running),
     .clk(clk),
     .rst(rst)
@@ -38,20 +36,15 @@ module Conditional_tb (
 
   task RunAccelerator;
   begin
-    run <= 1;
+
+    running <= 0;
 
     `ADVANCE;
 
-    run <= 0;
     running <= 1;
 
     `ADVANCE;
 
-    while(done) begin
-
-      `ADVANCE;
-
-    end
     running <= 0;
   end
   endtask
@@ -75,6 +68,7 @@ module Conditional_tb (
     `ADVANCE;
 
     rst = 0;
+    running = 1;
     in0 = 0;
     in1 = 32'hFFFFFFFF;
     in2 = 32'hFFFFFFFF;
@@ -83,6 +77,23 @@ module Conditional_tb (
     in0 = 32'hFFFFFFFF;
     in1 = 32'hFFFFFFFF;
     in2 = 32'hFFFFFFFF;
+
+    `ADVANCE;
+
+    in0 = 0;
+    in1 = 32'h00000000;
+    in2 = 32'h00000000;
+
+    `ADVANCE;
+    in0 = 32'hFFFFFFFF;
+    in1 = 32'h00000000;
+    in2 = 32'h00000000;
+
+    `ADVANCE;
+
+    running = 0;
+
+    `ADVANCE;
 
     $finish();
   end
