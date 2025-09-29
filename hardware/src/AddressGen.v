@@ -27,10 +27,10 @@ module AddressGen #(
    //outputs 
    output                    valid_o,
    input                     ready_i,
-   output reg [ADDR_W - 1:0] addr_o,
+   output     [ADDR_W - 1:0] addr_o,
    output                    store_o,
 
-   output reg done_o
+   output     done_o
 );
 
 wire [PERIOD_W-1:0] fullZeroPeriod = 0; // To remove warning about bitsize

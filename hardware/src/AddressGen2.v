@@ -30,12 +30,12 @@ module AddressGen2 #(
    input        [ DELAY_W - 1:0] delay_i,
 
    //outputs 
-   output reg                valid_o,
+   output                    valid_o,
    input                     ready_i,
-   output reg [ADDR_W - 1:0] addr_o,
+   output     [ADDR_W - 1:0] addr_o,
    output                    store_o,
 
-   output reg done_o
+   output     done_o
 );
 
    SuperAddress #(
