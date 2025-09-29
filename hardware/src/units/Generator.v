@@ -54,7 +54,7 @@ module Generator #(
 
       .run_i(run),
 
-      .ignore_first_i(0),
+      .ignore_first_i(1'b0),
 
       //configurations 
       .duty_i  (duty),

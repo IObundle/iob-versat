@@ -158,11 +158,18 @@ static inline SingleInterfaces& operator|=(SingleInterfaces& left,SingleInterfac
   return left;
 }
 
+struct PortInfo{
+  int delay;
+  ExpressionRange range;
+};
+
 struct ModuleInfo{
   String name;
   Array<ParameterExpression> defaultParameters;
-  Array<int> inputDelays;
-  Array<int> outputLatencies;
+
+  Array<PortInfo> inputs;
+  Array<PortInfo> outputs;
+  
   Array<WireExpression> configs;
   Array<WireExpression> states;
   Array<ExternalMemoryInterfaceExpression> externalInterfaces;

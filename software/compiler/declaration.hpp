@@ -2,6 +2,7 @@
 
 #include "configurations.hpp"
 #include "addressGen.hpp"
+#include "verilogParsing.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
@@ -49,6 +50,11 @@ struct FUDeclaration{
   // These always exist, regardless of merge info 
   Array<Wire> configs;
   Array<Wire> states;
+  
+  // TODO: Need to calculate these for hierarchical and merge units. For now only works for base units.
+  //       After solving this, check the TODO for the output of testbench
+  Array<SymbolicExpression*> inputSize;
+  Array<SymbolicExpression*> outputSize;
 
   AccelInfo info;
   

@@ -122,8 +122,7 @@ static const int stateStart = @{stateStart} * sizeof(int);
 static const unsigned int AcceleratorConfigSize = sizeof(@{typeName}Config);
 
 extern volatile @{typeName}Config* accelConfig; // @{nConfigs}
-
-@{accelStateDecl}
+extern volatile @{typeName}State* accelState; // @{nStates}
 
 static inline iptr ALIGN(iptr base,iptr alignment){
   // TODO: Because alignment is power of 2 (unless we want to support weird AXI_DATA_W values), we can use a faster implementation here.
