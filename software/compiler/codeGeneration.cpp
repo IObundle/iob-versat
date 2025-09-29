@@ -922,24 +922,24 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
     ExternalMemorySymbolic ext = decl->externalMemorySymbol[i];
     FULL_SWITCH(ext.type){
     case ExternalMemoryType_DP: {
-      m->AddPortIndexed("addr_%d_port_0",i,ext.dp[0].bitSize,WireDir_OUTPUT);
-      m->AddPortIndexed("out_%d_port_0",i,ext.dp[0].dataSizeOut,WireDir_OUTPUT);
-      m->AddPortIndexed("in_%d_port_0",i,ext.dp[0].dataSizeIn,WireDir_INPUT);
-      m->AddPortIndexed("enable_%d_port_0",i,SYM_one,WireDir_OUTPUT);
-      m->AddPortIndexed("write_%d_port_0",i,SYM_one,WireDir_OUTPUT);
-      m->AddPortIndexed("addr_%d_port_1",i,ext.dp[1].bitSize,WireDir_OUTPUT);
-      m->AddPortIndexed("out_%d_port_1",i,ext.dp[1].dataSizeOut,WireDir_OUTPUT);
-      m->AddPortIndexed("in_%d_port_1",i,ext.dp[1].dataSizeIn,WireDir_INPUT);
-      m->AddPortIndexed("enable_%d_port_1",i,SYM_one,WireDir_OUTPUT);
-      m->AddPortIndexed("write_%d_port_1",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_addr_%d_port_0",i,ext.dp[0].bitSize,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_out_%d_port_0",i,ext.dp[0].dataSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_in_%d_port_0",i,ext.dp[0].dataSizeIn,WireDir_INPUT);
+      m->AddPortIndexed("ext_dp_enable_%d_port_0",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_write_%d_port_0",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_addr_%d_port_1",i,ext.dp[1].bitSize,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_out_%d_port_1",i,ext.dp[1].dataSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_in_%d_port_1",i,ext.dp[1].dataSizeIn,WireDir_INPUT);
+      m->AddPortIndexed("ext_dp_enable_%d_port_1",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_dp_write_%d_port_1",i,SYM_one,WireDir_OUTPUT);
     } break;
     case ExternalMemoryType_2P: {
-      m->AddPortIndexed("addr_out_%d",i,ext.tp.bitSizeOut,WireDir_OUTPUT);
-      m->AddPortIndexed("addr_in_%d",i,ext.tp.bitSizeIn,WireDir_OUTPUT);
-      m->AddPortIndexed("write_%d",i,SYM_one,WireDir_OUTPUT);
-      m->AddPortIndexed("read_%d",i,SYM_one,WireDir_OUTPUT);
-      m->AddPortIndexed("data_in_%d",i,ext.tp.dataSizeIn,WireDir_INPUT);
-      m->AddPortIndexed("data_out_%d",i,ext.tp.dataSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_2p_addr_out_%d",i,ext.tp.bitSizeOut,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_2p_addr_in_%d",i,ext.tp.bitSizeIn,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_2p_write_%d",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_2p_read_%d",i,SYM_one,WireDir_OUTPUT);
+      m->AddPortIndexed("ext_2p_data_in_%d",i,ext.tp.dataSizeIn,WireDir_INPUT);
+      m->AddPortIndexed("ext_2p_data_out_%d",i,ext.tp.dataSizeOut,WireDir_OUTPUT);
     } break;
   }
   }
@@ -4279,9 +4279,11 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   for(VerilogPortSpec& spec : databus){
     spec.dir = WireDir_OUTPUT;
   }
+#if 0
   for(VerilogPortSpec& spec : memoryMapped){
     spec.dir = WireDir_OUTPUT;
   }
+#endif
   for(VerilogPortSpec& spec : externalMemory){
     spec.dir = WireDir_OUTPUT;
   }
