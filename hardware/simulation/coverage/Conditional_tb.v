@@ -33,22 +33,6 @@ module Conditional_tb (
     .rst(rst)
   );
 
-
-  task RunAccelerator;
-  begin
-
-    running <= 0;
-
-    `ADVANCE;
-
-    running <= 1;
-
-    `ADVANCE;
-
-    running <= 0;
-  end
-  endtask
-
   initial begin
     `ifdef VCD;
     $dumpfile("uut.vcd");
