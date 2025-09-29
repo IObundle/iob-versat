@@ -514,6 +514,8 @@ char* StaticFormat(String format,...);
 // Shorthand for CString ("converts" a String to a C string using StaticFormat). Instead of having to provide two different functions to handle "const char* str" and "String" 
 #define CS(STR) StaticFormat("%.*s",UN(STR))
 
+void ReportNotImplemented(String msg);
+
 // Array useful functions
 int CountNonZeros(Array<int> arr);
 

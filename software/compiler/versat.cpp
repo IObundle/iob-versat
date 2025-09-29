@@ -53,6 +53,16 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     decl.parameters[i].name = info->defaultParameters[i].name;
     decl.parameters[i].valueExpr = SymbolicExpressionFromVerilog(info->defaultParameters[i].expr,perm);
   }
+
+  decl.inputSize = PushArray<SymbolicExpression*>(out,info->inputs.size);
+  decl.outputSize = PushArray<SymbolicExpression*>(out,info->outputs.size);
+
+  for(int i = 0; i < info->inputs.size; i++){
+    decl.inputSize[i] = SymbolicExpressionFromVerilog(info->inputs[i].range,out);
+  }
+  for(int i = 0; i < info->outputs.size; i++){
+    decl.outputSize[i] = SymbolicExpressionFromVerilog(info->outputs[i].range,out);
+  }
     
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
@@ -140,11 +150,12 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     }
   }
   
+
   decl.name = info->name;
 
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.info.infos[0].inputDelays = info->inputDelays;
-  decl.info.infos[0].outputLatencies = info->outputLatencies;
+  decl.info.infos[0].inputDelays = Extract(info->inputs,out,&PortInfo::delay);
+  decl.info.infos[0].outputLatencies = Extract(info->outputs,out,&PortInfo::delay);
   
   decl.configs = configs;
   decl.states = states;

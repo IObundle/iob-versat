@@ -830,15 +830,21 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   
   VerilogModuleBuilder* m = StartVerilogModuleInterface(temp);
 
+  if(decl->type != FUDeclarationType_SINGLE){
+    // TODO: We cannot do complex units since we have not fixed the calculation of input and output Size
+    ReportNotImplemented("Currently Versat does not support interface generation for non simple units");
+    exit(-1);
+  }
+
   m->StartGroup("Inputs");
   for(int i = 0; i < decl->NumberInputs(); i++){
-    m->AddPortIndexed("in%d",i,SYM_dataW,WireDir_INPUT);
+    m->AddPortIndexed("in%d",i,decl->inputSize[i],WireDir_INPUT);
   }
   m->EndGroup();
 
   m->StartGroup("Outputs");
   for(int i = 0; i < decl->NumberOutputs(); i++){
-    m->AddPortIndexed("out%d",i,SYM_dataW,WireDir_OUTPUT);
+    m->AddPortIndexed("out%d",i,decl->outputSize[i],WireDir_OUTPUT);
   }
   m->EndGroup();
 
@@ -3177,19 +3183,6 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   {
     CEmitter* c = StartCCode(temp);
 
-    if(stateStructs.size > 0){
-      c->RawLine(PushString(temp,"extern volatile %.*sState* accelState;",UN(typeName)));
-    } else {
-      c->RawLine("extern volatile AcceleratorState* accelState;");
-    };
-
-    String content = PushASTRepr(c,temp);
-    TemplateSetString("accelStateDecl",content);
-  }
-
-  {
-    CEmitter* c = StartCCode(temp);
-
     for(auto elem : allStaticsVerilatorSide){
       c->Define(PushString(temp,"ACCEL_%.*s",UN(elem.name)),PushString(temp,"accelStatic->%.*s",UN(elem.name)));
     }
@@ -3230,7 +3223,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
       c->ArrayDeclareBlock("unsigned int*","delayBuffers",true);
 
       for(int i = 0; i < names.size; i++){
-        c->Elem(PushString(temp,"delayBuffer_%d",i));
+        c->Elem(SF("delayBuffer_%d",i));
       }
         
       c->EndBlock();
@@ -3239,7 +3232,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         c->Enum("MergeType");
         for(int i = 0; i <  names.size; i++){
           auto name  =  names[i];
-          c->EnumMember(PushString(temp,"MergeType_%.*s",UN(name)),PushString(temp,"%d",i));
+          c->EnumMember(SF("MergeType_%.*s",UN(name)),SF("%d",i));
         }
         c->EndEnum();
 
@@ -3250,10 +3243,10 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
         c->SwitchBlock("type");
         for(int i = 0 ; i < names.size; i++){
-          c->CaseBlock(PushString(temp,"MergeType_%.*s",UN(names[i])));
+          c->CaseBlock(SF("MergeType_%.*s",UN(names[i])));
 
           for(auto info : muxInfo[i]){
-            c->Assignment(PushString(temp,"accelConfig->%.*s.sel",UN(info.name)),PushString(temp,"%d",info.val));
+            c->Assignment(SF("accelConfig->%.*s.sel",UN(info.name)),SF("%d",info.val));
           }
           c->EndBlock();
         }
@@ -3279,6 +3272,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
   TemplateSetBool("useDMA",globalOptions.useDMA);
   TemplateSetString("typeName",accel->name);
   TemplateSetNumber("nConfigs",val.nConfigs);
+  TemplateSetNumber("nStates",val.nStates);
 
   ProcessTemplateSimple(f,META_HeaderTemplate_Content);
 }
@@ -3685,9 +3679,11 @@ if(SimulateDatabus){
     CEmitter* c = StartCCode(temp);
     c->Comment("Extract state from model");
       
+#if 1
     if(topLevelDecl->states.size){
-      c->RawLine("AcceleratorState* state = &stateBuffer;");
+      c->RawLine("AcceleratorState* state = (AcceleratorState*) &stateBuffer;");
     }
+#endif
 
     for(int i = 0; i < topLevelDecl->states.size; i++){
       Wire w = topLevelDecl->states[i];
@@ -3824,7 +3820,7 @@ static iptr WRITE_@{0} = 0;)FOO";
     String content = PushASTRepr(c,temp);
     TemplateSetString("memoryAccessDefines",content);
   }
-    
+
   String typeName = accel->name;
   TemplateSetString("typeName",typeName);
     
@@ -4265,6 +4261,19 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   Array<VerilogPortSpec> databus = ObtainGroupByName(interface,"Databus");
   Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,"MemoryMapped");
   Array<VerilogPortSpec> externalMemory = ObtainGroupByName(interface,"ExternalMemory");
+  
+  bool containsRun = false;
+  bool containsRunning = false;
+  bool containsDone = false;
+  if(decl->singleInterfaces & SingleInterfaces_RUNNING){
+    containsRunning = true;
+  }
+  if(decl->singleInterfaces & SingleInterfaces_RUN){
+    containsRun = true;
+  }
+  if(decl->singleInterfaces & SingleInterfaces_DONE){
+    containsDone = true;
+  }
 
   // NOTE: Kinda hacky way of making everything a wire (needed since these connect directly to a module)
   for(VerilogPortSpec& spec : databus){
@@ -4296,10 +4305,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   };
   
   Opt<int> clkPortIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsClock);
-  // TODO: Use this instead of assuming the name
-  
   String clkName = {};
-
   if(clkPortIndex.has_value()){
     clkName = allPorts[clkPortIndex.value()].name;
     allPorts = RemoveElement(allPorts,clkPortIndex.value(),temp);
@@ -4307,7 +4313,6 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
 
   Opt<int> resetWireIndex = FindPortIndexByProperty(allPorts,SpecialPortProperties_IsReset);
   String resetWire = {};
-  
   if(resetWireIndex.has_value()){
     resetWire = allPorts[resetWireIndex.value()].name; 
   }
@@ -4488,24 +4493,49 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     }
   }
   
-  m->Task("RunAccelerator");
+  if(containsRun){
+    m->Task("RunAccelerator");
 
-  m->Set("run","1");
+    m->Set("run","1");
 
-  AdvanceClock();
+    AdvanceClock();
 
-  m->Set("run","0");
-  m->Set("running","1");
+    m->Set("run","0");
+    if(containsRunning){
+      m->Set("running","1");
+    }
 
-  AdvanceClock();
+    AdvanceClock();
+    
+    if(containsDone){
+      m->Loop("","done","");
+      AdvanceClock();
+      m->EndLoop();
+    }
+
+    if(containsRunning){
+      m->Set("running","0");
+    }
   
-  m->Loop("","done","");
-  AdvanceClock();
-  m->EndLoop();
+    m->EndTask();
+  } else if(containsRunning){
+    m->Task("SetRunning");
+    m->Set("running","1");
+    
+    AdvanceClock();
 
-  m->Set("running","0");
+    if(containsDone){
+      m->Loop("","done","");
+      AdvanceClock();
+      m->EndLoop();
+    }
+
+    m->Set("running","0");
+
+    m->EndTask();
+  }
   
-  m->EndTask();
+  printf("Contains running %d\n\n\n\n",containsRunning);
   
   m->InitialBlock();
 
