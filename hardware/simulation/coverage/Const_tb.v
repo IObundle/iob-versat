@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+// verilator coverage_off
 module Const_tb (
 
 );
@@ -40,3 +41,4 @@ module Const_tb (
 
 
 endmodule
+// verilator coverage_on

@@ -1,18 +1,18 @@
 `timescale 1ns / 1ps
 
 // verilator coverage_off
-module Counter_tb (
+module DoneCycle_tb (
 
 );
-  // Outputs
-  wire [(32)-1:0] out0;
+  localparam DATA_W = 4;
   // Control
   reg [(1)-1:0] running;
   reg [(1)-1:0] run;
+  wire [(1)-1:0] done;
   reg [(1)-1:0] clk;
   reg [(1)-1:0] rst;
   // Config
-  reg [(32)-1:0] start;
+  reg [(DATA_W)-1:0] amount;
 
   localparam CLOCK_PERIOD = 10;
 
@@ -20,15 +20,37 @@ module Counter_tb (
   always #(CLOCK_PERIOD/2) clk = ~clk;
   `define ADVANCE @(posedge clk) #(CLOCK_PERIOD/2);
 
-  Counter uut (
-    .out0(out0),
+  DoneCycle #(
+    .DATA_W(DATA_W)
+  ) uut (
     .running(running),
     .run(run),
+    .done(done),
     .clk(clk),
     .rst(rst),
-    .start(start)
+    .amount(amount)
   );
 
+
+  task RunAccelerator;
+  begin
+    run = 1;
+
+    `ADVANCE;
+
+    run = 0;
+    running = 1;
+
+    `ADVANCE;
+
+    while(~done) begin
+
+      `ADVANCE;
+
+    end
+    running = 0;
+  end
+  endtask
 
   initial begin
     `ifdef VCD;
@@ -39,43 +61,27 @@ module Counter_tb (
     run = 0;
     clk = 0;
     rst = 0;
-    start = 0;
+    amount = 0;
 
     `ADVANCE;
 
     rst = 1;
-    start = 32'hFFFFFFFF;
+    amount = 4'hF;
 
     `ADVANCE;
 
     rst = 0;
-
-    run = 1;
-    running = 1;
-
-    start = 32'hFFFFFFF0;
+    amount = 4'hF;
+    RunAccelerator();
 
     `ADVANCE;
 
-    run = 0;
-    start = 0;
-
-    // wait for the counter to wrap
-    while (out0 != 0) begin
-      `ADVANCE;
-    end
-
-    running = 0;
+    amount = 0;
 
     `ADVANCE;
 
-    run = 1;
-    running = 1;
-    start = 32'hFFFFFFFF;
-
-    `ADVANCE;
-
-    running = 0;
+    amount = 4'hF;
+    RunAccelerator();
 
     $finish();
   end

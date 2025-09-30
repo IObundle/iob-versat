@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+// verilator coverage_off
 module CombMux8_tb (
 
 );
@@ -88,3 +89,4 @@ module CombMux8_tb (
   end
 
 endmodule
+// verilator coverage_on

@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+// verilator coverage_off
 module Conditional_tb (
 
 );
@@ -84,3 +85,4 @@ module Conditional_tb (
 
 
 endmodule
+// verilator coverage_on
