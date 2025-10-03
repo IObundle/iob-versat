@@ -40,7 +40,7 @@ MERGED_DAT=merged.dat
 	# merge coverage
 	verilator_coverage --write $(MERGED_DAT) $*_cov.dat
 	# annotate coverage
-	verilator_coverage --annotate $*_cov_annotated --annotate-min 2 --annotate-all $(MERGED_DAT)
+	verilator_coverage --annotate $*_cov_annotated --annotate-min 1 --annotate-all $(MERGED_DAT)
 	./$(SCRIPTS_DIR)/iob_cov_analyze.py ./$*_cov_annotated -o $@ -E $*_tb.v
 
 clean:
