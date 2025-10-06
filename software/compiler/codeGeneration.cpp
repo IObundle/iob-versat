@@ -3278,22 +3278,22 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
   TEMP_REGION(temp,nullptr);
   Pool<FUInstance> nodes = accel->allocated;
 
-  // We need to bundle config + static (type->config) only contains config, but not static
-  // TODO: This is not good. Eventually need to take a look at what is happening inside the wrapper.
+  struct WireExtra : public Wire{
+    String source;
+  };
+
   auto arr = StartArray<WireExtra>(temp);
   for(auto n : nodes){
     for(Wire config : n->declaration->configs){
       WireExtra* ptr = arr.PushElem();
-      *ptr = config;
+      *((Wire*) ptr) = config;
       ptr->source = "config->TOP_";
-      ptr->source2 = "config->";
     }
   }
   for(Wire& staticWire : allStaticsVerilatorSide){
     WireExtra* ptr = arr.PushElem();
-    *ptr = staticWire;
+    *((Wire*) ptr) = staticWire;
     ptr->source = "statics->";
-    ptr->source2 = "statics->";
   }
   Array<WireExtra> allConfigsVerilatorSide = EndArray(arr);
 
@@ -3720,7 +3720,7 @@ if(SimulateDatabus){
           c->RawLine(TemplateSubstitute(format,values,temp));
         }
 #endif
-          
+
         if(wire.stage == VersatStage_READ){
           c->Assignment(PushString(temp,"self->%.*s",UN(wire.name)),PushString(temp,"%.*s%.*s",UN(wire.source),UN(wire.name)));
         }
@@ -3762,13 +3762,13 @@ if(SimulateDatabus){
         c->RawLine(TemplateSubstitute(format,values,temp));
       }
 
-        if(wire.stage == VersatStage_WRITE){
-          String format = R"FOO(  COMPUTED_@{0} = 0;
+      if(wire.stage == VersatStage_WRITE){
+        String format = R"FOO(  COMPUTED_@{0} = 0;
   WRITE_@{0} = 0;)FOO";
-          String values[2] = {wire.name,wire.source};
+        String values[2] = {wire.name,wire.source};
             
-          c->RawLine(TemplateSubstitute(format,values,temp));
-        }
+        c->RawLine(TemplateSubstitute(format,values,temp));
+      }
     }
 
     c->RawLine(R"FOO(
