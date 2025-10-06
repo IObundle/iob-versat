@@ -4497,10 +4497,11 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   }
   
   if(containsRun){
-    m->LocalParam("SIM_TIME_NO_DONE","10");
-
-    m->Integer("i");
-    
+    if(!containsDone){
+      m->LocalParam("SIM_TIME_NO_DONE","10");
+      m->Integer("i");
+    }
+   
     m->Task("RunAccelerator");
 
     m->SetForced("run","1",true);
@@ -4530,6 +4531,11 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   
     m->EndTask();
   } else if(containsRunning){
+    if(!containsDone){
+      m->LocalParam("SIM_TIME_NO_DONE","10");
+      m->Integer("i");
+    }
+
     m->Task("SetRunning");
     m->SetForced("running","1",true);
     
