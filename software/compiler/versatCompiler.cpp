@@ -984,6 +984,8 @@ Module Test(){
 // ============================================================================
 // Bugs
 
+BUG: Debug folder gets created inside the iob-soc-versat repo when running ./test.py tests. Something about the python3 script -> makefile is causing the path to not be the same as if just calling makefile directly.
+
 BUG: localOrder appears to be broken. 
 
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 

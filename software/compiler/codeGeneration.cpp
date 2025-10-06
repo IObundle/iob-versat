@@ -1230,7 +1230,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
         for(WireInformation info : wireInfo){
           m->If(SF("address[%d:0] == %d",configurationAddressBits + 1,info.addr));
 
-          String configStartExpr = PushRepresentation(info.bitExpr,temp);
+          String configStartExpr = PushRepresentation(info.startBitExpr,temp);
           
           if(info.wire.sizeExpr && info.wire.sizeExpr->type != SymbolicExpressionType_LITERAL){
             String repr = PushRepresentation(info.wire.sizeExpr,temp);
@@ -1258,7 +1258,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
         m->Set("configdata",0);
         m->ElseIf("change_config_pulse");
         for(WireInformation info : wireInfo){
-          String start = PushRepresentation(info.bitExpr,temp);
+          String start = PushRepresentation(info.startBitExpr,temp);
           String size = PushRepresentation(info.wire.sizeExpr,temp);
           
           if(info.wire.stage == VersatStage_READ){
@@ -1266,7 +1266,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
           }
         }
         for(WireInformation info : wireInfo){
-          String start = PushRepresentation(info.bitExpr,temp);
+          String start = PushRepresentation(info.startBitExpr,temp);
           String size = PushRepresentation(info.wire.sizeExpr,temp);
 
           if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
@@ -1289,7 +1289,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
       }
       m->ElseIf("change_config_pulse");
       for(WireInformation info : wireInfo){
-        String start = PushRepresentation(info.bitExpr,temp);
+        String start = PushRepresentation(info.startBitExpr,temp);
         String size = PushRepresentation(info.wire.sizeExpr,temp);
         if(info.wire.stage == VersatStage_COMPUTE){
           m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
@@ -1315,7 +1315,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
       }
       m->ElseIf("change_config_pulse");
       for(WireInformation info : wireInfo){
-        String start = PushRepresentation(info.bitExpr,temp);
+        String start = PushRepresentation(info.startBitExpr,temp);
         String size = PushRepresentation(info.wire.sizeExpr,temp);
         if(info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Write_%.*s",UN(info.wire.name)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
@@ -1327,7 +1327,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
 
     for(WireInformation info : wireInfo){
       if(info.isStatic){
-        String start = PushRepresentation(info.bitExpr,temp);
+        String start = PushRepresentation(info.startBitExpr,temp);
         m->Assign(info.wire.name,PushString(temp,"configdata[(%.*s)+:%d]",UN(start),info.wire.bitSize));
       }
     }
@@ -2562,7 +2562,7 @@ assign data_wstrb = csr_wstrb;
 
       for(auto info : wireInfo){
         if(info.isStatic){
-          m->Wire(info.wire.name,info.wire.bitSize);
+          m->Wire(info.wire.name,info.wire.sizeExpr);
         }
       }
 
