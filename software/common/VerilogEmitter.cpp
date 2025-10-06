@@ -263,6 +263,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_INTEGER_DECL:
     case VASTType_LOCAL_PARAM:
     case VASTType_SET:
+    case VASTType_FORCED_SET:
     case VASTType_EXPR:
     case VASTType_PORT_CONNECT:
     case VASTType_ASSIGN_DECL:
@@ -334,6 +335,7 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
     case VASTType_SET:
+    case VASTType_FORCED_SET:
     case VASTType_LOCAL_PARAM:
     case VASTType_INTERFACE_DECL:
     case VASTType_EXPR:
@@ -387,6 +389,7 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     case VASTType_INTERFACE_DECL:
     case VASTType_LOCAL_PARAM:
     case VASTType_SET:
+    case VASTType_FORCED_SET:
     case VASTType_EXPR:
     case VASTType_ASSIGN_DECL:
     case VASTType_BLANK:
@@ -818,6 +821,16 @@ void VEmitter::Set(String identifier,String expr){
   
   setDecl->assignOrSet.name = PushString(arena,identifier);
   setDecl->assignOrSet.expr = PushString(arena,expr);
+
+  InsertDeclaration(setDecl);
+}
+
+void VEmitter::SetForced(String identifier,String expr,bool isCombLike){
+  VAST* setDecl = PushVAST(VASTType_FORCED_SET,arena);
+  
+  setDecl->assignOrSet.name = PushString(arena,identifier);
+  setDecl->assignOrSet.expr = PushString(arena,expr);
+  setDecl->assignOrSet.isForcedCombLike = isCombLike;
 
   InsertDeclaration(setDecl);
 }
@@ -1380,6 +1393,16 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       b->PushString("%.*s <= %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
     }
   } break;
+
+  case VASTType_FORCED_SET:{
+    b->PushSpaces(level * 2);
+    if(top->assignOrSet.isForcedCombLike){
+      b->PushString("%.*s = %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
+    } else {
+      b->PushString("%.*s <= %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
+    }
+  } break;
+
   
   case VASTType_BLANK: {
     // Do nothing. Outer code should add a new line by itself since we are a declaration

@@ -915,8 +915,6 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
     m->EndGroup();
   }
   
-  // TODO: We cannot do this as the parameters must depend on the specific unit.
-#if 1
   m->StartGroup("ExternalMemory");
   for(int i = 0; i <  decl->externalMemorySymbol.size; i++){
     ExternalMemorySymbolic ext = decl->externalMemorySymbol[i];
@@ -944,7 +942,6 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   }
   }
   m->EndGroup();
-#endif
   
   return End(m,out);
 }
@@ -4259,7 +4256,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
 
   VerilogModuleInterface* interface = GenerateModuleInterface(decl,temp);
   Array<VerilogPortSpec> databus = ObtainGroupByName(interface,"Databus");
-  Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,"MemoryMapped");
+  //Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,"MemoryMapped");
   Array<VerilogPortSpec> externalMemory = ObtainGroupByName(interface,"ExternalMemory");
   
   bool containsRun = false;
@@ -4361,10 +4358,14 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   bool containsMemoryMapped = RemoveGroupInPlace(interface,"MemoryMapped");
   bool containsMemories = RemoveGroupInPlace(interface,"ExternalMemory");
   
-  auto AdvanceClock = [m]() -> void{
-    m->Blank();
+  auto AdvanceClock = [m](bool blanks = true) -> void{
+    if(blanks){
+      m->Blank();
+    }
     m->RawStatement("`ADVANCE");
-    m->Blank();
+    if(blanks){
+      m->Blank();
+    }
   };
 
   if(containsMemoryMapped){
@@ -4434,7 +4435,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     m->Set("addrToInsert","addr_i");
     m->Set("valueToInsert","data_i");
 
-    AdvanceClock();
+    AdvanceClock(true);
 
     m->Set("insertValue","0");
     m->Set("addrToInsert","0");
@@ -4496,48 +4497,58 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   }
   
   if(containsRun){
+    m->LocalParam("SIM_TIME_NO_DONE","10");
+
+    m->Integer("i");
+    
     m->Task("RunAccelerator");
 
-    m->Set("run","1");
+    m->SetForced("run","1",true);
 
     AdvanceClock();
 
-    m->Set("run","0");
+    m->SetForced("run","0",true);
     if(containsRunning){
-      m->Set("running","1");
+      m->SetForced("running","1",true);
     }
 
     AdvanceClock();
     
     if(containsDone){
-      m->Loop("","done","");
-      AdvanceClock();
+      m->Loop("","~done","");
+      AdvanceClock(false);
+      m->EndLoop();
+    } else {
+      m->Loop("i = 0","i < SIM_TIME_NO_DONE","i = i + 1");
+      AdvanceClock(false);
       m->EndLoop();
     }
 
     if(containsRunning){
-      m->Set("running","0");
+      m->SetForced("running","0",true);
     }
   
     m->EndTask();
   } else if(containsRunning){
     m->Task("SetRunning");
-    m->Set("running","1");
+    m->SetForced("running","1",true);
     
     AdvanceClock();
 
     if(containsDone){
-      m->Loop("","done","");
+      m->Loop("","~done","");
       AdvanceClock();
+      m->EndLoop();
+    } else {
+      m->Loop("i = 0","i < SIM_TIME_NO_DONE","i = i + 1");
+      AdvanceClock(false);
       m->EndLoop();
     }
 
-    m->Set("running","0");
+    m->SetForced("running","0",true);
 
     m->EndTask();
   }
-  
-  printf("Contains running %d\n\n\n\n",containsRunning);
   
   m->InitialBlock();
 

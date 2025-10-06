@@ -1073,12 +1073,6 @@ address Test(a,b){
   stride = stride;
   }
 
-Versat Spec:
-
-- The using stuff is kinda weird syntax. What we probably want is to think about types as parameterizable.
--- Insteand of "using(Addr) VRead ...", we probably want "VRead(Addr) ...", where Addr is a parameter for the VRead type.
--- We then end up with two types of parameters, Versat parameters and Verilog parameters, which we probably want to collapse into a single type from the perspective of the user and let Versat handle how to route the parameter itself.
-
 Usability:
 x
 - Need to check parameters and sizes and report stuff at Versat compile time.
@@ -1091,9 +1085,7 @@ Code Generation:
 
 - Header file generating code that should depend on Metadata.
 
-- Usability.
-
-- Optimizations:
+Optimizations:
 
 -- We could collapse certain loops, assuming that we have the info needed (or we can push it into runtime).
 -- Leftover loops can be used to reduce the preassure on the lower loops (less bits needed and stuff like that, we currently pay for the upper loops bits wether we use them or not)
@@ -1137,14 +1129,6 @@ Blindness:
 - We currently do not keep track of memory usage. Which functions use the most memory, which file uses the most memory, etc. This can easily be accomplished by adding code to the ARENA macros used.
 
 Features:
-
-- I'm considering removing the usage of the template engine for the generation of code and instead replace it with an "emitter" based approach. Templates work for a good amount of static and low amount of dynamic data but for a lot of dynamic data they kinda fall apart. Furthermore, the amount of complexity required to implement them is kinda not worth it.
-
--- I'm considering writting an emitter for Verilog that should be useful for a lot of situations.
-
-- The template engine could be updated to compile at build time, offer compile time checks instead of runtime and simplify data management since we could pass and use C code to access and iterate the data. This means that passing large structures is preferebly instead of doing what we do now where we want to minimize data passing this way. Read the NOTEs that are contained inside the OutputTopLevelFiles.
-
-- The Address gen are kinda adhoc in the generated code. Need to find a way of binding them to the accelerator that uses them (some declaration inside the module/merge that indicates to Versat that the address gen is intended to be used for that unit.). As a consequence of this, we might need to generate different address gens for different structs because of merge. I think I have a good enough merge backbone to implement this in a couple of days, but I also would probably like to finalize the static portion before progressing to tackle this problem.
 
 - We could implement a shared delay as well as config. To make it even more powerful, we could make it so we could share the delay of some units and the config of others and have it overlap somewhat. How I would represent that in syntax I do not know.
 

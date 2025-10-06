@@ -139,6 +139,7 @@ enum VASTType{
   VASTType_IF,
   VASTType_LOOP,
   VASTType_SET,
+  VASTType_FORCED_SET,
   VASTType_EXPR,
   VASTType_ALWAYS_BLOCK,
   VASTType_INITIAL_BLOCK,
@@ -216,6 +217,7 @@ struct VAST{
     struct {
       String name;
       String expr;
+      bool isForcedCombLike;
     } assignOrSet; 
 
     struct {
@@ -338,6 +340,8 @@ struct VEmitter{
 
   void Set(String identifier,int val);
   void Set(String identifier,String expr);
+
+  void SetForced(String identifier,String expr,bool isCombLike); // isCombLike is '=', otherwise it is '<=" 
 
   void If(String expr);
   void ElseIf(String expr);
