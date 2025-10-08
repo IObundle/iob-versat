@@ -722,8 +722,14 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
     res.nUnitsIO += 1; // For the DMA
   }
 
-  if(globalOptions.insertAdditionalDebugRegisters){
+  if(globalOptions.insertDebugRegisters){
     AddRegister(VersatRegister_Debug);
+  }
+
+  if(globalOptions.insertProfilingRegisters){
+    for(ProfilingVersatRegisters_GenType reg : ProfilingVersatRegisters){
+      AddRegister(reg.t);
+    }
   }
 
   res.nConfigs += res.versatConfigs;

@@ -2495,9 +2495,10 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum){
 // ============================================================================
 // Global special Symbolic Expressions 
 
-static SymbolicExpression SYM_INST_zero  = {.type = SymbolicExpressionType_LITERAL,.literal = 0};
-static SymbolicExpression SYM_INST_one   = {.type = SymbolicExpressionType_LITERAL,.literal = 1};
-static SymbolicExpression SYM_INST_eight = {.type = SymbolicExpressionType_LITERAL,.literal = 8};
+static SymbolicExpression SYM_INST_zero      = {.type = SymbolicExpressionType_LITERAL,.literal = 0};
+static SymbolicExpression SYM_INST_one       = {.type = SymbolicExpressionType_LITERAL,.literal = 1};
+static SymbolicExpression SYM_INST_eight     = {.type = SymbolicExpressionType_LITERAL,.literal = 8};
+static SymbolicExpression SYM_INST_thirtyTwo = {.type = SymbolicExpressionType_LITERAL,.literal = 32};
 
 static SymbolicExpression SYM_INST_dataW    = {.type = SymbolicExpressionType_VARIABLE,.variable = "DATA_W"};
 static SymbolicExpression SYM_INST_addrW    = {.type = SymbolicExpressionType_VARIABLE,.variable = "ADDR_W"};
@@ -2509,6 +2510,7 @@ static SymbolicExpression SYM_INST_lenW     = {.type = SymbolicExpressionType_VA
 SymbolicExpression* SYM_zero = &SYM_INST_zero;
 SymbolicExpression* SYM_one = &SYM_INST_one;
 SymbolicExpression* SYM_eight = &SYM_INST_eight;
+SymbolicExpression* SYM_thirtyTwo = &SYM_INST_thirtyTwo;
 
 SymbolicExpression* SYM_dataW = &SYM_INST_dataW;
 SymbolicExpression* SYM_addrW = &SYM_INST_addrW;

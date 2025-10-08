@@ -139,6 +139,7 @@ enum VASTType{
   VASTType_IF,
   VASTType_LOOP,
   VASTType_SET,
+  VASTType_SIMPLE_OP,
   VASTType_FORCED_SET,
   VASTType_EXPR,
   VASTType_ALWAYS_BLOCK,
@@ -204,6 +205,11 @@ struct VAST{
       Array<String> sensitivity;
       ArenaList<VAST*>* declarations;
     } alwaysBlock;
+
+    struct {
+      String identifier;
+      char op;
+    } simpleOp;
 
     struct {
       ArenaList<VAST*>* declarations;
@@ -340,6 +346,8 @@ struct VEmitter{
 
   void Set(String identifier,int val);
   void Set(String identifier,String expr);
+
+  void Increment(String identifier);
 
   void SetForced(String identifier,String expr,bool isCombLike); // isCombLike is '=', otherwise it is '<=" 
 

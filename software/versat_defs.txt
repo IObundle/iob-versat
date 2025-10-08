@@ -115,23 +115,49 @@ define_map possibleAttributes{
    VERSAT_STAGE   : versat_stage
 };
 
+// Note: The position of the registers is variable and depends on user flags. Some flags add registers and the position of the 
+// register on the accelerator changes based on the flags passed.
 enum VersatRegister{
-    VersatRegister_Control,
-    VersatRegister_DmaInternalAddress,
-    VersatRegister_DmaExternalAddress,
-    VersatRegister_DmaTransferLength,
-    VersatRegister_DmaControl,
-    VersatRegister_Debug,
+   VersatRegister_Control,
+   VersatRegister_DmaInternalAddress,
+   VersatRegister_DmaExternalAddress,
+   VersatRegister_DmaTransferLength,
+   VersatRegister_DmaControl,
+   VersatRegister_Debug,
+   VersatRegister_ProfileControl,
+   VersatRegister_ProfileRunCount,
+   VersatRegister_ProfileCyclesSinceLastReset,
+   VersatRegister_ProfileRunningCycles,
+   VersatRegister_ProfileDatabusValid,
+   VersatRegister_ProfileDatabusValidAndReady,
+   VersatRegister_ProfileConfigurationsSet,
+   VersatRegister_ProfileConfigurationsSetWhileRunning,
 };
 
+// Any value added here is automatically added to generated accelerator with profiling enabled. No logic is given, we just allocate memory mapped space.
+table ProfilingVersatRegisters(VersatRegister t){
+   VersatRegister_ProfileControl,
+   VersatRegister_ProfileRunCount,
+   VersatRegister_ProfileCyclesSinceLastReset,
+   VersatRegister_ProfileRunningCycles,
+   VersatRegister_ProfileDatabusValid,
+   VersatRegister_ProfileDatabusValidAndReady,
+   VersatRegister_ProfileConfigurationsSet,
+   VersatRegister_ProfileConfigurationsSetWhileRunning,   
+};
+
+/*
+Not in use currently.
 map versatRegister(VersatRegister t,String name){
    VersatRegister_Control              : "Control",
    VersatRegister_DmaInternalAddress   : "Dma Internal Address",
    VersatRegister_DmaExternalAddress   : "Dma External Address",
    VersatRegister_DmaTransferLength    : "Dma Transfer Length",
    VersatRegister_DmaControl           : "Dma Control",
-   VersatRegister_Debug                : "Debug"
+   VersatRegister_Debug                : "Debug",
+   VersatRegister_ProfileControl       : "Profile Control"
 };
+*/
 
 file ExtractVerilatedSignals = ./scripts/ExtractVerilatedSignals.py;
 file GetVerilatorRoot = ./scripts/GetVerilatorRoot.sh;
@@ -141,7 +167,7 @@ file MakefileTemplate    = ./software/templates/versat_makefile.tpl;
 file TopInstanceTemplate = ./software/templates/versat_top_instance.tpl;
 file WrapperTemplate     = ./software/templates/versat_wrapper.tpl;
 file VersatTemplate      = ./software/templates/iob_versat_template.tpl;
+file FirmwareTemplate    = ./software/templates/iob-versat.tpl;
 
 fileGroup defaultVerilogUnits = ./hardware/src/units;
 fileGroup defaultVerilogFiles = ./hardware/src | ./hardware/src/units;
-fileGroup defaultSoftwareFiles = ./software/src;

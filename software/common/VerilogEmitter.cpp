@@ -262,6 +262,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_INTERFACE_DECL:
     case VASTType_INTEGER_DECL:
     case VASTType_LOCAL_PARAM:
+    case VASTType_SIMPLE_OP:
     case VASTType_SET:
     case VASTType_FORCED_SET:
     case VASTType_EXPR:
@@ -334,6 +335,7 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     FULL_SWITCH(type){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
+    case VASTType_SIMPLE_OP:
     case VASTType_SET:
     case VASTType_FORCED_SET:
     case VASTType_LOCAL_PARAM:
@@ -387,6 +389,7 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
     case VASTType_INTERFACE_DECL:
+    case VASTType_SIMPLE_OP:
     case VASTType_LOCAL_PARAM:
     case VASTType_SET:
     case VASTType_FORCED_SET:
@@ -823,6 +826,15 @@ void VEmitter::Set(String identifier,String expr){
   setDecl->assignOrSet.expr = PushString(arena,expr);
 
   InsertDeclaration(setDecl);
+}
+
+void VEmitter::Increment(String identifier){
+  VAST* incrDecl = PushVAST(VASTType_SIMPLE_OP,arena);
+  
+  incrDecl->simpleOp.identifier = PushString(arena,identifier);
+  incrDecl->simpleOp.op = '+';
+  
+  InsertDeclaration(incrDecl);
 }
 
 void VEmitter::SetForced(String identifier,String expr,bool isCombLike){
@@ -1392,6 +1404,19 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     } else {
       b->PushString("%.*s <= %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
     }
+  } break;
+
+  case VASTType_SIMPLE_OP:{
+    b->PushSpaces(level * 2);
+    String name = top->simpleOp.identifier;
+    char op = top->simpleOp.op;
+    
+    String eq = "<=";
+    if(state->isComb){
+      eq = "=";
+    }
+    
+    b->PushString("%.*s %.*s %.*s %c 1;",UN(name),UN(eq),UN(name),op);
   } break;
 
   case VASTType_FORCED_SET:{

@@ -69,6 +69,30 @@ float VersatUnitReadFloat(volatile const void* baseaddr,int index);
 void SignalLoop();
 void VersatLoadDelay(volatile const unsigned int* delayBuffer);
 
+// ======================================
+// Debug facilities
+
+// TODO: Only generate this if the flag is set.
+
+typedef struct{
+  bool databusIsActive;
+} VersatDebugState;
+
+typedef struct{
+  int runCount;
+  int cyclesSinceLastReset;
+  int runningCycles;
+  int databusValid;
+  int databusValidAndReady;
+  int configurationsSet;
+  int configurationsSetWhileRunning;
+} VersatProfile;
+
+VersatDebugState VersatDebugGetState();
+VersatProfile    VersatProfileGet();
+void             VersatProfileReset();
+void             VersatPrintProfile(VersatProfile profile);
+
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
 // Their embedded counterparts simply do nothing
 void ConfigEnableDMA(bool value);

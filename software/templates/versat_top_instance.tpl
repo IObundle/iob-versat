@@ -85,8 +85,6 @@ assign done = (!(|runCounter) && (&unitDone));
 
 wire dma_running;
 
-@{interface}
-
 @{emitIO}
 
 always @(posedge clk,posedge rst)
@@ -101,7 +99,6 @@ begin
 end
 
 @{dmaInstantiation}
-@{dmaInstantiation2}
 
 always @(posedge clk,posedge rst_int)
 begin
@@ -119,6 +116,14 @@ begin
 end
 
 assign memoryMappedAddr = @{memoryConfigDecisionExpr};
+
+@{profilingStuff}
+
+// Control interface write portion
+@{controlWriteInterface}
+
+// Control interface read portion
+@{controlReadInterface}
 
 @{unitsMappedDecl}
 

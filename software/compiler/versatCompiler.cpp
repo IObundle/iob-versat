@@ -193,7 +193,11 @@ parse_opt (int key, char *arg,
     } break;
 
     case 128: {
-      opts->options->insertAdditionalDebugRegisters = true;
+      opts->options->insertDebugRegisters = true;
+    } break;
+
+    case 129: {
+      opts->options->insertProfilingRegisters = true;
     } break;
       
     case 'g': opts->options->debugPath = arg; opts->options->debug = true; break;
@@ -210,7 +214,8 @@ parse_opt (int key, char *arg,
 // TODO: Better error handling
 struct argp_option options[] =
   {
-    { "debug", 128 ,0, 0, "Insert debug utilities on the generated accelerator"},
+    { "debug", 128 ,0, 0, "Insert debug registers on the generated accelerator"},
+    { "profile", 129 ,0, 0, "Insert profiling registers on the generated accelerator"},
     { 0, 'b',"Size",   0, "Databus size connected to external RAM (8,16,default:32,64,128,256)"},
     { 0, 'd', 0,       0, "Use DMA"},
     { 0, 'D', 0,       0, "Architecture has databus"},
@@ -887,10 +892,6 @@ int main(int argc,char* argv[]){
   }
 
   int res = CopyFileGroup(defaultVerilogFiles,globalOptions.hardwareOutputFilepath,true,FilePurpose_VERILOG_COMMON_CODE);
-  if(res){
-    return res;
-  }
-  res = CopyFileGroup(defaultSoftwareFiles,globalOptions.softwareOutputFilepath,false,FilePurpose_SOFTWARE);
   if(res){
     return res;
   }

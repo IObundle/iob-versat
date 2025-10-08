@@ -161,6 +161,7 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum);
 extern SymbolicExpression* SYM_zero;
 extern SymbolicExpression* SYM_one;
 extern SymbolicExpression* SYM_eight;
+extern SymbolicExpression* SYM_thirtyTwo;
 extern SymbolicExpression* SYM_dataW;
 extern SymbolicExpression* SYM_addrW;
 extern SymbolicExpression* SYM_axiAddrW;

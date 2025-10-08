@@ -998,4 +998,19 @@ float VersatUnitReadFloat(volatile const void* base,int index){
   return *view;
 }
 
+VersatDebugState VersatDebugGetState(){
+  return (VersatDebugState){};
+}
+
+VersatProfile VersatProfileGet(){
+  return (VersatProfile){};
+}
+
+void VersatPrintProfile(VersatProfile p){
+}
+
+void VersatProfileReset(){
+
+}
+
 #endif
