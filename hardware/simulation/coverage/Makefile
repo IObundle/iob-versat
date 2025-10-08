@@ -41,7 +41,7 @@ MERGED_DAT=merged.dat
 	verilator_coverage --write $(MERGED_DAT) $*_cov.dat
 	# annotate coverage
 	verilator_coverage --annotate $*_cov_annotated --annotate-min 1 --annotate-all $(MERGED_DAT)
-	./$(SCRIPTS_DIR)/iob_cov_analyze.py ./$*_cov_annotated -o $@ -E $*_tb.v
+	./$(SCRIPTS_DIR)/iob_cov_analyze.py ./$*_cov_annotated -o $@ -E $*_tb.v $(if $(wildcard $*_coverage.waiver),-T --waive $*_coverage.waiver)
 
 clean:
 	rm -rf $(VERILATED_PATH) *.vcd

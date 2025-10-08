@@ -4,8 +4,8 @@
 module DebugReadMem_tb (
 
 );
-  localparam AXI_ADDR_W = 2;
-  localparam AXI_DATA_W = 2;
+  localparam AXI_ADDR_W = 4;
+  localparam AXI_DATA_W = 32;
   localparam LEN_W = 8;
   // Control
   reg [(1)-1:0] running;
@@ -27,7 +27,8 @@ module DebugReadMem_tb (
   wire [(LEN_W)-1:0] databus_len_0;
   wire [(1)-1:0] databus_last_0;
 
-  integer i;
+  integer i, j;
+  reg [AXI_DATA_W-1:0] write_data;
 
   localparam CLOCK_PERIOD = 10;
 
@@ -144,16 +145,21 @@ module DebugReadMem_tb (
     `ADVANCE;
 
     // fill memory with data
-    for(i=0;i<(2**AXI_ADDR_W);i=i+1) begin
-        WriteMemory(i[AXI_ADDR_W-1:0],i[AXI_DATA_W-1:0]);
+    // AXI_DATA_W/8
+    write_data = 0;
+    for(i=0;i<(2**AXI_ADDR_W);i=i+(AXI_DATA_W/8)) begin
+        WriteMemory(i[AXI_ADDR_W-1:0],write_data);
+        write_data = ~write_data;
     end
 
     `ADVANCE;
 
     // read memory
-    for(i=0;i<(2**AXI_ADDR_W);i=i+1) begin
-        address = i[AXI_ADDR_W-1:0];
-        RunAccelerator();
+    for(j=0;j<2;j=j+1) begin
+        for(i=0;i<(2**AXI_ADDR_W);i=i+1) begin
+            address = i[AXI_ADDR_W-1:0];
+            RunAccelerator();
+        end
     end
 
     $finish();
