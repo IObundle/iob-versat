@@ -1,0 +1,10 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// RegFile verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive my_2p_asym_ram.v:1:128 "Waive Memory Module"
+waive iob_ram_2p.v:1:67 "Waive Memory Module"

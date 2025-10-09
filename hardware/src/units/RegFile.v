@@ -50,8 +50,11 @@
 );
 
 wire lastCycle;
+reg ext_read_en;
 
-   DelayCalc delay_inst (
+   DelayCalc #(
+       .DELAY_W(DELAY_W)
+   ) delay_inst (
    .clk(clk),
    .rst(rst),
 
@@ -76,8 +79,8 @@ assign ext_2p_addr_in_1 = address1;
 assign ext_2p_write_0 = write;
 assign ext_2p_write_1 = write;
 
-assign ext_2p_read_0 = 1'b1; //read;
-assign ext_2p_read_1 = 1'b1; //read;
+assign ext_2p_read_0 = ext_read_en; //read;
+assign ext_2p_read_1 = ext_read_en; //read;
 
 assign out0 = ext_2p_data_in_0;
 assign out1 = ext_2p_data_in_1;
@@ -101,11 +104,13 @@ always @(posedge clk,posedge rst) begin
       dataToWrite <= 0;
       address0 <= 0;
       address1 <= 0;
+      ext_read_en <= 1'b0;
    end else begin
       write <= 1'b0;
       read <= 1'b0;
       read_reg <= read;
       write_reg <= 0;
+      ext_read_en <= 1'b1;
 
       address0 <= {selectedOutput0,2'b00};
       address1 <= {selectedOutput1,2'b00};
@@ -129,67 +134,5 @@ always @(posedge clk,posedge rst) begin
       end
    end
 end
-
-// A set amount of registers
-
-//reg [DATA_W-1:0] mem[NUMBER_REGS-1:0];
-/*
-wire [DATA_W-1:0] inputs[NUMBER_REGS-1:0];
-wire [DATA_W-1:0] outputs[NUMBER_REGS-1:0];
-wire [DATA_W-1:0] reg_rdata[NUMBER_REGS-1:0];
-wire [NUMBER_REGS-1:0] reg_rvalid;
-wire [NUMBER_REGS-1:0] reg_done;
-
-reg [3:0] validRead;
-
-assign rdata = reg_rdata[validRead];
-
-assign done = &reg_done; 
-assign rvalid = reg_rvalid[validRead]; 
-
-assign out0 = outputs[selectedOutput0];
-assign out1 = outputs[selectedOutput1];
-
-integer j;
-always @* begin
-   validRead = 0;
-   for(j = 0; j < NUMBER_REGS; j++) begin
-      if(valid && addr[ADDR_W-1:2] == j[3:0]) begin
-         validRead = j[3:0];
-      end
-   end
-end
-
-generate
-genvar i;
-for(i = 0; i < NUMBER_REGS; i = i + 1) begin : genRegs
-   Reg register(
-      .clk(clk),
-      .rst(rst),
-
-      .running(running),
-      .run(run),
-      .done(reg_done[i]),
-
-      // native interface 
-      .addr(addr[1:0]),
-      .wstrb(wstrb),
-      .wdata(wdata),
-      .valid(valid && (addr[ADDR_W-1:2] == i[3:0])),
-      .rvalid(reg_rvalid[i]),
-      .rdata(reg_rdata[i]),
-
-      //input / output data
-      .in0(in0),
-      .out0(outputs[i]),
-
-      .delay0(delay0),
-
-      .disabled(disabled || (selectedInput != i[3:0])),
-      .currentValue()
-      );
-end
-endgenerate
-*/
 
 endmodule
