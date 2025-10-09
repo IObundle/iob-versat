@@ -88,6 +88,7 @@ typedef struct{
   int configurationsSetWhileRunning;
 } VersatProfile;
 
+void             DebugRunAccelerator(int times, int maxCycles); // Mainly for cases where the accelerator is hanging, we put a upper bound in the amount of cycles that we wait for.
 VersatDebugState VersatDebugGetState();
 VersatProfile    VersatProfileGet();
 void             VersatProfileReset();

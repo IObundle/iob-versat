@@ -187,6 +187,29 @@ void VersatLoadDelay(volatile const unsigned int* buffer){
 // ======================================
 // Debug facilities
 
+static inline void DebugEndAccelerator(int upperBound){
+  //PRINT("End accelerator\n");
+  for(int i = 0; i < upperBound; i++){  
+    volatile int val = MEMGET(versat_base,VersatRegister_Control);
+    if(val){
+      break;
+    }
+  } 
+}
+
+static inline void DebugRunAcceleratorOnce(int times,int upperbound){ // times inside value amount
+   MEMSET(versat_base,VersatRegister_Control,times);
+   DebugEndAccelerator(upperbound);
+}
+
+void DebugRunAccelerator(int times, int maxCycles){
+  for(; times > 0xffff; times -= 0xffff){
+    DebugRunAcceleratorOnce(times,maxCycles);
+  } 
+
+  DebugRunAcceleratorOnce(times,maxCycles);
+}
+
 VersatDebugState VersatDebugGetState(){
   VersatDebugState res = {};
 

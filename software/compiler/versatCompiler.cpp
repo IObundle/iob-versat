@@ -1021,6 +1021,12 @@ An empty AddressGen is not working correctly. The address gen parser is programm
 
 /*
 
+Code generation for customizable features:
+
+- There exists a bunch of code that gets generated even though it is not needed. Stuff like profile functions are declared and even defined in wrapper and firmware. While this is not a problem, since the stuff that is extra does not affect the correctness or causes any error, one thing that is does is slow down the testing, since now every change affects all the tests even though it should only change the tests that actually use the features.
+
+-- Basically, it is not enough to control generation of functions, we also should control stuff like function declarations and the likes in order to make it so that tests that do not use the features are not forced to be recompiled and retested for a change that does not affect them.
+
 Code generation lint friendly:
 
 - If a module is composed of units that do not contain certain signals, like clk, rst, run and the likes, then the module should not have those signals as well. The only thing missing to implement this is changing the wrapper to support the verilated unit not containing these signals.

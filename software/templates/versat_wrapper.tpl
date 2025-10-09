@@ -998,6 +998,13 @@ float VersatUnitReadFloat(volatile const void* base,int index){
   return *view;
 }
 
+// ======================================
+// Debug stuff currently disabled for pc-emul, altough we could do something in here to provide some data back.
+
+void DebugRunAccelerator(int times, int maxCycles){
+  RunAccelerator(times);
+} 
+
 VersatDebugState VersatDebugGetState(){
   return (VersatDebugState){};
 }
