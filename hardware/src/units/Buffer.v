@@ -10,14 +10,6 @@ module Buffer #(
 
    input running,
 
-   // External memory
-   //output [DELAY_W-1:0]     ext_2p_addr_out_0,
-   //output [DELAY_W-1:0]     ext_2p_addr_in_0,
-   //output                  ext_2p_write_0,
-   //output                  ext_2p_read_0,
-   //input  [DATA_W-1:0]     ext_2p_data_in_0,
-   //output [DATA_W-1:0]     ext_2p_data_out_0,
-
    //input / output data
    input [DATA_W-1:0] in0,
 
