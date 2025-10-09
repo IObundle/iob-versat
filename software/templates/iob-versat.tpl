@@ -194,7 +194,7 @@ static inline void DebugEndAccelerator(int upperBound){
   for(int i = 0; i < upperBound; i++){  
     volatile int val = MEMGET(versat_base,VersatRegister_Control);
     if(val){
-      break;
+      return;
     }
   } 
   PRINT("Accelerator reached upperbound\n");
