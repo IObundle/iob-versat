@@ -2409,6 +2409,7 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
     m->AlwaysBlock("clk","rst_int");
     m->If("rst_int");
     m->Set("soft_reset","0");
+    m->Set("runCounter","0");
     m->Set("signal_loop","0");
     if(globalOptions.useDMA){
       m->Set("dma_length","0");
@@ -2417,11 +2418,16 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
     }
     m->Else();
 
+    m->If("run");
+    m->Set("runCounter","runCounter - 1");
+    m->EndIf();
+
     m->Set("soft_reset","0");
     m->Set("signal_loop","0");
     m->If("csr_valid && we");
 
     m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Control)));
+      m->Set("runCounter","runCounter + csr_wdata[15:0]");
       m->Set("soft_reset","csr_wdata[31]");
       m->Set("signal_loop","csr_wdata[30]");
     m->EndIf();
@@ -4128,7 +4134,8 @@ static iptr WRITE_@{0} = 0;)FOO";
 
 void OutputFirmware(String softwarePath,VersatComputedValues val){
   TEMP_REGION(temp,nullptr);
-
+  
+  //TODO: The src folder is not good. We want to remove this. We should not depend on IOb stuff in Versat code. 
   FILE* file = OpenFileAndCreateDirectories(PushString(temp,"%.*s/src/iob-versat.c",UN(softwarePath)),"w",FilePurpose_SOFTWARE);
   DEFER_CLOSE_FILE(file);
 
@@ -4180,16 +4187,22 @@ static int Percentage(int smaller,int bigger){
 }
 
 void VersatPrintProfile(VersatProfile p){
-  PRINT("Runs profiled:%d\n",p.runCount);
-  PRINT("Total cycles:%d\n",p.cyclesSinceLastReset);
-  PRINT("Cycles with accelerator running: %d (%d%%)\n",p.runningCycles,Percentage(p.runningCycles,p.cyclesSinceLastReset));
-  PRINT("Cycles databus valid: %d (%d%%)\n",p.databusValid,Percentage(p.databusValid,p.cyclesSinceLastReset));
-  PRINT("Cycles databus valid and ready: %d (%d%%)\n",p.databusValidAndReady,Percentage(p.databusValidAndReady,p.cyclesSinceLastReset));
-  PRINT("Databus efficiency: %d%%\n",Percentage(p.databusValidAndReady,p.databusValid));
+  PRINT("Runs profiled:%d\n", p.runCount);
+  PRINT("Total cycles:%d\n", p.cyclesSinceLastReset);
+  PRINT("  Cycles with accelerator running: %d (%d%%)\n", p.runningCycles,
+        Percentage(p.runningCycles, p.cyclesSinceLastReset));
+  PRINT("    Cycles databus valid: %d (%d%%)\n", p.databusValid,
+        Percentage(p.databusValid, p.runningCycles));
+  PRINT("    Cycles databus valid and ready: %d (%d%%)\n", p.databusValidAndReady,
+        Percentage(p.databusValidAndReady, p.runningCycles));
+  PRINT("      Databus efficiency: %d%%\n",
+        Percentage(p.databusValidAndReady, p.databusValid));
 
-  PRINT("Configurations set: %d\n",p.configurationsSet);
-  PRINT("Configurations set while accel running: %d\n",p.configurationsSetWhileRunning);
-  PRINT("Configurations efficiency: %d%%\n",Percentage(p.configurationsSet,p.configurationsSetWhileRunning));
+  PRINT("Configurations set: %d\n", p.configurationsSet);
+  PRINT("  Configurations set while accel running: %d\n",
+        p.configurationsSetWhileRunning);
+  PRINT("  Configurations efficiency: %d%%\n",
+        Percentage(p.configurationsSet, p.configurationsSetWhileRunning));
 }
 )FOO";
 

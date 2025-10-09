@@ -41,7 +41,7 @@ module versat_instance #(
 
 @{wireDecls}
 
-wire wor_rvalid;
+//wire wor_rvalid;
 
 wire data_valid;
 wire [ADDR_W-1:0] address;
@@ -99,21 +99,6 @@ begin
 end
 
 @{dmaInstantiation}
-
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      runCounter <= 0;
-   end else begin
-      if(run)
-         runCounter <= runCounter - 1;
-
-      if(csr_valid && we) begin
-         if(csr_addr == 0)
-            runCounter <= runCounter + csr_wdata[15:0];
-      end
-   end
-end
 
 assign memoryMappedAddr = @{memoryConfigDecisionExpr};
 
