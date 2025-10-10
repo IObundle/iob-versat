@@ -1,0 +1,39 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// Buffer verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive Buffer.v:28 "Occupancy tied to FIFO level, MSB always 0"
+
+waive iob_fifo_sync.v:25 "Clock always enabled"
+waive iob_fifo_sync.v:26 "Async reset always 0"
+waive iob_fifo_sync.v:33 "Buffer logic does not allow FIFO write full condition"
+waive iob_fifo_sync.v:146 "Buffer logic does not allow FIFO write full condition"
+waive iob_fifo_sync.v:51 "Buffer logic does not allow level MSB to activate (FIFO never overflows)"
+waive iob_fifo_sync.v:100:101 "Buffer logic does not allow level MSB to activate (FIFO never overflows)"
+waive iob_fifo_sync.v:116 "Buffer logic does not allow level MSB to activate (FIFO never overflows)"
+waive iob_fifo_sync.v:124:125 "Buffer logic does not perform read only operations on FIFO"
+
+waive iob_ram_2p.v:40:41 "Memory is never initialized"
+
+waive iob_asym_converter.v:32 "Clock always enabled"
+waive iob_asym_converter.v:33 "Async reset always 0"
+
+waive versat_counter.v:15 "Clock always enabled"
+waive versat_counter.v:16 "Async reset always 0"
+
+waive iob_reg_re.v:15 "Clock always enabled"
+waive iob_reg_re.v:16 "Async reset always 0"
+
+waive iob_reg_r.v:15 "Clock always enabled"
+waive iob_reg_r.v:16 "Async reset always 0"
+waive iob_reg_r.v:20:24 "Level Reg MSB is always 0. See level waivers"
+
+waive iob_reg.v:16 "Clock always enabled"
+waive iob_reg.v:17 "Async reset always 0"
+waive iob_reg.v:28:29 "Async reset always 0. Branch never taken"
+waive iob_reg.v:30:31 "Clock enale always 1. Branch always taken"
+waive iob_reg.v:19:20 "Level Reg MSB is always 0. See level waivers"

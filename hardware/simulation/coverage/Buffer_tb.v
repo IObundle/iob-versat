@@ -4,7 +4,7 @@
 module Buffer_tb (
 
 );
-  localparam DELAY_W = 2;
+  localparam DELAY_W = 4;
   localparam DATA_W = 1;
   // Inputs
   reg [(DATA_W)-1:0] in0;
@@ -58,29 +58,31 @@ module Buffer_tb (
 
     `ADVANCE;
 
-    for(i=0;i<(2**DELAY_W);i=i+1) begin
-      rst = 1;
-      `ADVANCE;
-      rst = 0;
+    amount = {DELAY_W{1'b1}};
+
+    for(i=0;i<(2**(DELAY_W+1));i=i+1) begin
       running = 1;
-      amount = i[DELAY_W-1:0];
       in0 = i[0];
-
       `ADVANCE;
-      for(j=0;j<i;j=j+1) begin
-        `ADVANCE;
-      end
-
-      `ADVANCE
-
-      running = 0;
     end
 
-    `ADVANCE;
-
+    running = 0;
     amount = 0;
 
     `ADVANCE;
+    
+    rst = 1;
+
+    `ADVANCE;
+
+    rst = 0;
+
+    for(i=0;i<(2**(DELAY_W+3));i=i+1) begin
+      running = 1;
+      in0 = i[DELAY_W+1];
+      `ADVANCE;
+    end
+
 
     $finish();
   end
