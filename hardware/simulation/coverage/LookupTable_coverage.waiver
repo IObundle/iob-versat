@@ -1,0 +1,16 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// Buffer verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive my_dp_asym_ram.v:1:178 "Testbench auxiliary module"
+waive my_iob_dp_ram.v:1:79 "Testbench auxiliary module"
+
+waive LookupTable.v:21 "rdata is always 0"
+waive LookupTable.v:32 "Port is always enabled"
+waive LookupTable.v:36 "Port 1 is always used for read. Write data is always 0."
+waive LookupTable.v:38 "Port is always enabled"
+waive LookupTable.v:39 "Port 1 is always used for read. Write enable is always 0."
