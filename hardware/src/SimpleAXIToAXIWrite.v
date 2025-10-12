@@ -114,16 +114,15 @@ module SimpleAXItoAXIWrite #(
    );
 
    // Address write constants
-   assign axi_awid_o    = 'b0;
+   assign axi_awid_o    = 0;
    assign axi_awsize_o  = axi_size;
    assign axi_awburst_o = 'b01;  // INCR
-   assign axi_awlock_o  = 'b0;
-   assign axi_awcache_o = 'h2;
-   assign axi_awprot_o  = 'b010;
-   assign axi_awqos_o   = 'h0;
+   assign axi_awlock_o  = 0;
+   assign axi_awcache_o = 0;
+   assign axi_awprot_o  = 0;
+   assign axi_awqos_o   = 0;
 
    reg [(AXI_DATA_W/8)-1:0] wstrb;
-   //assign axi_wdata_o = m_wdata_i;
    assign axi_wstrb_o  = wstrb;
 
    assign axi_bready_o = 1'b1;  // We ignore write response
@@ -163,7 +162,6 @@ module SimpleAXItoAXIWrite #(
          case (state)
             3'h0: begin  // Wait one cycle for transfer controller to calculate things.
                if (m_wvalid_i) begin
-                  //awvalid <= 1'b1;
                   stored_offset  <= m_waddr_i[OFFSET_W-1:0];
                   state          <= 3'h1;
                   first_transfer <= 1'b1;
@@ -177,6 +175,7 @@ module SimpleAXItoAXIWrite #(
                state         <= 3'h2;
             end
             3'h2: begin  // Write address set
+               // awvalid is 1 at this point
                if (axi_awready_i) begin
                   awvalid <= 1'b0;
                   state   <= 3'h4;
