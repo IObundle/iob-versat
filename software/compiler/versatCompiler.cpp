@@ -1031,6 +1031,10 @@ Code generation lint friendly:
 
 - If a module is composed of units that do not contain certain signals, like clk, rst, run and the likes, then the module should not have those signals as well. The only thing missing to implement this is changing the wrapper to support the verilated unit not containing these signals.
 
+More user error checking:
+
+- Verilog parsed content does not check direction of ports. We should encode all the interfaces that we expect as data and 
+
 Error handling:
 
 - Versat is currently incapable of handling even the slighest deviation from good data. Very poor handling of error conditions.

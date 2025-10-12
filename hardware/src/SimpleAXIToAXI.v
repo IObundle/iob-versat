@@ -64,6 +64,40 @@ module SimpleAXItoAXI #(
    input rst_i
 );
 
+   wire temp_axi_awvalid;
+   wire temp_axi_awready;
+   wire temp_axi_wvalid;
+   wire temp_axi_wready;
+   wire temp_axi_bvalid;
+   wire temp_axi_bready;
+
+   VersatAxiDelay delayAW(
+      .s_valid_i(temp_axi_awvalid),
+      .s_ready_o(temp_axi_awready),
+      .m_valid_o(axi_awvalid_o),
+      .m_ready_i(axi_awready_i),
+      .clk_i(clk_i),
+      .rst_i(rst_i)      
+   );
+
+   VersatAxiDelay delayW(
+      .s_valid_i(temp_axi_wvalid),
+      .s_ready_o(temp_axi_wready),
+      .m_valid_o(axi_wvalid_o),
+      .m_ready_i(axi_wready_i),
+      .clk_i(clk_i),
+      .rst_i(rst_i)      
+   );
+
+   VersatAxiDelay delayB(
+      .s_valid_i(axi_bvalid_i),
+      .s_ready_o(axi_bready_o),
+      .m_valid_o(temp_axi_bvalid),
+      .m_ready_i(temp_axi_bready),
+      .clk_i(clk_i),
+      .rst_i(rst_i)      
+   );
+
    SimpleAXItoAXIWrite #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
@@ -88,17 +122,17 @@ module SimpleAXItoAXI #(
       .axi_awcache_o(axi_awcache_o), //Address write channel memory type. Set to 0000 if master output; ignored if slave input.
       .axi_awprot_o(axi_awprot_o), //Address write channel protection type. Set to 000 if master output; ignored if slave input.
       .axi_awqos_o(axi_awqos_o), //Address write channel quality of service.
-      .axi_awvalid_o(axi_awvalid_o), //Address write channel valid.
-      .axi_awready_i(axi_awready_i), //Address write channel ready.
+      .axi_awvalid_o(temp_axi_awvalid), //Address write channel valid.
+      .axi_awready_i(temp_axi_awready), //Address write channel ready.
       .axi_wdata_o(axi_wdata_o), //Write channel data.
       .axi_wstrb_o(axi_wstrb_o), //Write channel write strobe.
       .axi_wlast_o(axi_wlast_o), //Write channel last word flag.
-      .axi_wvalid_o(axi_wvalid_o), //Write channel valid.
-      .axi_wready_i(axi_wready_i), //Write channel ready.
+      .axi_wvalid_o(temp_axi_wvalid), //Write channel valid.
+      .axi_wready_i(temp_axi_wready), //Write channel ready.
       .axi_bid_i(axi_bid_i), //Write response channel ID.
       .axi_bresp_i(axi_bresp_i), //Write response channel response.
-      .axi_bvalid_i(axi_bvalid_i), //Write response channel valid.
-      .axi_bready_o(axi_bready_o), //Write response channel ready.
+      .axi_bvalid_i(temp_axi_bvalid), //Write response channel valid.
+      .axi_bready_o(temp_axi_bready), //Write response channel ready.
 
       .clk_i(clk_i),
       .rst_i(rst_i)
