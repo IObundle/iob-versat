@@ -4153,6 +4153,47 @@ void OutputFirmware(String softwarePath,VersatComputedValues val){
   String content = PushASTRepr(c,temp);
   TemplateSetString("registerLocation",content);
 
+  String dmaExists = R"FOO(
+  if(enableDMA && (dataInsideVersat != destInsideVersat)){
+    if(destInsideVersat){
+      destInt = destInt - versat_base;
+    }
+    if(dataInsideVersat){
+      dataInt = dataInt - versat_base;
+    }
+
+    MEMSET(versat_base,VersatRegister_DmaInternalAddress,destInt); 
+    MEMSET(versat_base,VersatRegister_DmaExternalAddress,dataInt);
+    MEMSET(versat_base,VersatRegister_DmaTransferLength,size); // Byte size
+    MEMSET(versat_base,VersatRegister_DmaControl,0x1); // Start DMA
+
+    while(1){
+      int val = MEMGET(versat_base,VersatRegister_DmaControl);
+      if(val) break;
+    }
+  } else {
+    volatile int* destView = (volatile int*) dest;
+    volatile int* dataView = (volatile int*) data;
+    for(int i = 0; i < size / sizeof(int); i++){
+      destView[i] = dataView[i];
+    }
+  }
+)FOO";
+
+  String dmaDoesNotExist = R"FOO(
+    volatile int* destView = (volatile int*) dest;
+    volatile int* dataView = (volatile int*) data;
+    for(int i = 0; i < size / sizeof(int); i++){
+      destView[i] = dataView[i];
+    }
+)FOO";
+
+  if(globalOptions.useDMA){
+    TemplateSetString("dmaStuff",dmaExists);
+  } else {
+    TemplateSetString("dmaStuff",dmaDoesNotExist);
+  }
+
   String content3 = R"FOO(
 // ======================================
 // Debug facilities

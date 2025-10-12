@@ -104,8 +104,6 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
     return;
   }
 
-  //TIME_IT("Memory copy");
-
   iptr destInt = (iptr) dest;
   iptr dataInt = (iptr) data;
 
@@ -129,30 +127,7 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
     //PRINT("Using a simple copy loop for now\n");
   }
 
-  if(enableDMA && acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
-    if(destInsideVersat){
-      destInt = destInt - versat_base;
-    }
-    if(dataInsideVersat){
-      dataInt = dataInt - versat_base;
-    }
-
-    MEMSET(versat_base,VersatRegister_DmaInternalAddress,destInt); 
-    MEMSET(versat_base,VersatRegister_DmaExternalAddress,dataInt);
-    MEMSET(versat_base,VersatRegister_DmaTransferLength,size); // Byte size
-    MEMSET(versat_base,VersatRegister_DmaControl,0x1); // Start DMA
-
-    while(1){
-      int val = MEMGET(versat_base,VersatRegister_DmaControl);
-      if(val) break;
-    }
-  } else {
-    volatile int* destView = (volatile int*) dest;
-    volatile int* dataView = (volatile int*) data;
-    for(int i = 0; i < size / sizeof(int); i++){
-      destView[i] = dataView[i];
-    }
-  }
+@{dmaStuff}
 }
 
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val){
