@@ -4153,6 +4153,58 @@ void OutputFirmware(String softwarePath,VersatComputedValues val){
   String content = PushASTRepr(c,temp);
   TemplateSetString("registerLocation",content);
 
+  String content3 = R"FOO(
+// ======================================
+// Debug facilities
+
+static inline void DebugEndAccelerator(int upperBound){
+  for(int i = 0; i < upperBound; i++){  
+    volatile int val = MEMGET(versat_base,VersatRegister_Control);
+    if(val){
+      return;
+    }
+  } 
+  PRINT("Accelerator reached upperbound\n");
+}
+
+static inline void DebugRunAcceleratorOnce(int times,int upperbound){ // times inside value amount
+   PRINT("Gonna start accelerator: (%x,%d,%d)\n",versat_base, VersatRegister_Control, times);
+   MEMSET(versat_base,VersatRegister_Control,times);
+   DebugEndAccelerator(upperbound);
+
+   PRINT("Ended accelerator\n");
+}
+
+void DebugRunAccelerator(int times, int maxCycles){
+  // Accelerator was previously stuck
+  if(!MEMGET(versat_base, VersatRegister_Control)){
+    PRINT("Versat accel was previously stuck, before current call to DebugRunAccelerator\n");
+    return;
+  }
+
+  for(; times > 0xffff; times -= 0xffff){
+    DebugRunAcceleratorOnce(0xffff,maxCycles);
+  } 
+
+  DebugRunAcceleratorOnce(times,maxCycles);
+}
+
+VersatDebugState VersatDebugGetState(){
+  VersatDebugState res = {};
+
+  int debugState = MEMGET(versat_base,VersatRegister_Debug); 
+  res.databusIsActive = (debugState & 0x1);
+
+  return res;
+}
+)FOO";
+
+  if(globalOptions.insertDebugRegisters){
+    TemplateSetString("debugStuff",content3);
+  } else {
+    TemplateSetString("debugStuff",{});
+  }
+
   String content2 = R"FOO(
 VersatProfile VersatProfileGet(){
   VersatProfile res = {};              
