@@ -6,28 +6,29 @@ module Generator_tb (
 );
   localparam PERIOD_W = 2;
   localparam DELAY_W = 2;
+  localparam ADDR_W = 4;
   // Outputs
-  wire [(32)-1:0] out0;
+  wire [(ADDR_W)-1:0] out0;
   // Control
   reg [(1)-1:0] running;
   reg [(1)-1:0] run;
   reg [(1)-1:0] clk;
   reg [(1)-1:0] rst;
   // Config
-  reg [(32)-1:0] iter;
-  reg [(32)-1:0] shift;
+  reg [(ADDR_W)-1:0] iter;
+  reg [(ADDR_W)-1:0] shift;
   reg [(PERIOD_W)-1:0] per;
-  reg [(32)-1:0] incr;
-  reg [(32)-1:0] iter2;
-  reg [(32)-1:0] shift2;
+  reg [(ADDR_W)-1:0] incr;
+  reg [(ADDR_W)-1:0] iter2;
+  reg [(ADDR_W)-1:0] shift2;
   reg [(PERIOD_W)-1:0] per2;
-  reg [(32)-1:0] incr2;
-  reg [(32)-1:0] iter3;
-  reg [(32)-1:0] shift3;
+  reg [(ADDR_W)-1:0] incr2;
+  reg [(ADDR_W)-1:0] iter3;
+  reg [(ADDR_W)-1:0] shift3;
   reg [(PERIOD_W)-1:0] per3;
-  reg [(32)-1:0] incr3;
+  reg [(ADDR_W)-1:0] incr3;
   reg [(PERIOD_W)-1:0] duty;
-  reg [(32)-1:0] start;
+  reg [(ADDR_W)-1:0] start;
   // Delays
   reg [(DELAY_W)-1:0] delay0;
 
@@ -41,7 +42,8 @@ module Generator_tb (
 
   Generator #(
     .PERIOD_W(PERIOD_W),
-    .DELAY_W(DELAY_W)
+    .DELAY_W(DELAY_W),
+    .ADDR_W(ADDR_W)
   ) uut (
     .out0(out0),
     .running(running),
@@ -98,21 +100,21 @@ module Generator_tb (
 
     rst = 0;
     // configure max values
-    iter = {32{1'b1}};
-    shift = {32{1'b1}};
+    iter = {ADDR_W{1'b1}};
+    shift = {ADDR_W{1'b1}};
     per = {PERIOD_W{1'b1}};
-    incr = {32{1'b1}};
-    iter2 = {32{1'b1}};
-    shift2 = {32{1'b1}};
+    incr = {ADDR_W{1'b1}};
+    iter2 = {ADDR_W{1'b1}};
+    shift2 = {ADDR_W{1'b1}};
     per2 = {PERIOD_W{1'b1}};
-    incr2 = {32{1'b1}};
-    iter3 = {32{1'b1}};
-    shift3 = {32{1'b1}};
+    incr2 = {ADDR_W{1'b1}};
+    iter3 = {ADDR_W{1'b1}};
+    shift3 = {ADDR_W{1'b1}};
     per3 = {PERIOD_W{1'b1}};
-    incr3 = {32{1'b1}};
-    duty = {32{1'b1}};
-    start = {32{1'b1}};
-    delay0 = {32{1'b1}};
+    incr3 = {ADDR_W{1'b1}};
+    duty = {PERIOD_W{1'b1}};
+    start = {ADDR_W{1'b1}};
+    delay0 = {DELAY_W{1'b1}};
 
     run = 1;
     running = 1;
@@ -120,7 +122,7 @@ module Generator_tb (
     `ADVANCE;
     run = 0;
 
-    for(i=0;i<(2**(3*PERIOD_W*DELAY_W));i=i+1) begin
+    for(i=0;i<(2**(PERIOD_W*DELAY_W*ADDR_W));i=i+1) begin
       `ADVANCE;
     end
 
@@ -129,23 +131,79 @@ module Generator_tb (
     running = 0;
 
     // configure 0 values
-    iter = {32{1'b1}};
-    shift = {32{1'b1}};
-    per = {PERIOD_W{1'b1}};
-    incr = {32{1'b1}};
-    iter2 = {32{1'b1}};
-    shift2 = {32{1'b1}};
-    per2 = {PERIOD_W{1'b1}};
-    incr2 = {32{1'b1}};
-    iter3 = {32{1'b1}};
-    shift3 = {32{1'b1}};
-    per3 = {PERIOD_W{1'b1}};
-    incr3 = {32{1'b1}};
-    duty = {32{1'b1}};
-    start = {32{1'b1}};
-    delay0 = {32{1'b1}};
+    iter = {ADDR_W{1'b0}};
+    shift = {ADDR_W{1'b0}};
+    per = {PERIOD_W{1'b0}};
+    incr = {ADDR_W{1'b0}};
+    iter2 = {ADDR_W{1'b0}};
+    shift2 = {ADDR_W{1'b0}};
+    per2 = {PERIOD_W{1'b0}};
+    incr2 = {ADDR_W{1'b0}};
+    iter3 = {ADDR_W{1'b0}};
+    shift3 = {ADDR_W{1'b0}};
+    per3 = {PERIOD_W{1'b0}};
+    incr3 = {ADDR_W{1'b0}};
+    duty = {PERIOD_W{1'b0}};
+    start = {ADDR_W{1'b0}};
+    delay0 = {DELAY_W{1'b0}};
 
     `ADVANCE;
+
+    rst = 1;
+
+    `ADVANCE;
+
+    rst = 0;
+
+    `ADVANCE;
+
+    run = 1;
+    running = 1;
+
+    `ADVANCE;
+
+    run = 0;
+
+    `ADVANCE;
+    `ADVANCE;
+
+    running = 0;
+    rst = 1;
+
+    `ADVANCE;
+
+    rst = 0;
+
+    // Small run
+    iter = 2;
+    shift = 2;
+    per = 2;
+    incr = 2;
+    iter2 = 2;
+    shift2 = 2;
+    per2 = 2;
+    incr2 = 2;
+    iter3 = 2;
+    shift3 = 2;
+    per3 = 2;
+    incr3 = 2;
+    duty = 2;
+    start = 2;
+    delay0 = 2;
+
+    run = 1;
+    running = 1;
+
+    `ADVANCE;
+
+    run = 0;
+    for (int i = 0; i < 1000; i++) begin
+        `ADVANCE;
+    end
+
+    `ADVANCE;
+
+    running = 0;
 
     $finish();
   end

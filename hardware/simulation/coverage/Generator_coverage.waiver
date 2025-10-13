@@ -1,0 +1,36 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// Generator verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive AddressGen3.v:21 "ignore_first is always 0"
+waive SuperAddress.v:29 "ignore_first is always 0"
+waive SuperAddress.v:115 "ignore is always 0, since ignore_first is always 0"
+waive SuperAddress.v:156 "ignore is always 0, since ignore_first is always 0"
+waive SuperAddress.v:162 "ignore is always 0, since ignore_first is always 0"
+waive SuperAddress.v:168 "ignore is always 0, since ignore_first is always 0"
+waive SuperAddress.v:178 "ignore is always 0, since ignore_first is always 0"
+waive SuperAddress.v:189 "ignore is always 0, since ignore_first is always 0"
+waive SuperAddress.v:202 "ignore is always 0, since ignore_first is always 0"
+
+waive SuperAddress.v:65:68 "Inputs always 0"
+waive SuperAddress.v:70:72 "Inputs always 1"
+waive SuperAddress.v:76 "Input always 1"
+waive SuperAddress.v:80 "Input always 1"
+
+waive SuperAddress.v:61 "doneDatabus is always 1, since status is always 0"
+waive SuperAddress.v:73 "data_last_o is always 0, since status is always 0"
+waive SuperAddress.v:77:79 "databus output is always 0, since databus_length is always 0"
+waive SuperAddress.v:224:225 "status is always 0, since databus_length is always 0"
+waive SuperAddress.v:231 "status is always 0, since databus_length is always 0"
+waive SuperAddress.v:249 "status is always 0, since databus_length is always 0"
+waive SuperAddress.v:260:280 "status is always 0, since databus_length is always 0"
+
+waive CountNLoops.v:14 "count is always 0"
+waive CountNLoops.v:17 "advance is always 0"
+waive CountNLoops.v:25 "count is always 0"
+waive CountNLoops.v:34 "count is always 0"
+waive CountNLoops.v:37:40 "count is always 0"
