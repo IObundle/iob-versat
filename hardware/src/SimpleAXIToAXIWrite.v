@@ -143,7 +143,7 @@ module SimpleAXItoAXIWrite #(
 
    wire [AXI_ADDR_W-1:0] symbolsToRead;
 
-   reg [(AXI_DATA_W/8)-1:0] initial_strb, final_strb;
+   wire [(AXI_DATA_W/8)-1:0] initial_strb, final_strb;
    wire outputOneExtra;
 
    AXITransferController #(
