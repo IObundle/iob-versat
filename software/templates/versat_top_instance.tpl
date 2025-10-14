@@ -83,7 +83,7 @@ wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
 
 assign done = (!(|runCounter) && (&unitDone));
 
-wire dma_running;
+wire dma_running; // TODO: Emit this only if we have DMA enabled.
 
 @{emitIO}
 

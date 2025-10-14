@@ -9,16 +9,17 @@
 // TODO: We might also consider implementing some transfer logic inside this. Forcing the outside code to set the burst_start_i wire is a bit error prone.
 //       We can always receive the AXI wires and use them to drive the logic. It probably does not add any extra resources since we are just implementing what the outside code is implementing already.
 module AXITransferController #(
-   parameter AXI_ADDR_W = 32,
-   parameter AXI_DATA_W = 32,
-   parameter AXI_LEN_W  = 8,
-   parameter LEN_W      = 32
+   parameter AXI_ADDR_W   = 32,
+   parameter AXI_DATA_W   = 32,
+   parameter AXI_LEN_W    = 8,
+   parameter LEN_W        = 32,
+   parameter MAX_TRANSF_W = 32
 ) (
    input [AXI_ADDR_W-1:0] address_i,  // Must remain constant during transfer
    input [     LEN_W-1:0] length_i,   // In bytes
 
-   input                         transfer_start_i, // Assert one cycle before starting a transfer. Set address_i and length_i to the correct values beforehand
-   input                         burst_start_i, // At the start of a burst (after values accepted by axi), assert this signal for one cycle. This updates the stored values and prepares the values of the next cycle
+   input                  transfer_start_i, // Assert one cycle before starting a transfer. Set address_i and length_i to the correct values beforehand
+   input                  burst_start_i, // At the start of a burst (after values accepted by axi), assert this signal for one cycle. This updates the stored values and prepares the values of the next cycle
 
    output reg [AXI_ADDR_W-1:0] true_axi_axaddr_o,  /* registered */
 
@@ -26,7 +27,10 @@ module AXITransferController #(
    output reg [(AXI_DATA_W/8)-1:0] initial_strb_o, // First strobe of the transfer. The rest is always full 1
    output reg [(AXI_DATA_W/8)-1:0] final_strb_o, // Last strobe of the transfer. Only valid if last_transfer is asserted
 
-   output [31:0] symbolsToRead_o,  // How many symbols (data transfers) to expect from the source
+   output [MAX_TRANSF_W-1:0]  symbolsToRead_o,        // How many symbols (data transfers) to expect from the source
+   output                     outputOneExtraSymbol_o, // For unaligned transfers, we must output one more than we read. 
+   output [MAX_TRANSF_W-1:0]  sourceSymbolsToRead_o,
+   output [MAX_TRANSF_W-1:0]  axiSymbolsTransfers_o,
 
    output reg [AXI_LEN_W-1:0] true_axi_axlen_o,
    output reg                 last_transfer_o,
@@ -35,6 +39,8 @@ module AXITransferController #(
    input clk_i,
    input rst_i
 );
+
+   assign outputOneExtraSymbol_o = 1'b0;
 
    function integer calculate_AXI_OFFSET_W(input integer axi_data_w);
       begin
@@ -133,7 +139,29 @@ module AXITransferController #(
 
    generate
       if (AXI_DATA_W == 32) begin
+         assign sourceSymbolsToRead_o = ((length_i - 1) >> 2) + 1;
+
+         always @* begin
+            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[1:0]) >> 2) + 1;
+/*
+            axiSymbolsTransfers_o = 0;
+            if(address_i[1:0] == 2'b00) begin
+               axiSymbolsTransfers_o = ((length_i - 1) >> 2) + 1;
+            end
+            if(address_i[1:0] == 2'b01) begin
+               axiSymbolsTransfers_o = (length_i >> 2) + 1;
+            end
+            if(address_i[1:0] == 2'b10) begin
+               axiSymbolsTransfers_o = ((length_i + 1) >> 2) + 1;
+            end
+            if(address_i[1:0] == 2'b11) begin
+               axiSymbolsTransfers_o = ((length_i + 2) >> 2) + 1;
+            end
+*/
+         end
+
          assign symbolsToRead_o            = (|length_i[1:0]) ? (length_i >> 2) + 1 : length_i >> 2;
+
          assign max_transfer_len           = min(MAX_LENGTH * 4,13'h0400);
          assign max_transfer_len_minus_one = min((MAX_LENGTH * 4) - 4,13'h03FC);
          always @* begin
@@ -147,6 +175,13 @@ module AXITransferController #(
          end
       end  // if(AXI_DATA_W == 32)
       if (AXI_DATA_W == 64) begin
+         assign sourceSymbolsToRead_o = ((length_i - 1) >> 3) + 1;
+
+         always @* begin
+            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[2:0]) >> 3) + 1;
+         end
+         //assign sourceSymbolsToRead_o = length_i >> 3;
+
          assign symbolsToRead_o            = (|length_i[2:0]) ? (length_i >> 3) + 1 : length_i >> 3;
          assign max_transfer_len           = min(MAX_LENGTH * 8,13'h0800);
          assign max_transfer_len_minus_one = min((MAX_LENGTH * 8) - 8,13'h07F8);
@@ -162,6 +197,13 @@ module AXITransferController #(
          end
       end  // if(AXI_DATA_W == 64)
       if (AXI_DATA_W == 128) begin
+         assign sourceSymbolsToRead_o = ((length_i - 1) >> 4) + 1;
+         //assign sourceSymbolsToRead_o = length_i >> 4;
+
+         always @* begin
+            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[3:0]) >> 4) + 1;
+         end
+
          assign symbolsToRead_o            = (|length_i[3:0]) ? (length_i >> 4) + 1 : length_i >> 4;
          assign max_transfer_len           = min(MAX_LENGTH * 16,13'h1000);
          assign max_transfer_len_minus_one = min((MAX_LENGTH * 16) - 16,13'h0FF0);
@@ -178,6 +220,13 @@ module AXITransferController #(
          end
       end  // if(AXI_DATA_W == 128)
       if (AXI_DATA_W == 256) begin
+         assign sourceSymbolsToRead_o = ((length_i - 1) >> 5) + 1;
+         //assign sourceSymbolsToRead_o = length_i >> 5;
+
+         always @* begin
+            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[4:0]) >> 5) + 1;
+         end
+
          assign symbolsToRead_o = (|length_i[4:0]) ? (length_i >> 5) + 1 : length_i >> 5;
          assign max_transfer_len           = min(MAX_LENGTH * 32,13'h1000);
          assign max_transfer_len_minus_one = min((MAX_LENGTH * 32) - 32,13'h0FE0); // Because of boundary conditions, cannot go higher
@@ -194,6 +243,13 @@ module AXITransferController #(
          end
       end  // if(AXI_DATA_W == 256)
       if (AXI_DATA_W == 512) begin
+         assign sourceSymbolsToRead_o = ((length_i - 1) >> 6) + 1;
+         //assign sourceSymbolsToRead_o = length_i >> 6;
+
+         always @* begin
+            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[5:0]) >> 6) + 1;
+         end
+
          assign symbolsToRead_o = (|length_i[5:0]) ? (length_i >> 6) + 1 : length_i >> 6;
          assign max_transfer_len           = min(MAX_LENGTH * 64,13'h1000);
          assign max_transfer_len_minus_one = min((MAX_LENGTH * 64) - 64,13'h0FC0); // Because of boundary conditions, cannot go higher
@@ -232,5 +288,33 @@ module AXITransferController #(
          end
       end
    end
+
+// If offset is 3 and we have a length of 2, we need two transfers.
+/*
+
+For 32 bits:
+Offset | Length   | M_Transfers | AXI_Transfers | OneExtraTransfer
+0      |  1,2,3,4 |     1       |        1      |
+0      |  5,6,7,8 |     2       |        2      |
+
+
+Offset | Length   | M_Transfers | AXI_Transfers | OneExtraTransfer
+1      |  1,2,3   |     1       |        1      |
+1      |  4       |     1       |        2      |       X
+1      |  5,6,7   |     2       |        2      |
+
+M_Transfers is always length divided by the AXI_DATA Size plus 1
+
+2      |  1,2     |     1       |        1      |        
+2      |  3,4     |     1       |        2      |       X
+2      |  5,6     |     2       |        2      |        
+2      |  7,8     |     2       |        3      |       X
+
+
+3      |  1       |     1       |        1      |        
+3      |  2,3,4   |     1       |        2      |       X
+
+
+*/
 
 endmodule  // transfer_controller
