@@ -9,8 +9,8 @@ module TransferNFromSimpleM #(
    parameter MAX_TRANSF_W = 32
    ) (
       input [MAX_TRANSF_W-1:0] transferCount_i,
-      input                  initiateTransfer_i,
-      output                 done_o,
+      input                    initiateTransfer_i,
+      output                   done_o,
 
       // Connect directly to simple axi 
       input                        m_wvalid_i,
@@ -144,6 +144,7 @@ module SimpleAXItoAXIWrite #(
    wire [AXI_ADDR_W-1:0] symbolsToRead;
 
    reg [(AXI_DATA_W/8)-1:0] initial_strb, final_strb;
+   wire outputOneExtra;
 
    AXITransferController #(
       .AXI_ADDR_W(AXI_ADDR_W),
@@ -161,7 +162,7 @@ module SimpleAXItoAXIWrite #(
       .final_strb_o  (final_strb),
 
       //.symbolsToRead_o(symbolsToRead),
-      .outputOneExtraSymbol_o(),
+      .outputOneExtraSymbol_o(outputOneExtra),
       .sourceSymbolsToRead_o(symbolsToRead),
       .axiSymbolsTransfers_o(),
 
@@ -222,7 +223,7 @@ module SimpleAXItoAXIWrite #(
 
    reg awvalid, wvalid;
    assign axi_awvalid_o = awvalid;
-   assign axi_wvalid_o  = data_valid;
+   assign axi_wvalid_o  = wvalid;
 
    reg m_axi_last;
    assign axi_wlast_o = m_axi_last;
@@ -311,7 +312,7 @@ module SimpleAXItoAXIWrite #(
       end
 
       if (state == 3'h4) begin
-         wvalid     = m_wvalid_i || flush_burst_split;
+         wvalid     = data_valid || (m_TransferDone && outputOneExtra);
 
          m_axi_last = (counter == axi_awlen_o);
       end

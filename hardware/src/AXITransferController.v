@@ -40,8 +40,6 @@ module AXITransferController #(
    input rst_i
 );
 
-   assign outputOneExtraSymbol_o = 1'b0;
-
    function integer calculate_AXI_OFFSET_W(input integer axi_data_w);
       begin
          calculate_AXI_OFFSET_W = $clog2((axi_data_w / 8));
@@ -140,27 +138,8 @@ module AXITransferController #(
    generate
       if (AXI_DATA_W == 32) begin
          assign sourceSymbolsToRead_o = ((length_i - 1) >> 2) + 1;
-
-         always @* begin
-            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[1:0]) >> 2) + 1;
-/*
-            axiSymbolsTransfers_o = 0;
-            if(address_i[1:0] == 2'b00) begin
-               axiSymbolsTransfers_o = ((length_i - 1) >> 2) + 1;
-            end
-            if(address_i[1:0] == 2'b01) begin
-               axiSymbolsTransfers_o = (length_i >> 2) + 1;
-            end
-            if(address_i[1:0] == 2'b10) begin
-               axiSymbolsTransfers_o = ((length_i + 1) >> 2) + 1;
-            end
-            if(address_i[1:0] == 2'b11) begin
-               axiSymbolsTransfers_o = ((length_i + 2) >> 2) + 1;
-            end
-*/
-         end
-
-         assign symbolsToRead_o            = (|length_i[1:0]) ? (length_i >> 2) + 1 : length_i >> 2;
+         assign axiSymbolsTransfers_o = ((length_i - 1 + address_i[1:0]) >> 2) + 1;
+         assign symbolsToRead_o       = (|length_i[1:0]) ? (length_i >> 2) + 1 : length_i >> 2;
 
          assign max_transfer_len           = min(MAX_LENGTH * 4,13'h0400);
          assign max_transfer_len_minus_one = min((MAX_LENGTH * 4) - 4,13'h03FC);
@@ -176,11 +155,7 @@ module AXITransferController #(
       end  // if(AXI_DATA_W == 32)
       if (AXI_DATA_W == 64) begin
          assign sourceSymbolsToRead_o = ((length_i - 1) >> 3) + 1;
-
-         always @* begin
-            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[2:0]) >> 3) + 1;
-         end
-         //assign sourceSymbolsToRead_o = length_i >> 3;
+         assign axiSymbolsTransfers_o =  ((length_i - 1 + address_i[2:0]) >> 3) + 1;
 
          assign symbolsToRead_o            = (|length_i[2:0]) ? (length_i >> 3) + 1 : length_i >> 3;
          assign max_transfer_len           = min(MAX_LENGTH * 8,13'h0800);
@@ -198,11 +173,7 @@ module AXITransferController #(
       end  // if(AXI_DATA_W == 64)
       if (AXI_DATA_W == 128) begin
          assign sourceSymbolsToRead_o = ((length_i - 1) >> 4) + 1;
-         //assign sourceSymbolsToRead_o = length_i >> 4;
-
-         always @* begin
-            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[3:0]) >> 4) + 1;
-         end
+         assign axiSymbolsTransfers_o =  ((length_i - 1 + address_i[3:0]) >> 4) + 1;
 
          assign symbolsToRead_o            = (|length_i[3:0]) ? (length_i >> 4) + 1 : length_i >> 4;
          assign max_transfer_len           = min(MAX_LENGTH * 16,13'h1000);
@@ -221,11 +192,7 @@ module AXITransferController #(
       end  // if(AXI_DATA_W == 128)
       if (AXI_DATA_W == 256) begin
          assign sourceSymbolsToRead_o = ((length_i - 1) >> 5) + 1;
-         //assign sourceSymbolsToRead_o = length_i >> 5;
-
-         always @* begin
-            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[4:0]) >> 5) + 1;
-         end
+         assign axiSymbolsTransfers_o =  ((length_i - 1 + address_i[4:0]) >> 5) + 1;
 
          assign symbolsToRead_o = (|length_i[4:0]) ? (length_i >> 5) + 1 : length_i >> 5;
          assign max_transfer_len           = min(MAX_LENGTH * 32,13'h1000);
@@ -244,11 +211,7 @@ module AXITransferController #(
       end  // if(AXI_DATA_W == 256)
       if (AXI_DATA_W == 512) begin
          assign sourceSymbolsToRead_o = ((length_i - 1) >> 6) + 1;
-         //assign sourceSymbolsToRead_o = length_i >> 6;
-
-         always @* begin
-            axiSymbolsTransfers_o =  ((length_i - 1 + address_i[5:0]) >> 6) + 1;
-         end
+         assign axiSymbolsTransfers_o =  ((length_i - 1 + address_i[5:0]) >> 6) + 1;
 
          assign symbolsToRead_o = (|length_i[5:0]) ? (length_i >> 6) + 1 : length_i >> 6;
          assign max_transfer_len           = min(MAX_LENGTH * 64,13'h1000);
@@ -288,6 +251,8 @@ module AXITransferController #(
          end
       end
    end
+
+   assign outputOneExtraSymbol_o = axiSymbolsTransfers_o != sourceSymbolsToRead_o;
 
 // If offset is 3 and we have a length of 2, we need two transfers.
 /*
