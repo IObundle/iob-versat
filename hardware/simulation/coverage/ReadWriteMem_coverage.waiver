@@ -2,12 +2,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Mem verilator coverage waivers
+// ReadWriteMem verilator coverage waivers
 
 // waiver structure:
 // waive filename:line[:line] [reason]
 waive my_iob_dp_ram.v:1:79 "Waive Memory Module"
 waive my_dp_asym_ram.v:1:178 "Waive Memory Module"
+
+waive ReadWriteMem.v:50 "unused output port, kept to match standard memory interface"
+waive ReadWriteMem.v:53 "unused output port, kept to match standard memory interface"
 
 waive SuperAddress.v:29 "ignore_first_i is always 0"
 waive SuperAddress.v:41:51 "inputs always 0"

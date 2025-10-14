@@ -7,7 +7,8 @@
    parameter DATA_W        = 32,
    parameter DELAY_W       = 7,
    parameter SIZE_W        = 32,
-   parameter ADDR_W        = 12
+   parameter ADDR_W        = 12,
+   parameter PERIOD_W      = 10
 ) (
    //control
    input clk,
@@ -48,8 +49,8 @@
    // Configuration
    // Input config
    input [ADDR_W-1:0] iterA,
-   input [       9:0] perA,
-   input [       9:0] dutyA,
+   input [PERIOD_W-1:0] perA,
+   input [PERIOD_W-1:0] dutyA,
    input [ADDR_W-1:0] startA,
    input [ADDR_W-1:0] shiftA,
    input [ADDR_W-1:0] incrA,
@@ -59,8 +60,8 @@
 
    // Output config
    input [ADDR_W-1:0] iterB,
-   input [       9:0] perB,
-   input [       9:0] dutyB,
+   input [PERIOD_W-1:0] perB,
+   input [PERIOD_W-1:0] dutyB,
    input [ADDR_W-1:0] startB,
    input [ADDR_W-1:0] shiftB,
    input [ADDR_W-1:0] incrB,
@@ -71,6 +72,7 @@
    wire we = |wstrb;
 
    wire doneA, doneB;
+   wire ready_int = ~rst;
 
    //output databus
    reg [DATA_W-1:0] out_reg;
@@ -107,7 +109,8 @@
    AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W),
-      .DELAY_W(DELAY_W)
+      .DELAY_W(DELAY_W),
+      .PERIOD_W(PERIOD_W)
    ) addrgenA (
       .clk_i(clk),
       .rst_i(rst),
@@ -127,7 +130,7 @@
 
       //outputs 
       .valid_o(enA_int),
-      .ready_i(1'b1),
+      .ready_i(ready_int),
       .addr_o (addrA_int),
       .store_o(), // TODO: Handle duty
 
@@ -137,7 +140,8 @@
    AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W),
-      .DELAY_W(DELAY_W)
+      .DELAY_W(DELAY_W),
+      .PERIOD_W(PERIOD_W)
    ) addrgenB (
       .clk_i(clk),
       .rst_i(rst),
@@ -157,7 +161,7 @@
 
       //outputs 
       .valid_o(),
-      .ready_i(1'b1),
+      .ready_i(ready_int),
       .addr_o (addrB_int),
       .store_o(), // TODO: Handle duty
 
