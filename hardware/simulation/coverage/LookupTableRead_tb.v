@@ -261,7 +261,7 @@ module LookupTableRead_tb (
 
     length = {LEN_W{1'b1}};
     pingPong = 1;
-    disabled = 1;
+    disabled = 0;
 
     run = 1;
     running = 1;
@@ -270,12 +270,87 @@ module LookupTableRead_tb (
 
     // run AddressGen with max configuration
     for(i=0;i<(2**(3*ADDR_W));i=i+1) begin
+      if (i == 0) begin
+          disabled = 1;
+          pingPong = 0;
+      end else begin
+          disabled = 0;
+          pingPong = 1;
+      end
+      in0 = i[ADDR_W-1:0];
+      ext_addr = i[AXI_ADDR_W-1:0];
+      `ADVANCE;
+    end
+
+    running = 0;
+    run = 0;
+
+    `ADVANCE;
+
+    rst = 1;
+
+    `ADVANCE;
+
+    rst = 0;
+
+    `ADVANCE;
+
+    run = 1;
+
+    `ADVANCE;
+
+    `ADVANCE;
+
+    run = 0;
+    running = 1;
+
+    // run AddressGen with max configuration
+    for(i=0;i<(2**(3*ADDR_W));i=i+1) begin
+      if (i == 0) begin
+          disabled = 1;
+          pingPong = 0;
+      end else begin
+          disabled = 0;
+          pingPong = 1;
+      end
+      in0 = i[ADDR_W-1:0];
+      ext_addr = i[AXI_ADDR_W-1:0];
       `ADVANCE;
     end
 
     running = 0;
 
     `ADVANCE;
+
+    rst = 1;
+
+    `ADVANCE;
+
+    rst = 0;
+
+    run = 1;
+    running = 1;
+
+    `ADVANCE;
+
+    run = 0;
+
+    // run AddressGen with max configuration
+    for(i=0;i<(2**(3*ADDR_W));i=i+1) begin
+      in0 = i[ADDR_W-1:0];
+      ext_addr = i[AXI_ADDR_W-1:0];
+      `ADVANCE;
+    end
+
+    running = 0;
+    run = 0;
+
+    `ADVANCE;
+    rst = 1;
+
+    `ADVANCE;
+
+    rst = 0;
 
     $finish();
   end

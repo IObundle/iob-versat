@@ -10,6 +10,26 @@ waive SimHelper_DatabusMem.v:1:94 "Waive Memory Module"
 waive my_dp_asym_ram.v:1:178 "Waive Memory Module"
 waive my_iob_dp_ram.v:1:79 "Waive Memory Module"
 
+waive LookupTableRead.v:23:24 "Databus is read only"
+waive LookupTableRead.v:35 "LSB of addr port is always 0"
+waive LookupTableRead.v:36 "Ext DP Port 0 is read only"
+waive LookupTableRead.v:38:39 "Ext DP Port 0 is read only"
+waive LookupTableRead.v:46 "Ext DP Port 1 is write only"
+
+waive LookupTableRead.v:83 "LSB of addr0 is always 0"
+waive LookupTableRead.v:151:152 "wires always 0"
+
+waive AddressGen.v:22 "start always 0"
+waive AddressGen.v:32 "delay always 0"
+
+waive SuperAddress.v:32 "start always 0"
+waive SuperAddress.v:90 "start always 0"
+
+waive SuperAddress.v:53 "delay always 0"
+waive SuperAddress.v:85 "delay always 0"
+waive SuperAddress.v:147 "delay always 0"
+waive SuperAddress.v:150:152 "delay always 0"
+
 waive SuperAddress.v:29 "ignore_first_i is always 0"
 waive SuperAddress.v:41:51 "inputs always 0"
 waive SuperAddress.v:65:68 "Inputs always 0"
@@ -42,3 +62,7 @@ waive CountNLoops.v:17 "advance is always 0"
 waive CountNLoops.v:25 "count is always 0"
 waive CountNLoops.v:34 "count is always 0"
 waive CountNLoops.v:37:40 "count is always 0"
+
+waive SkidBuffer.v:63 "Idle state"
+waive SkidBuffer.v:79 "SkidBuffer 1 never gets out_transfer == 0 in EXTRA state, since SkidBuffer 2 always starts first."
+waive SkidBuffer.v:84 "Default state (2'b11) never triggered"
