@@ -1,0 +1,14 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// VWrite verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive SimHelper_DatabusMem.v:1:94 "Waive Memory Module"
+waive my_2p_asym_ram.v:1:130 "Waive Memory Module"
+waive iob_ram_2p.v:1:69 "Waive Memory Module"
+
+waive VWrite.v:30 "databus interface used for write only"
+waive VWrite.v:32 "databus interface used for write only"
