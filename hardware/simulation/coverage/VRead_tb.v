@@ -10,7 +10,7 @@ module VRead_tb (
   localparam AXI_ADDR_W = 4;
   localparam AXI_DATA_W = 8;
   localparam DELAY_W = 2;
-  localparam LEN_W = 2;
+  localparam LEN_W = 4;
   // Outputs
   wire [(DATA_W)-1:0] out0;
   // Control
@@ -277,6 +277,61 @@ module VRead_tb (
     ignore_first = 1;
     delay0 = {DELAY_W{1'b1}};
 
+    `ADVANCE;
+
+    // 0 configuration
+    ext_addr = {AXI_ADDR_W{1'b0}};
+    pingPong = 0;
+    amount_minus_one = {ADDR_W{1'b0}};
+    length = {LEN_W{1'b0}};
+    addr_shift = {AXI_ADDR_W{1'b0}};
+    enabled = 0;
+    iter = {ADDR_W{1'b0}};
+    per = {PERIOD_W{1'b0}};
+    duty = {PERIOD_W{1'b0}};
+    start = {ADDR_W{1'b0}};
+    shift = {ADDR_W{1'b0}};
+    incr = {ADDR_W{1'b0}};
+    iter2 = {ADDR_W{1'b0}};
+    per2 = {PERIOD_W{1'b0}};
+    shift2 = {ADDR_W{1'b0}};
+    incr2 = {ADDR_W{1'b0}};
+    iter3 = {ADDR_W{1'b0}};
+    per3 = {PERIOD_W{1'b0}};
+    shift3 = {ADDR_W{1'b0}};
+    incr3 = {ADDR_W{1'b0}};
+    extra_delay = {DELAY_W{1'b0}};
+    ignore_first = 0;
+    delay0 = {DELAY_W{1'b0}};
+
+    `ADVANCE;
+
+    // valid configuration
+    ext_addr = {AXI_ADDR_W{1'b1}};
+    pingPong = 1;
+    amount_minus_one = ({ADDR_W{1'b1}} - 1'b1);
+    length = {LEN_W{1'b1}};
+    addr_shift = {AXI_ADDR_W{1'b1}};
+    enabled = 1;
+    iter = {ADDR_W{1'b1}};
+    per = {PERIOD_W{1'b1}};
+    duty = {PERIOD_W{1'b1}};
+    start = {ADDR_W{1'b1}};
+    shift = {ADDR_W{1'b1}};
+    incr = {ADDR_W{1'b1}};
+    iter2 = {ADDR_W{1'b1}};
+    per2 = {PERIOD_W{1'b1}};
+    shift2 = {ADDR_W{1'b1}};
+    incr2 = {ADDR_W{1'b1}};
+    iter3 = {ADDR_W{1'b1}};
+    per3 = {PERIOD_W{1'b1}};
+    shift3 = {ADDR_W{1'b1}};
+    incr3 = {ADDR_W{1'b1}};
+    extra_delay = {DELAY_W{1'b0}};
+    ignore_first = 1;
+    delay0 = {DELAY_W{1'b1}};
+    
+
     run = 1;
 
     `ADVANCE;
@@ -291,6 +346,16 @@ module VRead_tb (
     end
 
     running = 0;
+
+    `ADVANCE;
+
+    // run with other pingPongState
+    RunAccelerator();
+
+    `ADVANCE;
+    pingPong = 0;
+    RunAccelerator();
+
     rst = 1;
 
     `ADVANCE;

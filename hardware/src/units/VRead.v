@@ -103,7 +103,8 @@ module VRead #(
       else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
-   wire [ADDR_W-1:0] constant1 = 1;
+   wire [ADDR_W-1:0] amount;
+   assign amount = amount_minus_one + 1'b1;
    
    //wire [ADDR_W-1:0] gen_addr_temp;
    //wire gen_valid, gen_ready;
@@ -192,7 +193,7 @@ module VRead #(
       .reading(1'b1),
       .data_last_o(),
 
-      .count_i(amount_minus_one + constant1),
+      .count_i(amount),
       .start_address_i(ext_addr),
       .address_shift_i(addr_shift),
       .databus_length(length)
@@ -287,17 +288,6 @@ assign data_data = databus_rdata_0;
    localparam DIFF = AXI_DATA_W / DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
    localparam DECISION_BIT_START = $clog2(DATA_W / 8);
-
-   function [ADDR_W-DECISION_BIT_W-1:0] symbolSpaceConvert(input [ADDR_W-1:0] in);
-      reg [ADDR_W-1:0] noPingPong;
-      reg [ADDR_W-1:0] shiftRes;
-      begin
-         noPingPong           = in;
-         noPingPong[ADDR_W-1] = 1'b0;
-         shiftRes             = noPingPong >> DECISION_BIT_W;
-         symbolSpaceConvert   = shiftRes[ADDR_W-DECISION_BIT_W-1:0];
-      end
-   endfunction
 
    generate
       if (AXI_DATA_W > DATA_W) begin

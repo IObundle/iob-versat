@@ -10,6 +10,19 @@ waive SimHelper_DatabusMem.v:1:94 "Waive Memory Module"
 waive my_2p_asym_ram.v:1:130 "Waive Memory Module"
 waive iob_ram_2p.v:1:69 "Waive Memory Module"
 
+waive VRead.v:31:32 "databus is read only"
+waive VRead.v:88 "data_ready is always 1, 1st handshake always comes before 2nd handshake"
+
+waive AddressGen3.v:24 "start_i MSB is always 0"
+waive AddressGen3.v:49 "ready_i always 1"
+
+waive SuperAddress.v:32:53 "VRead reader instance has these inputs set at 0"
+waive SuperAddress.v:57 "VRead reader instance has ready_i always 1"
+waive SuperAddress.v:58:59 "VRead reader instance has ready_i always 1"
+waive SuperAddress.v:85:103 "VRead reader does not run address generation"
+waive SuperAddress.v:85:103 "VRead reader does not run address generation"
+waive SuperAddress.v:147:213 "VRead reader does not run address generation"
+
 waive SuperAddress.v:29 "ignore_first is always 0"
 waive SuperAddress.v:115 "ignore is always 0, since ignore_first is always 0"
 waive SuperAddress.v:156 "ignore is always 0, since ignore_first is always 0"
@@ -35,5 +48,17 @@ waive SuperAddress.v:260:280 "status is always 0, since databus_length is always
 waive CountNLoops.v:14 "count is always 0"
 waive CountNLoops.v:17 "advance is always 0"
 waive CountNLoops.v:25 "count is always 0"
-waive CountNLoops.v:34 "count is always 0"
+waive CountNLoops.v:34:35 "count is always 0"
 waive CountNLoops.v:37:40 "count is always 0"
+
+waive JoinTwoHandshakes.v:21 "second_ready_o is always 1, 1st handshake always comes before 2nd handshake"
+waive JoinTwoHandshakes.v:25 "result_ready_i always 1"
+
+waive SkidBuffer.v:20 "2nd Buffer in_ready_o always 1"
+waive SkidBuffer.v:35:36 "1st Buffer never gets to state EXTRA. Data stored never toggled."
+waive SkidBuffer.v:66:67 "1st Buffer never triggers branch to state EMPTY. In transfer always 1 when out_transfer is 1"
+waive SkidBuffer.v:78:81 "1st Buffer never gets to state EXTRA"
+waive SkidBuffer.v:69:71 "2nd Buffer never triggers branch to state EXTRA"
+waive SkidBuffer.v:78:81 "1st Buffer never gets to state EXTRA"
+waive SkidBuffer.v:63 "Idle state"
+waive SkidBuffer.v:84 "Default state (2'b11) never triggered"
