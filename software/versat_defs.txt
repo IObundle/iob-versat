@@ -126,24 +126,38 @@ enum VersatRegister{
    VersatRegister_Debug,
    VersatRegister_ProfileControl,
    VersatRegister_ProfileRunCount,
+   VersatRegister_ProfileRunCount2,
    VersatRegister_ProfileCyclesSinceLastReset,
+   VersatRegister_ProfileCyclesSinceLastReset2,
    VersatRegister_ProfileRunningCycles,
+   VersatRegister_ProfileRunningCycles2,
    VersatRegister_ProfileDatabusValid,
+   VersatRegister_ProfileDatabusValid2,
    VersatRegister_ProfileDatabusValidAndReady,
+   VersatRegister_ProfileDatabusValidAndReady2,
    VersatRegister_ProfileConfigurationsSet,
+   VersatRegister_ProfileConfigurationsSet2,
    VersatRegister_ProfileConfigurationsSetWhileRunning,
+   VersatRegister_ProfileConfigurationsSetWhileRunning2
 };
 
 // Any value added here is automatically added to generated accelerator with profiling enabled. No logic is given, we just allocate memory mapped space.
 table ProfilingVersatRegisters(VersatRegister t){
    VersatRegister_ProfileControl,
    VersatRegister_ProfileRunCount,
+   VersatRegister_ProfileRunCount2,
    VersatRegister_ProfileCyclesSinceLastReset,
+   VersatRegister_ProfileCyclesSinceLastReset2,
    VersatRegister_ProfileRunningCycles,
+   VersatRegister_ProfileRunningCycles2,
    VersatRegister_ProfileDatabusValid,
+   VersatRegister_ProfileDatabusValid2,
    VersatRegister_ProfileDatabusValidAndReady,
+   VersatRegister_ProfileDatabusValidAndReady2,
    VersatRegister_ProfileConfigurationsSet,
-   VersatRegister_ProfileConfigurationsSetWhileRunning,   
+   VersatRegister_ProfileConfigurationsSet2,
+   VersatRegister_ProfileConfigurationsSetWhileRunning,
+   VersatRegister_ProfileConfigurationsSetWhileRunning2,   
 };
 
 /*

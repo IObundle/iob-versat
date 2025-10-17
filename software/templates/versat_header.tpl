@@ -79,13 +79,13 @@ typedef struct{
 } VersatDebugState;
 
 typedef struct{
-  int runCount;
-  int cyclesSinceLastReset;
-  int runningCycles;
-  int databusValid;
-  int databusValidAndReady;
-  int configurationsSet;
-  int configurationsSetWhileRunning;
+  uint64_t runCount;
+  uint64_t cyclesSinceLastReset;
+  uint64_t runningCycles;
+  uint64_t databusValid;
+  uint64_t databusValidAndReady;
+  uint64_t configurationsSet;
+  uint64_t configurationsSetWhileRunning;
 } VersatProfile;
 
 void             DebugRunAccelerator(int times, int maxCycles); // Mainly for cases where the accelerator is hanging, we put a upper bound in the amount of cycles that we wait for.

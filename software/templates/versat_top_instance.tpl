@@ -25,7 +25,7 @@ module versat_instance #(
 
 // data/control interface
    input                           csr_valid,
-   input [ADDR_W-1:0]              csr_addr, // Use address in the code below, it uses byte addresses
+   input [ADDR_W-1:0]              csr_addr,
    input [DATA_W/8-1:0]            csr_wstrb,
    input [DATA_W-1:0]              csr_wdata,
    output                          csr_rvalid,
@@ -41,24 +41,23 @@ module versat_instance #(
 
 @{wireDecls}
 
-//wire wor_rvalid;
-
+// This interface is the result of joining the csr or the dma interface
+// Any logic that can interact with the DMA must use this interface.
 wire data_valid;
-wire [ADDR_W-1:0] address;
+wire [ADDR_W-1:0] data_address;
 wire [DATA_W-1:0] data_data;
 wire [(DATA_W/8)-1:0] data_wstrb;
 
 reg running;
 
-reg [31:0] stateRead;
+reg [DATA_W-1:0] stateRead;
 
 wire we = (|csr_wstrb);
-
-wire memoryMappedAddr;
+wire memoryMappedAddr = @{memoryConfigDecisionExpr};
 
 // Versat registers and memory access
 reg versat_rvalid;
-reg [31:0] versat_rdata;
+reg [DATA_W-1:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
@@ -98,8 +97,6 @@ begin
 end
 
 @{dmaInstantiation}
-
-assign memoryMappedAddr = @{memoryConfigDecisionExpr};
 
 @{profilingStuff}
 

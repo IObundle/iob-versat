@@ -2497,6 +2497,7 @@ void Repr(StringBuilder* builder,LoopLinearSum* sum){
 
 static SymbolicExpression SYM_INST_zero      = {.type = SymbolicExpressionType_LITERAL,.literal = 0};
 static SymbolicExpression SYM_INST_one       = {.type = SymbolicExpressionType_LITERAL,.literal = 1};
+static SymbolicExpression SYM_INST_two       = {.type = SymbolicExpressionType_LITERAL,.literal = 2};
 static SymbolicExpression SYM_INST_eight     = {.type = SymbolicExpressionType_LITERAL,.literal = 8};
 static SymbolicExpression SYM_INST_thirtyTwo = {.type = SymbolicExpressionType_LITERAL,.literal = 32};
 
@@ -2509,6 +2510,7 @@ static SymbolicExpression SYM_INST_lenW     = {.type = SymbolicExpressionType_VA
 
 SymbolicExpression* SYM_zero = &SYM_INST_zero;
 SymbolicExpression* SYM_one = &SYM_INST_one;
+SymbolicExpression* SYM_two = &SYM_INST_two;
 SymbolicExpression* SYM_eight = &SYM_INST_eight;
 SymbolicExpression* SYM_thirtyTwo = &SYM_INST_thirtyTwo;
 

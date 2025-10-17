@@ -2240,6 +2240,11 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_instance.v",UN(hardwarePath)),"w",FilePurpose_VERILOG_CODE);
   DEFER_CLOSE_FILE(s);
 
+  auto AddrIf = [&val](VEmitter* m,VersatRegister r){
+    int index = GetIndex(val,r);
+    m->If(SF("csr_addr >= %d && csr_addr < %d",index,index+4));
+  };
+
   Pool<FUInstance> instances = accel->allocated;
   
   if(!s){
@@ -2328,18 +2333,20 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   
   if(globalOptions.insertProfilingRegisters){
     VEmitter* m = StartVCode(temp);
+    
+    SymbolicExpression* doubleDataW = SymbolicMult(SYM_dataW,SYM_two,temp);
 
-    m->Reg("profile_runCount",SYM_dataW);
-    m->Reg("profile_cycles",SYM_dataW);
-    m->Reg("profile_runningCycles",SYM_dataW);
-    m->Reg("profile_databusValid",SYM_dataW);
-    m->Reg("profile_databusValidAndReady",SYM_dataW);
-    m->Reg("profile_configurationsSet",SYM_dataW);
-    m->Reg("profile_configurationsSetWhileRunning",SYM_dataW);
+    m->Reg("profile_runCount",doubleDataW);
+    m->Reg("profile_cycles",doubleDataW);
+    m->Reg("profile_runningCycles",doubleDataW);
+    m->Reg("profile_databusValid",doubleDataW);
+    m->Reg("profile_databusValidAndReady",doubleDataW);
+    m->Reg("profile_configurationsSet",doubleDataW);
+    m->Reg("profile_configurationsSetWhileRunning",doubleDataW);
 
     if(val.configurationBits){
       m->Wire("configSet");
-      m->Assign("configSet",SF("csr_valid && we && !memoryMappedAddr && address >= %d",(val.versatConfigs * 4)));
+      m->Assign("configSet",SF("csr_valid && we && !memoryMappedAddr && data_address >= %d",(val.versatConfigs * 4)));
     }
 
     m->AlwaysBlock("clk","rst_int");
@@ -2384,7 +2391,7 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
       m->EndIf();
     }
 
-    m->If(SF("csr_valid && we && csr_addr == %d",GetIndex(val,VersatRegister_ProfileControl)));
+    m->If(SF("csr_valid && we && csr_addr >= %d && csr_addr < %d && csr_wstrb[0] == 1'b1 && csr_wdata[0] == 1'b1",GetIndex(val,VersatRegister_ProfileControl),GetIndex(val,VersatRegister_ProfileControl)+4));
       m->Set("profile_runCount","0");
       m->Set("profile_cycles","0");
       m->Set("profile_runningCycles","0");
@@ -2424,21 +2431,40 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
     m->Set("signal_loop","0");
     m->If("csr_valid && we");
 
-    m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Control)));
-      m->Set("startRunPulse","1");
-      m->Set("soft_reset","csr_wdata[31]");
-      m->Set("signal_loop","csr_wdata[30]");
+    AddrIf(m,VersatRegister_Control);
+      m->If("csr_wstrb[0] == 1'b1");
+        m->Set("startRunPulse","1");
+      m->EndIf();
+
+      m->If("csr_wstrb[3] == 1'b1");
+        m->Set("soft_reset","csr_wdata[31]");
+        m->Set("signal_loop","csr_wdata[30]");
+      m->EndIf();
     m->EndIf();
 
     if(globalOptions.useDMA){
-      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaInternalAddress)));
-      m->Set("dma_internal_address_start","csr_wdata");
+      auto EmitStrobe = [](VEmitter* m,String strobeWire,const char* leftReg,const char* rightReg,int regSize){
+        for(int i = 0; i < regSize; i += 8){
+          int left = 8;
+          if(i + left > regSize){
+            left = regSize % 8;
+          }
+        
+          m->If(SF("%.*s[%d]",UN(strobeWire),i/8));
+          m->Set(leftReg,SF("%s[%d+:%d]",rightReg,i,left));
+          m->EndIf();
+        }
+      };
+
+
+      AddrIf(m,VersatRegister_DmaInternalAddress);
+      EmitStrobe(m,"csr_wstrb","dma_internal_address_start","csr_wdata",32);
       m->EndIf();
-      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaExternalAddress)));
-      m->Set("dma_external_addr_start","csr_wdata");
+      AddrIf(m,VersatRegister_DmaExternalAddress);
+      EmitStrobe(m,"csr_wstrb","dma_external_addr_start","csr_wdata",32);
       m->EndIf();
-      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaTransferLength)));
-      m->Set("dma_length","csr_wdata[LEN_W-1:0]");
+      AddrIf(m,VersatRegister_DmaTransferLength);
+      EmitStrobe(m,"csr_wstrb","dma_length","csr_wdata",24);
       m->EndIf();
     }
 
@@ -2448,7 +2474,7 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
     m->EndBlock();
 
     if(globalOptions.useDMA){
-      m->Assign("dma_start",SF("csr_valid && we && csr_addr == %d",GetIndex(val,VersatRegister_DmaControl)));
+      m->Assign("dma_start",SF("csr_valid && we && csr_addr >= %d && csr_addr < %d && csr_wstrb[0] && csr_wdata[0] == 1'b1",GetIndex(val,VersatRegister_DmaControl),GetIndex(val,VersatRegister_DmaControl)+4));
     }
 
     String content3 = EndVCodeAndPrint(m,temp);
@@ -2471,17 +2497,18 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
               m->Set("versat_rvalid","1");
             m->EndIf();
           m->EndIf();
-        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Control)));
+        AddrIf(m,VersatRegister_Control);
           m->Set("versat_rdata","{31'h0,done}");
         m->EndIf();
 
         if(globalOptions.useDMA){
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaControl)));
+          AddrIf(m,VersatRegister_DmaControl);
             m->Set("versat_rdata","{31'h0,!dma_running}");
           m->EndIf();
         }
         if(globalOptions.insertDebugRegisters){
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Debug)));
+
+          AddrIf(m,VersatRegister_Debug);
           if(info.nIOs){
             m->Set("versat_rdata","{31'h0,|m_databus_valid}");
           } else {
@@ -2490,32 +2517,53 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
           m->EndIf();
         }
         if(globalOptions.insertProfilingRegisters){
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileRunCount)));
-          m->Set("versat_rdata","profile_runCount");
+          AddrIf(m,VersatRegister_ProfileRunCount);
+          m->Set("versat_rdata","profile_runCount[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileRunCount2);
+          m->Set("versat_rdata","profile_runCount[DATA_W+:DATA_W]");
           m->EndIf();
 
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileCyclesSinceLastReset)));
-          m->Set("versat_rdata","profile_cycles");
+          AddrIf(m,VersatRegister_ProfileCyclesSinceLastReset);
+          m->Set("versat_rdata","profile_cycles[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileCyclesSinceLastReset2);
+          m->Set("versat_rdata","profile_cycles[DATA_W+:DATA_W]");
           m->EndIf();
 
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileRunningCycles)));
-          m->Set("versat_rdata","profile_runningCycles");
+          AddrIf(m,VersatRegister_ProfileRunningCycles);
+          m->Set("versat_rdata","profile_runningCycles[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileRunningCycles2);
+          m->Set("versat_rdata","profile_runningCycles[DATA_W+:DATA_W]");
           m->EndIf();
 
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileDatabusValid)));
-          m->Set("versat_rdata","profile_databusValid");
+          AddrIf(m,VersatRegister_ProfileDatabusValid);
+          m->Set("versat_rdata","profile_databusValid[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileDatabusValid2);
+          m->Set("versat_rdata","profile_databusValid[DATA_W+:DATA_W]");
           m->EndIf();
 
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileDatabusValidAndReady)));
-          m->Set("versat_rdata","profile_databusValidAndReady");
+          AddrIf(m,VersatRegister_ProfileDatabusValidAndReady);
+          m->Set("versat_rdata","profile_databusValidAndReady[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileDatabusValidAndReady2);
+          m->Set("versat_rdata","profile_databusValidAndReady[DATA_W+:DATA_W]");
           m->EndIf();
 
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileConfigurationsSet)));
-          m->Set("versat_rdata","profile_configurationsSet");
+          AddrIf(m,VersatRegister_ProfileConfigurationsSet);
+          m->Set("versat_rdata","profile_configurationsSet[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileConfigurationsSet2);
+          m->Set("versat_rdata","profile_configurationsSet[DATA_W+:DATA_W]");
           m->EndIf();
 
-          m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_ProfileConfigurationsSetWhileRunning)));
-          m->Set("versat_rdata","profile_configurationsSetWhileRunning");
+          AddrIf(m,VersatRegister_ProfileConfigurationsSetWhileRunning);
+          m->Set("versat_rdata","profile_configurationsSetWhileRunning[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileConfigurationsSetWhileRunning2);
+          m->Set("versat_rdata","profile_configurationsSetWhileRunning[DATA_W+:DATA_W]");
           m->EndIf();
         }
 
@@ -2580,7 +2628,7 @@ JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
 
   .s_valid(data_valid),
   .s_data(data_data),
-  .s_addr(address),
+  .s_addr(data_address),
   .s_wstrb(data_wstrb)
 );
                            )FOO";
@@ -2589,7 +2637,7 @@ JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
     } else {
       String content = R"FOO(
 assign data_valid = csr_valid;
-assign address = csr_addr;
+assign data_address = csr_addr;
 assign data_data = csr_wdata;
 assign data_wstrb = csr_wstrb;
                            )FOO";
@@ -2602,7 +2650,7 @@ assign data_wstrb = csr_wstrb;
     if(val.memoryMappedBytes == 0){
       TemplateSetString("memoryConfigDecisionExpr","1'b0");
     } else {
-      String content = PushString(temp,"address[%d]",val.memoryConfigDecisionBit);
+      String content = PushString(temp,"data_address[%d]",val.memoryConfigDecisionBit);
       TemplateSetString("memoryConfigDecisionExpr",content);
     }
   }
@@ -2701,7 +2749,7 @@ assign data_wstrb = csr_wstrb;
       m->PortConnect("memoryMappedAddr","memoryMappedAddr");
       m->PortConnect("data_write","csr_valid && we");
 
-      m->PortConnect("address","address");
+      m->PortConnect("address","data_address");
       m->PortConnect("data_wstrb","data_wstrb");
       m->PortConnect("data_data","data_data");
 
@@ -4206,9 +4254,10 @@ static inline void DebugEndAccelerator(int upperBound){
   PRINT("Accelerator reached upperbound\n");
 }
 
-static inline void DebugRunAcceleratorOnce(int times,int upperbound){ // times inside value amount
-   PRINT("Gonna start accelerator: (%x,%d,%d)\n",versat_base, VersatRegister_Control, times);
-   MEMSET(versat_base,VersatRegister_Control,times);
+static inline void DebugRunAcceleratorOnce(int upperbound){ // times inside value amount
+   PRINT("Gonna start accelerator: (%x,%d,%d)\n",versat_base, VersatRegister_Control);
+
+   MEMSET(versat_base,VersatRegister_Control,1);
    DebugEndAccelerator(upperbound);
 
    PRINT("Ended accelerator\n");
@@ -4221,11 +4270,9 @@ void DebugRunAccelerator(int times, int maxCycles){
     return;
   }
 
-  for(; times > 0xffff; times -= 0xffff){
-    DebugRunAcceleratorOnce(0xffff,maxCycles);
+  for(int i = 0; i < times; i++){
+    DebugRunAcceleratorOnce(maxCycles);
   } 
-
-  DebugRunAcceleratorOnce(times,maxCycles);
 }
 
 VersatDebugState VersatDebugGetState(){
@@ -4247,52 +4294,74 @@ VersatDebugState VersatDebugGetState(){
   String content2 = R"FOO(
 VersatProfile VersatProfileGet(){
   VersatProfile res = {};              
-    
-  res.runCount = MEMGET(versat_base,VersatRegister_ProfileRunCount);
-  res.cyclesSinceLastReset = MEMGET(versat_base,VersatRegister_ProfileCyclesSinceLastReset);
-  res.runningCycles = MEMGET(versat_base,VersatRegister_ProfileRunningCycles);
-  res.databusValid = MEMGET(versat_base,VersatRegister_ProfileDatabusValid);
-  res.databusValidAndReady = MEMGET(versat_base,VersatRegister_ProfileDatabusValidAndReady);
-  res.configurationsSet = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSet);
-  res.configurationsSetWhileRunning = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSetWhileRunning);
+  
+  union {
+    uint64_t u64;
+    int i32[2];
+  } conv;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileRunCount);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileRunCount2);
+  res.runCount = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileCyclesSinceLastReset);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileCyclesSinceLastReset2);
+  res.cyclesSinceLastReset = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileRunningCycles);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileRunningCycles2);
+  res.runningCycles = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileDatabusValid);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileDatabusValid2);
+  res.databusValid = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileDatabusValidAndReady);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileDatabusValidAndReady2);
+  res.databusValidAndReady = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSet);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSet2);
+  res.configurationsSet = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSetWhileRunning);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSetWhileRunning2);
+  res.configurationsSetWhileRunning = conv.u64;
 
   return res;
 }
 
 void VersatProfileReset(){
-  MEMSET(versat_base,VersatRegister_ProfileControl,0); // Value currently has no meaning. The access is enough to cause a reset
+  MEMSET(versat_base,VersatRegister_ProfileControl,1);
 }
 
 // 0 to 100
-static int Percentage(int smaller,int bigger){
+static uint64_t Percentage(uint64_t smaller,uint64_t bigger){
   if(bigger == 0){
     return 0;
   }
 
-  int64_t b = (int64_t) bigger;
-  int64_t s = (int64_t) smaller;
-
-  int64_t percent = ((s * 100) / b);
+  uint64_t percent = ((smaller * 100) / bigger);
 
   return percent;
 }
 
 void VersatPrintProfile(VersatProfile p){
-  PRINT("Runs profiled:%d\n", p.runCount);
-  PRINT("Total cycles:%d\n", p.cyclesSinceLastReset);
-  PRINT("  Cycles with accelerator running: %d (%d%%)\n", p.runningCycles,
+  PRINT("Runs profiled:%llu\n", p.runCount);
+  PRINT("Total cycles:%llu\n", p.cyclesSinceLastReset);
+  PRINT("  Cycles with accelerator running: %llu (%llu%%)\n", p.runningCycles,
         Percentage(p.runningCycles, p.cyclesSinceLastReset));
-  PRINT("    Cycles databus valid: %d (%d%%)\n", p.databusValid,
+  PRINT("    Cycles databus valid: %llu (%llu%%)\n", p.databusValid,
         Percentage(p.databusValid, p.runningCycles));
-  PRINT("    Cycles databus valid and ready: %d (%d%%)\n", p.databusValidAndReady,
+  PRINT("    Cycles databus valid and ready: %llu (%llu%%)\n", p.databusValidAndReady,
         Percentage(p.databusValidAndReady, p.runningCycles));
-  PRINT("      Databus efficiency: %d%%\n",
+  PRINT("      Databus efficiency: %llu%%\n",
         Percentage(p.databusValidAndReady, p.databusValid));
 
-  PRINT("Configurations set: %d\n", p.configurationsSet);
-  PRINT("  Configurations set while accel running: %d\n",
+  PRINT("Configurations set: %llu\n", p.configurationsSet);
+  PRINT("  Configurations set while accel running: %llu\n",
         p.configurationsSetWhileRunning);
-  PRINT("  Configurations efficiency: %d%%\n",
+  PRINT("  Configurations efficiency: %llu%%\n",
         Percentage(p.configurationsSet, p.configurationsSetWhileRunning));
 }
 )FOO";
