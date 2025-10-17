@@ -4,13 +4,22 @@ TBS=$(wildcard *_tb.v)
 F_UNITS=$(foreach tb,$(TBS),$(subst _tb.v,,$(tb)))
 COV_RPTS=$(foreach fu,$(F_UNITS),$(addsuffix _coverage.rpt ,$(fu)))
 
+FU_COV_LOG=FU_coverage.log
+
 FU?=Relu
 VCD?=0
 
 VERILATED_PATH=./obj_dir
 VSRC=$(wildcard $(FU_DIR)/*.v)
 
-all coverage-all-fus: debug $(COV_RPTS)
+all coverage-all-fus: $(FU_COV_LOG)
+	@echo "============"
+	@echo "FU Coverage:"
+	@echo "============"
+	@cat $(FU_COV_LOG)
+
+$(FU_COV_LOG): $(COV_RPTS)
+	grep "Global Coverage:" *_coverage.rpt | sed -E 's/_coverage.rpt:/ /g' > $@
 
 coverage: $(FU)_coverage.rpt
 
