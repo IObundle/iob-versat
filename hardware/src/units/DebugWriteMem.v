@@ -40,7 +40,7 @@ module DebugWriteMem #(
          databus_valid_0 <= 1'b1;
          done <= 1'b0;
       end else if (running) begin
-         if(databus_ready_0) begin
+         if(databus_ready_0 && databus_last_0) begin
             databus_valid_0 <= 1'b0;
             done <= 1'b1;
          end
