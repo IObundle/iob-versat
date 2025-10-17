@@ -2452,6 +2452,8 @@ AcceleratorMapping* CreateMapping(int inputId,int outputId,Arena* out){
 
   mapping->firstId = inputId;
   mapping->secondId = outputId;
+  
+  mapping->instanceMap = PushTrieMap<FUInstance*,FUInstance*>(out);
   mapping->inputMap = PushTrieMap<PortInstance,PortInstance>(out);
   mapping->outputMap = PushTrieMap<PortInstance,PortInstance>(out);
 
@@ -2494,7 +2496,14 @@ FUInstance* MapOrCreateNode(Accelerator* accel,AcceleratorMapping* map,FUInstanc
 
     //mapped = CopyInstance(accel,inst,false,newName);
 
-    mapped = CopyInstance(accel,inst,false,inst->name);
+    if(NameExists(accel,inst->name)){
+      TEMP_REGION(temp,nullptr);
+      
+      String conflictFreeName = GenerateNewValidName(accel,inst->name,temp);
+      mapped = CopyInstance(accel,inst,false,conflictFreeName);
+    } else {
+      mapped = CopyInstance(accel,inst,false,inst->name);
+    }
     MappingInsertEqualNode(map,inst,mapped);
   }
 
@@ -2639,6 +2648,7 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   for(FUInstance* inst : flatten[0]->allocated){
     FUInstance* recon = MapOrCreateNode(merged->recons[0],merged->inputToRecon[0],inst);
     MapOrCreateNode(merged->mergedGraph,merged->reconToMerged[0],recon);
+    DEBUG_BREAK();
   }
   
   while(iter.HasNext()){
@@ -2934,6 +2944,8 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
 
       FUInstance* mergeInst = info->inst;
       FUInstance* reconInst = MappingMapNode(mergedToRecon[i],mergeInst);
+
+      DEBUG_BREAK();
 
       if(reconInst){
         info->inst = reconInst;

@@ -7,9 +7,9 @@
 `undef VERSAT_SIM_DELAY
 
 `ifdef VERSAT_SIM_AXI_DELAY
-`define VERSAT_SIM_DELAY VERSAT_SIM_AXI_DELAY
+`define VERSAT_SIM_DELAY `VERSAT_SIM_AXI_DELAY
 `else
-`define VERSAT_SIM_DELAY 3
+`define VERSAT_SIM_DELAY 5
 `endif
 
 `endif
@@ -37,13 +37,13 @@ module VersatAxiDelay #(
       reg [$clog2(MAX_DELAY):0] counter;
       always @(posedge clk_i, posedge rst_i) begin
          if (rst_i) begin
-            counter <= 0;
+            counter <= ($urandom % MAX_DELAY);
          end else begin
             if ((counter == 0) && m_valid_o && m_ready_i) begin
                counter <= ($urandom % MAX_DELAY);
             end
 
-            if (counter) counter <= counter - 1;
+            if (counter && s_valid_i) counter <= counter - 1;
          end
       end
 

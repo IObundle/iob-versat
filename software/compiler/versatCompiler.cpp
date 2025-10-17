@@ -985,6 +985,8 @@ Module Test(){
 // ============================================================================
 // Bugs
 
+BUG: Need more tests for modules that contain units but are not connected to anything. Also test merge for these cases as well.
+
 BUG: Debug folder gets created inside the iob-soc-versat repo when running ./test.py tests. Something about the python3 script -> makefile is causing the path to not be the same as if just calling makefile directly.
 
 BUG: localOrder appears to be broken. 

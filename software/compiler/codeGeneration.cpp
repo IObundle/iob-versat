@@ -2408,8 +2408,8 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
     VEmitter* m = StartVCode(temp);
     m->AlwaysBlock("clk","rst_int");
     m->If("rst_int");
+    m->Set("startRunPulse","0");
     m->Set("soft_reset","0");
-    m->Set("runCounter","0");
     m->Set("signal_loop","0");
     if(globalOptions.useDMA){
       m->Set("dma_length","0");
@@ -2417,17 +2417,15 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
       m->Set("dma_external_addr_start","0");
     }
     m->Else();
-
-    m->If("run");
-    m->Set("runCounter","runCounter - 1");
-    m->EndIf();
-
+    
+    m->Set("startRunPulse","0");
+    
     m->Set("soft_reset","0");
     m->Set("signal_loop","0");
     m->If("csr_valid && we");
 
     m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Control)));
-      m->Set("runCounter","runCounter + csr_wdata[15:0]");
+      m->Set("startRunPulse","1");
       m->Set("soft_reset","csr_wdata[31]");
       m->Set("signal_loop","csr_wdata[30]");
     m->EndIf();

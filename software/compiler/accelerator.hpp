@@ -263,6 +263,7 @@ struct AcceleratorMapping{
   int secondId;
 
   // After port instance change, do not need two maps for input/output differences. Should be able to only use 1.
+  TrieMap<FUInstance*,FUInstance*>* instanceMap;
   TrieMap<PortInstance,PortInstance>* inputMap;
   TrieMap<PortInstance,PortInstance>* outputMap;
 };
@@ -397,6 +398,7 @@ DAGOrderNodes CalculateDAGOrder(Accelerator* accel,Arena* out);
 bool IsCombinatorial(Accelerator* accel);
 bool IsUnitCombinatorial(FUInstance* inst);
 bool NameExists(Accelerator* accel,String name);
+String GenerateNewValidName(Accelerator* accel,String base,Arena* out);
 
 Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out);
 

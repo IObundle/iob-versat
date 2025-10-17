@@ -94,14 +94,11 @@ module VWrite #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         //doneWrite <= 1'b1;
          doneStore <= 1'b1;
       end else if (run) begin
-         //doneWrite <= !enabled;
          doneStore <= 1'b0;
       end else if (running) begin
          doneStore <= doneStore_int;
-         //if (databus_valid_0 && databus_ready_0 && databus_last_0) doneWrite <= 1'b1;
       end
    end
 
@@ -134,7 +131,7 @@ module VWrite #(
    always @(posedge clk,posedge rst) begin
       if(rst) begin
          gen_addr_temp <= 0;
-      end else if(run && enabled) begin
+      end else if(run && enabled && length != 0) begin
          gen_addr_temp <= 0;
          gen_valid <= 1'b1;
       end else begin
@@ -160,7 +157,7 @@ module VWrite #(
       ) writer (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run && enabled),
+      .run_i(run && enabled && length != 0),
       .done_o(transferDone),
 
       .ignore_first_i(1'b0),

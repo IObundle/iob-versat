@@ -262,7 +262,7 @@ module SimpleAXItoAXIWrite #(
                // awvalid is 1 at this point
                if (axi_awready_i) begin
                   awvalid <= 1'b0;
-                  state   <= 3'h4;
+                  state   <= 3'h3;
                   if (first_transfer) begin
                      first_transfer <= 1'b0;
                      wstrb          <= initial_strb;
@@ -274,7 +274,7 @@ module SimpleAXItoAXIWrite #(
                   end
                end
             end
-            3'h4: begin
+            3'h3: begin
                if (axi_wvalid_o && axi_wready_i) begin
                   counter <= counter + 1;
 
@@ -311,7 +311,7 @@ module SimpleAXItoAXIWrite #(
          initiateTransfer = 1'b1;
       end
 
-      if (state == 3'h4) begin
+      if (state == 3'h3) begin
          wvalid     = data_valid || (m_TransferDone && outputOneExtra);
 
          m_axi_last = (counter == axi_awlen_o);

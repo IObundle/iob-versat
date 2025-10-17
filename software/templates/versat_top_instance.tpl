@@ -50,8 +50,6 @@ wire [(DATA_W/8)-1:0] data_wstrb;
 
 reg running;
 
-wire done;
-reg [30:0] runCounter;
 reg [31:0] stateRead;
 
 wire we = (|csr_wstrb);
@@ -64,24 +62,25 @@ reg [31:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
-wire canRun = |runCounter && (&unitDone);
-reg canRun1;
-
+wire done = &unitDone;
+wire canRun = done;
 wire rst_int = (rst | soft_reset);
+
+reg startRunPulse;
+reg run;
+
+wire pre_run_pulse = canRun && startRunPulse;
 
 always @(posedge clk,posedge rst)
 begin
    if(rst) begin
-       canRun1 <= 0;
+       run <= 0;
+   end else if(pre_run_pulse) begin
+       run <= 1'b1;
    end else begin
-       canRun1 <= canRun;
+       run <= 1'b0;
    end
 end
-
-wire run = (canRun && canRun1);
-wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
-
-assign done = (!(|runCounter) && (&unitDone));
 
 wire dma_running; // TODO: Emit this only if we have DMA enabled.
 
