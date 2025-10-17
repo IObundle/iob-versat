@@ -191,7 +191,6 @@ module VRead #(
       .data_valid_i(1'b0),
       .data_ready_i(data_ready),
       .reading(1'b1),
-      .data_last_o(),
 
       .count_i(amount),
       .start_address_i(ext_addr),

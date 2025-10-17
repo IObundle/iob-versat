@@ -63,7 +63,6 @@ module SuperAddress #(
    input                          data_ready_i,
    input                          data_valid_i,
    input                          reading,
-   output                         data_last_o,
 
    // Only address databus values. Read vs Write implemented outside of thies unit.
    input                          databus_ready,
@@ -278,6 +277,5 @@ end
 assign counter_advance = (databus_valid && databus_ready && databus_last);
 
 assign done_o = doneAddress && doneDatabus;
-assign data_last_o = (databus_valid && databus_ready && databus_last && count_is_zero);
 
 endmodule  // SuperAddress

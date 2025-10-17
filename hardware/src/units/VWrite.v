@@ -78,7 +78,7 @@ module VWrite #(
    wire doneStore_int;
    assign done = (transferDone & doneStore);
 
-   wire data_valid, data_ready, data_last;
+   wire data_valid, data_ready;
    wire [   AXI_DATA_W-1:0] data_data;
    wire [DELAY_STORE_W-1:0] delay_store;
 
@@ -204,7 +204,6 @@ module VWrite #(
       .data_valid_i(data_valid),
       .data_ready_i(1'b1),
       .reading     (1'b0),
-      .data_last_o (data_last),
 
       .count_i        (amount),
       .start_address_i(ext_addr),
@@ -282,7 +281,7 @@ module VWrite #(
       .m_ready_i(data_ready),
       .m_addr_o (),
       .m_data_o (data_data),
-      .m_last_i (data_last),
+      .m_last_i (1'b0),
 
       // Connect to memory
       .mem_enable_o(read_en),

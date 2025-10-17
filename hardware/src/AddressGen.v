@@ -85,7 +85,6 @@ module AddressGen #(
       .data_valid_i(1'b1),
       .data_ready_i(1'b1),
       .reading(1'b1),
-      .data_last_o(),
 
       .count_i(0),
       .start_address_i(0),

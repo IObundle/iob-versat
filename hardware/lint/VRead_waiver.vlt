@@ -12,5 +12,3 @@ lint_off -rule PINCONNECTEMPTY -file "**VRead.v" -match "Cell pin connected by n
 lint_off -rule PINCONNECTEMPTY -file "**VRead.v" -match "Cell pin connected by name with empty reference: 'addr_o'"
 
 lint_off -rule PINCONNECTEMPTY -file "**VRead.v" -match "Cell pin connected by name with empty reference: 'store_o'"
-
-lint_off -rule PINCONNECTEMPTY -file "**VRead.v" -match "Cell pin connected by name with empty reference: 'data_last_o'"

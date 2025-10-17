@@ -12,6 +12,3 @@ lint_off -rule PINCONNECTEMPTY -file "**/AddressGen.v" -match "Cell pin connecte
 lint_off -rule PINCONNECTEMPTY -file "**/AddressGen.v" -match "Cell pin connected by name with empty reference: 'databus_addr'"
 
 lint_off -rule PINCONNECTEMPTY -file "**/AddressGen.v" -match "Cell pin connected by name with empty reference: 'databus_len'"
-
-lint_off -rule PINCONNECTEMPTY -file "**/AddressGen.v" -match "Cell pin connected by name with empty reference: 'data_last_o'"
-

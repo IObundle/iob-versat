@@ -101,7 +101,6 @@ module AddressGen3 #(
       .data_valid_i(1'b1),
       .data_ready_i(1'b1),
       .reading(1'b1),
-      .data_last_o(),
 
       .count_i(1'b0),
       .start_address_i(1'b0),
