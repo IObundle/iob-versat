@@ -312,7 +312,7 @@ module VWrite_tb (
     pingPong = 1;
     iter = {ADDR_W{1'b1}};
     per = {PERIOD_W{1'b1}};
-    duty = {PERIOD_W{1'b0}};
+    duty = {PERIOD_W{1'b1}};
     start = {ADDR_W{1'b1}};
     shift = {ADDR_W{1'b1}};
     incr = 1;
@@ -329,7 +329,33 @@ module VWrite_tb (
     delay0 = {DELAY_W{1'b0}};
 
     RunAccelerator();
+    in0 = {DATA_W{1'b0}};
+    RunAccelerator();
+    in0 = {DATA_W{1'b1}};
+    RunAccelerator();
+    amount_minus_one = {DATA_W{1'b1}};
+    extra_delay = {20{1'b1}};
+    pingPong = 0;
+    ignore_first = 1;
+    RunAccelerator();
+    extra_delay = {20{1'b0}};
+    `ADVANCE;
 
+    iter2 = {ADDR_W{1'b1}};
+    per2 = {PERIOD_W{1'b1}};
+    shift2 = {ADDR_W{1'b1}};
+    incr2 = {ADDR_W{1'b1}};
+    iter3 = {ADDR_W{1'b1}};
+    per3 = {PERIOD_W{1'b1}};
+    shift3 = {ADDR_W{1'b1}};
+    incr3 = {ADDR_W{1'b1}};
+
+    amount_minus_one = 0;
+    extra_delay = 0;
+    ignore_first = 0;
+    pingPong = 1;
+
+    RunAccelerator();
     `ADVANCE;
 
     rst = 1;
