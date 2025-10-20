@@ -9,5 +9,6 @@ lint_off -rule UNDRIVEN -file "**/OnlyOutputMem.v" -match "Signal is not driven:
 lint_off -rule UNDRIVEN -file "**/OnlyOutputMem.v" -match "Signal is not driven: 'rdata'"
 
 // Unused submodule output
-lint_off -rule PINCONNECTEMPTY -file "**/OnlyOutputMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/OnlyOutputMem.v" -match "Instance pin connected by name with empty reference: 'store_o'"
 
+// lint_off -rule PINCONNECTEMPTY -file "**/OnlyOutputMem.v" -match "Instance pin connected by name with empty reference: 'store_o'*"
