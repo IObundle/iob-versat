@@ -60,18 +60,19 @@ void SetVersatDebugPrintfFunction(VersatPrintf function){
   PRINT("Versat successfully set print function\n");
 }
 
-void StartAccelerator(){
-  MEMSET(versat_base,VersatRegister_Control,1);
-}
-
 void EndAccelerator(){
   //PRINT("End accelerator\n");
   while(1){
     volatile int val = MEMGET(versat_base,VersatRegister_Control);
     if(val){
-      break;
+      return;
     }
   } 
+}
+
+void StartAccelerator(){
+  EndAccelerator();
+  MEMSET(versat_base,VersatRegister_Control,1);
 }
 
 void ResetAccelerator(){
@@ -79,15 +80,11 @@ void ResetAccelerator(){
   VersatLoadDelay(delayBuffer);
 }
 
-static inline void RunAcceleratorOnce(){ // times inside value amount
-   StartAccelerator();
-   EndAccelerator();
-}
-
 void RunAccelerator(int times){
   for(int i = 0; i < times; i++){
-    RunAcceleratorOnce();
+    StartAccelerator();
   } 
+  EndAccelerator();
 }
 
 void SignalLoop(){

@@ -58,14 +58,17 @@ void SetVersatDebugPrintfFunction(VersatPrintf function);
 // In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
 int GetAcceleratorCyclesElapsed();
 
-void RunAccelerator(int times);
-void StartAccelerator();
-void EndAccelerator();
+void RunAccelerator(int times); // Runs accelerator n times and waits for it to finish before ending. Mostly used to flush the final computations and for simple invocations
+void StartAccelerator(); // Also waits for previous run to end if accelerator is still running
+void EndAccelerator(); // Ensure the accelerator as finished running
 void ResetAccelerator();
+
+// Fast data movement using internal Versat DMA if possible, otherwise regular memcpy style functions
 void VersatMemoryCopy(volatile void* dest,volatile const void* data,int byteSize);
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val);
 int VersatUnitRead(volatile const void* baseaddr,int index);
 float VersatUnitReadFloat(volatile const void* baseaddr,int index);
+
 void SignalLoop();
 void VersatLoadDelay(volatile const unsigned int* delayBuffer);
 
