@@ -13,7 +13,7 @@ module BurstSplit #(
    input [DATA_W-1:0] data_in_i,
    input              data_valid_i,
 
-   output reg [DATA_W-1:0] data_out_o,
+   output reg [DATA_W-1:0] data_out_o, // Combinatorial from data_in_i and stored_data
 
    input clk_i,
    input rst_i
@@ -187,7 +187,7 @@ module BurstSplit #(
                6'b111111: data_out_o = {data_in_i[7:0], stored_data[503:0]};
             endcase
          end
-      end  // if(DATA_W == 256)
+      end  // if(DATA_W == 512)
    endgenerate
 
 endmodule  // burst_split

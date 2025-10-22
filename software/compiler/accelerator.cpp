@@ -37,6 +37,17 @@ bool NameExists(Accelerator* accel,String name){
   return false;
 }
 
+String GenerateNewValidName(Accelerator* accel,String base,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  for(int i = 0; true; i++){
+    String possible = PushString(temp,"%.*s_%d",UN(base),i);
+    if(!NameExists(accel,possible)){
+      return PushString(out,possible);
+    }
+  }
+}
+
 int GetFreeShareIndex(Accelerator* accel){
   int attempt = 0; 
   while(1){
@@ -722,8 +733,14 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
     res.nUnitsIO += 1; // For the DMA
   }
 
-  if(globalOptions.insertAdditionalDebugRegisters){
+  if(globalOptions.insertDebugRegisters){
     AddRegister(VersatRegister_Debug);
+  }
+
+  if(globalOptions.insertProfilingRegisters){
+    for(ProfilingVersatRegisters_GenType reg : ProfilingVersatRegisters){
+      AddRegister(reg.t);
+    }
   }
 
   res.nConfigs += res.versatConfigs;
@@ -1156,6 +1173,11 @@ ConnectionNode* GetConnectionNode(ConnectionNode* head,int port,PortInstance oth
 void MappingCheck(AcceleratorMapping* map){
   int idToCheckFirst = map->firstId;
   int idToCheckSecond = map->secondId;
+  
+  for(auto p : map->instanceMap){
+    Assert(idToCheckFirst == p.first->accel->id);
+    Assert(idToCheckSecond == p.second->accel->id);
+  }
   for(auto p : map->inputMap){
     PortInstance f = p.first;
     PortInstance s = p.second;
@@ -1198,6 +1220,7 @@ AcceleratorMapping* MappingSimple(Accelerator* first,Accelerator* second,int siz
   }
   
   AcceleratorMapping* mapping = PushStruct<AcceleratorMapping>(out);
+  mapping->instanceMap = PushTrieMap<FUInstance*,FUInstance*>(mappingArena);
   mapping->inputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
   mapping->outputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
   mapping->firstId = first->id;   
@@ -1216,9 +1239,13 @@ AcceleratorMapping* MappingInvert(AcceleratorMapping* toReverse,Arena* out){
   MappingCheck(toReverse);
 
   AcceleratorMapping* result = PushStruct<AcceleratorMapping>(out);
+  result->instanceMap = PushTrieMap<FUInstance*,FUInstance*>(mappingArena);
   result->inputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
   result->outputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
 
+  for(auto p : toReverse->instanceMap){
+    result->instanceMap->Insert(p.second,p.first);
+  }
   for(auto p : toReverse->inputMap){
     result->inputMap->Insert(p.second,p.first);
   }
@@ -1241,8 +1268,18 @@ AcceleratorMapping* MappingCombine(AcceleratorMapping* first,AcceleratorMapping*
   Assert(first->secondId == second->firstId);
   
   AcceleratorMapping* result = PushStruct<AcceleratorMapping>(out);
+  result->instanceMap = PushTrieMap<FUInstance*,FUInstance*>(mappingArena);
   result->inputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
   result->outputMap = PushTrieMap<PortInstance,PortInstance>(mappingArena);
+
+  for(auto p : first->instanceMap){
+    FUInstance* start = p.first;
+    FUInstance** end = second->instanceMap->Get(p.second);
+    
+    if(end){
+      result->instanceMap->Insert(start,*end);
+    }
+  }
 
   for(auto p : first->inputMap){
     PortInstance start = p.first;
@@ -1303,6 +1340,8 @@ void MappingInsertEqualNode(AcceleratorMapping* mapping,FUInstance* first,FUInst
   int nInputs = decl->NumberInputs();
   int nOutputs = decl->NumberOutputs();
   
+  mapping->instanceMap->Insert(first,second);
+
   for(int i = 0; i < nInputs; i++){
     mapping->inputMap->Insert(MakePortIn(first,i),MakePortIn(second,i));
   }
@@ -1319,6 +1358,7 @@ void MappingInsertInput(AcceleratorMapping* mapping,PortInstance first,PortInsta
   Assert(first.dir == Direction_INPUT);
   Assert(second.dir == Direction_INPUT);
   
+  mapping->instanceMap->Insert(first.inst,second.inst);
   mapping->inputMap->Insert(first,second);
 }
 
@@ -1329,6 +1369,7 @@ void MappingInsertOutput(AcceleratorMapping* mapping,PortInstance first,PortInst
   Assert(first.dir == Direction_OUTPUT);
   Assert(second.dir == Direction_OUTPUT);
 
+  mapping->instanceMap->Insert(first.inst,second.inst);
   mapping->outputMap->Insert(first,second);
 }
 
@@ -1339,7 +1380,12 @@ void MappingPrintInfo(AcceleratorMapping* map){
 void MappingPrintAll(AcceleratorMapping* map){
   MappingPrintInfo(map);
   printf("\n");
-  
+
+  printf("Instance map:\n");
+  for(Pair<FUInstance*,FUInstance*> p : map->instanceMap){
+    printf("%.*s -> %.*s\n",UN(p.first->name),UN(p.second->name));
+  }
+
   printf("Input map:\n");
   for(Pair<PortInstance,PortInstance> p : map->inputMap){
     printf("%.*s:%d(%d) -> %.*s:%d(%d)\n",UN(p.first.inst->name),p.first.port,p.first.inst->id,
@@ -1360,7 +1406,12 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst){
   
   int nInputs = decl->NumberInputs();
   int nOutputs = decl->NumberOutputs();
-
+  
+  FUInstance** possibleNode = mapping->instanceMap->Get(inst);
+  if(possibleNode){
+    return *possibleNode;
+  }
+  
   FUInstance* toCheck = nullptr;
   for(int i = 0; i < nInputs; i++){
     PortInstance* optPort = mapping->inputMap->Get(MakePortIn(inst,i));

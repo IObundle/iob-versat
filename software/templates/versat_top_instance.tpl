@@ -25,7 +25,7 @@ module versat_instance #(
 
 // data/control interface
    input                           csr_valid,
-   input [ADDR_W-1:0]              csr_addr, // Use address in the code below, it uses byte addresses
+   input [ADDR_W-1:0]              csr_addr,
    input [DATA_W/8-1:0]            csr_wstrb,
    input [DATA_W-1:0]              csr_wdata,
    output                          csr_rvalid,
@@ -41,51 +41,47 @@ module versat_instance #(
 
 @{wireDecls}
 
-wire wor_rvalid;
-
+// This interface is the result of joining the csr or the dma interface
+// Any logic that can interact with the DMA must use this interface.
 wire data_valid;
-wire [ADDR_W-1:0] address;
+wire [ADDR_W-1:0] data_address;
 wire [DATA_W-1:0] data_data;
 wire [(DATA_W/8)-1:0] data_wstrb;
 
 reg running;
 
-wire done;
-reg [30:0] runCounter;
-reg [31:0] stateRead;
+reg [DATA_W-1:0] stateRead;
 
 wire we = (|csr_wstrb);
-
-wire memoryMappedAddr;
+wire memoryMappedAddr = @{memoryConfigDecisionExpr};
 
 // Versat registers and memory access
 reg versat_rvalid;
-reg [31:0] versat_rdata;
+reg [DATA_W-1:0] versat_rdata;
 
 reg soft_reset,signal_loop; // Self resetting 
 
-wire canRun = |runCounter && (&unitDone);
-reg canRun1;
-
+wire done = &unitDone;
+wire canRun = done;
 wire rst_int = (rst | soft_reset);
+
+reg startRunPulse;
+reg run;
+
+wire pre_run_pulse = canRun && startRunPulse;
 
 always @(posedge clk,posedge rst)
 begin
    if(rst) begin
-       canRun1 <= 0;
+       run <= 0;
+   end else if(pre_run_pulse) begin
+       run <= 1'b1;
    end else begin
-       canRun1 <= canRun;
+       run <= 1'b0;
    end
 end
 
-wire run = (canRun && canRun1);
-wire pre_run_pulse = (canRun && !canRun1); // One cycle before run is asserted
-
-assign done = (!(|runCounter) && (&unitDone));
-
-wire dma_running;
-
-@{interface}
+wire dma_running; // TODO: Emit this only if we have DMA enabled.
 
 @{emitIO}
 
@@ -101,24 +97,14 @@ begin
 end
 
 @{dmaInstantiation}
-@{dmaInstantiation2}
 
-always @(posedge clk,posedge rst_int)
-begin
-   if(rst_int) begin
-      runCounter <= 0;
-   end else begin
-      if(run)
-         runCounter <= runCounter - 1;
+@{profilingStuff}
 
-      if(csr_valid && we) begin
-         if(csr_addr == 0)
-            runCounter <= runCounter + csr_wdata[15:0];
-      end
-   end
-end
+// Control interface write portion
+@{controlWriteInterface}
 
-assign memoryMappedAddr = @{memoryConfigDecisionExpr};
+// Control interface read portion
+@{controlReadInterface}
 
 @{unitsMappedDecl}
 

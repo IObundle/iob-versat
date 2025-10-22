@@ -58,10 +58,10 @@ module SimpleAXItoAXIRead #(
    assign axi_arid_o    = 0;
    assign axi_arsize_o  = axi_size;
    assign axi_arburst_o = 'b01;  // INCR
-   assign axi_arlock_o  = 'b0;
-   assign axi_arcache_o = 'h2;
-   assign axi_arprot_o  = 'b010;
-   assign axi_arqos_o   = 'h0;
+   assign axi_arlock_o  = 0;
+   assign axi_arcache_o = 0;
+   assign axi_arprot_o  = 0;
+   assign axi_arqos_o   = 0;
 
    reg [1:0] read_state;
    reg arvalid, rready;

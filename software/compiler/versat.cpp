@@ -756,9 +756,9 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.wire = w;
       info.addr = 4 * addr++; // TODO: This 4 is because we are using addresses that are byte aligned in a 32 bit system. We could make this proper instead of hardcoded.
 
-      info.bitExpr = Normalize(expr,out);
+      info.startBitExpr = Normalize(expr,out);
       
-      expr = SymbolicAdd(info.bitExpr,w.sizeExpr,temp);
+      expr = SymbolicAdd(info.startBitExpr,w.sizeExpr,temp);
       *list->PushElem() = info;
     }
   }
@@ -783,9 +783,9 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.addr = 4 * addr++;
       info.isStatic = true;
 
-      info.bitExpr = Normalize(expr,out);
+      info.startBitExpr = Normalize(expr,out);
 
-      expr = SymbolicAdd(info.bitExpr,info.wire.sizeExpr,temp);
+      expr = SymbolicAdd(info.startBitExpr,info.wire.sizeExpr,temp);
 
       *list->PushElem() = info;
     }
@@ -806,9 +806,9 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       
       info.addr = 4 * addr++;
 
-      info.bitExpr = Normalize(expr,out);
+      info.startBitExpr = Normalize(expr,out);
 
-      expr = SymbolicAdd(info.bitExpr,PushVariable(temp,"DELAY_W"),temp);
+      expr = SymbolicAdd(info.startBitExpr,PushVariable(temp,"DELAY_W"),temp);
 
       *list->PushElem() = info;
     }

@@ -2,8 +2,8 @@
 
 module VRead #(
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 17,
-   parameter PERIOD_W   = 15, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 18,
+   parameter PERIOD_W   = 16, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -119,7 +119,7 @@ module VRead #(
    always @(posedge clk,posedge rst) begin
       if(rst) begin
          gen_addr_temp <= 0;
-      end else if(run && enabled) begin
+      end else if(run && enabled && length != 0) begin
          gen_addr_temp <= 0;
          gen_valid <= 1'b1;
       end else begin
@@ -143,7 +143,7 @@ module VRead #(
       ) reader (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run && enabled),
+      .run_i(run && enabled && length != 0),
       .done_o(transferDone),
 
       .ignore_first_i(1'b0),

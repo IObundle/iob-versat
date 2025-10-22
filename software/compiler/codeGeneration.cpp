@@ -34,6 +34,15 @@ int GetIndex(VersatComputedValues val,VersatRegister reg){
   return -1;
 };
 
+Opt<int> GetOptIndex(VersatComputedValues val,VersatRegister reg){
+  for(int i = 0; i < val.registers.size; i++){
+    if(val.registers[i] == reg){
+      return (i * 4); // TODO: This multiplication in here is dangerous. We probably want to have logic in the accelerator to convert address from byte space to symbol space and then we can just remove the 4 from here.
+    }
+  }
+  return {};
+}
+
 String GetRelativePathFromSourceToTarget(String sourcePath,String targetPath,Arena* out){
   TEMP_REGION(temp,out);
   fs::path source(StaticFormat("%.*s",UN(sourcePath)));
@@ -915,8 +924,6 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
     m->EndGroup();
   }
   
-  // TODO: We cannot do this as the parameters must depend on the specific unit.
-#if 1
   m->StartGroup("ExternalMemory");
   for(int i = 0; i <  decl->externalMemorySymbol.size; i++){
     ExternalMemorySymbolic ext = decl->externalMemorySymbol[i];
@@ -944,7 +951,6 @@ VerilogModuleInterface* GenerateModuleInterface(FUDeclaration* decl,Arena* out){
   }
   }
   m->EndGroup();
-#endif
   
   return End(m,out);
 }
@@ -1233,7 +1239,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
         for(WireInformation info : wireInfo){
           m->If(SF("address[%d:0] == %d",configurationAddressBits + 1,info.addr));
 
-          String configStartExpr = PushRepresentation(info.bitExpr,temp);
+          String configStartExpr = PushRepresentation(info.startBitExpr,temp);
           
           if(info.wire.sizeExpr && info.wire.sizeExpr->type != SymbolicExpressionType_LITERAL){
             String repr = PushRepresentation(info.wire.sizeExpr,temp);
@@ -1261,7 +1267,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
         m->Set("configdata",0);
         m->ElseIf("change_config_pulse");
         for(WireInformation info : wireInfo){
-          String start = PushRepresentation(info.bitExpr,temp);
+          String start = PushRepresentation(info.startBitExpr,temp);
           String size = PushRepresentation(info.wire.sizeExpr,temp);
           
           if(info.wire.stage == VersatStage_READ){
@@ -1269,7 +1275,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
           }
         }
         for(WireInformation info : wireInfo){
-          String start = PushRepresentation(info.bitExpr,temp);
+          String start = PushRepresentation(info.startBitExpr,temp);
           String size = PushRepresentation(info.wire.sizeExpr,temp);
 
           if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
@@ -1292,7 +1298,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
       }
       m->ElseIf("change_config_pulse");
       for(WireInformation info : wireInfo){
-        String start = PushRepresentation(info.bitExpr,temp);
+        String start = PushRepresentation(info.startBitExpr,temp);
         String size = PushRepresentation(info.wire.sizeExpr,temp);
         if(info.wire.stage == VersatStage_COMPUTE){
           m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
@@ -1318,7 +1324,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
       }
       m->ElseIf("change_config_pulse");
       for(WireInformation info : wireInfo){
-        String start = PushRepresentation(info.bitExpr,temp);
+        String start = PushRepresentation(info.startBitExpr,temp);
         String size = PushRepresentation(info.wire.sizeExpr,temp);
         if(info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Write_%.*s",UN(info.wire.name)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
@@ -1330,7 +1336,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
 
     for(WireInformation info : wireInfo){
       if(info.isStatic){
-        String start = PushRepresentation(info.bitExpr,temp);
+        String start = PushRepresentation(info.startBitExpr,temp);
         m->Assign(info.wire.name,PushString(temp,"configdata[(%.*s)+:%d]",UN(start),info.wire.bitSize));
       }
     }
@@ -2234,6 +2240,11 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_instance.v",UN(hardwarePath)),"w",FilePurpose_VERILOG_CODE);
   DEFER_CLOSE_FILE(s);
 
+  auto AddrIf = [&val](VEmitter* m,VersatRegister r){
+    int index = GetIndex(val,r);
+    m->If(SF("csr_addr >= %d && csr_addr < %d",index,index+4));
+  };
+
   Pool<FUInstance> instances = accel->allocated;
   
   if(!s){
@@ -2319,58 +2330,251 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
       
     TemplateSetString("wireDecls",content);
   }
+  
+  if(globalOptions.insertProfilingRegisters){
+    VEmitter* m = StartVCode(temp);
+    
+    SymbolicExpression* doubleDataW = SymbolicMult(SYM_dataW,SYM_two,temp);
 
+    m->Reg("profile_runCount",doubleDataW);
+    m->Reg("profile_cycles",doubleDataW);
+    m->Reg("profile_runningCycles",doubleDataW);
+    m->Reg("profile_databusValid",doubleDataW);
+    m->Reg("profile_databusValidAndReady",doubleDataW);
+    m->Reg("profile_configurationsSet",doubleDataW);
+    m->Reg("profile_configurationsSetWhileRunning",doubleDataW);
+
+    if(val.configurationBits){
+      m->Wire("configSet");
+      m->Assign("configSet",SF("csr_valid && we && !memoryMappedAddr && data_address >= %d",(val.versatConfigs * 4)));
+    }
+
+    m->AlwaysBlock("clk","rst_int");
+    m->If("rst_int");
+    m->Set("profile_runCount","0");
+    m->Set("profile_cycles","0");
+    m->Set("profile_runningCycles","0");
+    m->Set("profile_databusValid","0");
+    m->Set("profile_databusValidAndReady","0");
+    m->Set("profile_configurationsSet","0");
+    m->Set("profile_configurationsSetWhileRunning","0");
+
+    m->Else();
+
+    m->Increment("profile_cycles");
+
+    m->If("run");
+    m->Increment("profile_runCount");
+    m->EndIf();
+
+    m->If("running");
+    m->Increment("profile_runningCycles");
+    m->EndIf();
+    
+    if(info.nIOs){
+      m->If("|m_databus_valid");
+      m->Increment("profile_databusValid");
+      m->EndIf();
+
+      m->If("(|m_databus_valid) && (|m_databus_ready)");
+      m->Increment("profile_databusValidAndReady");
+      m->EndIf();
+    }
+
+    if(val.configurationBits){
+      m->If("configSet");
+      m->Increment("profile_configurationsSet");
+      m->EndIf();
+
+      m->If("configSet && running");
+      m->Increment("profile_configurationsSetWhileRunning");
+      m->EndIf();
+    }
+
+    m->If(SF("csr_valid && we && csr_addr >= %d && csr_addr < %d && csr_wstrb[0] == 1'b1 && csr_wdata[0] == 1'b1",GetIndex(val,VersatRegister_ProfileControl),GetIndex(val,VersatRegister_ProfileControl)+4));
+      m->Set("profile_runCount","0");
+      m->Set("profile_cycles","0");
+      m->Set("profile_runningCycles","0");
+      m->Set("profile_databusValid","0");
+      m->Set("profile_databusValidAndReady","0");
+      m->Set("profile_configurationsSet","0");
+      m->Set("profile_configurationsSetWhileRunning","0");
+    m->EndIf();
+
+    m->EndIf();
+    m->EndBlock();
+
+    String content = EndVCodeAndPrint(m,temp);
+    TemplateSetString("profilingStuff",content);
+  } else {
+    TemplateSetString("profilingStuff",{});
+  }
+
+  // Control write portion
+  {      
+    VEmitter* m = StartVCode(temp);
+    m->AlwaysBlock("clk","rst_int");
+    m->If("rst_int");
+    m->Set("startRunPulse","0");
+    m->Set("soft_reset","0");
+    m->Set("signal_loop","0");
+    if(globalOptions.useDMA){
+      m->Set("dma_length","0");
+      m->Set("dma_internal_address_start","0");
+      m->Set("dma_external_addr_start","0");
+    }
+    m->Else();
+    
+    m->Set("startRunPulse","0");
+    
+    m->Set("soft_reset","0");
+    m->Set("signal_loop","0");
+    m->If("csr_valid && we");
+
+    AddrIf(m,VersatRegister_Control);
+      m->If("csr_wstrb[0] == 1'b1");
+        m->Set("startRunPulse","1");
+      m->EndIf();
+
+      m->If("csr_wstrb[3] == 1'b1");
+        m->Set("soft_reset","csr_wdata[31]");
+        m->Set("signal_loop","csr_wdata[30]");
+      m->EndIf();
+    m->EndIf();
+
+    if(globalOptions.useDMA){
+      auto EmitStrobe = [](VEmitter* m,String strobeWire,const char* leftReg,const char* rightReg,int regSize){
+        for(int i = 0; i < regSize; i += 8){
+          int left = 8;
+          if(i + left > regSize){
+            left = regSize % 8;
+          }
+        
+          m->If(SF("%.*s[%d]",UN(strobeWire),i/8));
+          m->Set(leftReg,SF("%s[%d+:%d]",rightReg,i,left));
+          m->EndIf();
+        }
+      };
+
+
+      AddrIf(m,VersatRegister_DmaInternalAddress);
+      EmitStrobe(m,"csr_wstrb","dma_internal_address_start","csr_wdata",32);
+      m->EndIf();
+      AddrIf(m,VersatRegister_DmaExternalAddress);
+      EmitStrobe(m,"csr_wstrb","dma_external_addr_start","csr_wdata",32);
+      m->EndIf();
+      AddrIf(m,VersatRegister_DmaTransferLength);
+      EmitStrobe(m,"csr_wstrb","dma_length","csr_wdata",24);
+      m->EndIf();
+    }
+
+    m->EndIf();
+
+    m->EndIf();
+    m->EndBlock();
+
+    if(globalOptions.useDMA){
+      m->Assign("dma_start",SF("csr_valid && we && csr_addr >= %d && csr_addr < %d && csr_wstrb[0] && csr_wdata[0] == 1'b1",GetIndex(val,VersatRegister_DmaControl),GetIndex(val,VersatRegister_DmaControl)+4));
+    }
+
+    String content3 = EndVCodeAndPrint(m,temp);
+    TemplateSetString("controlWriteInterface",content3);
+  }
       
+  // Control read portion
   {      
     VEmitter* m = StartVCode(temp);
     m->AlwaysBlock("clk","rst");
-    m->If("rst");
-    m->Set("versat_rdata","0");
-    m->Set("versat_rvalid","0");
-    m->Set("signal_loop","0");
-    m->Set("soft_reset","0");
-    m->Else();
-    m->Set("versat_rvalid","0");
-    m->Set("soft_reset","0");
-    m->Set("signal_loop","0");
-
-    m->If("csr_valid");
-      m->If("!memoryMappedAddr");
-        m->Set("versat_rdata","stateRead");
-        m->If("csr_wstrb == 0");
-          m->Set("versat_rvalid","1");
-        m->EndIf();
-      m->EndIf();
-
-      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_Control)));
-        m->If("csr_wstrb == 0");
-          m->Set("versat_rvalid","1");
-        m->EndIf();
-        m->If("we");
-          m->Set("soft_reset","csr_wdata[31]");
-          m->Set("signal_loop","csr_wdata[30]");
-        m->Else();
+      m->If("rst");
+        m->Set("versat_rdata","0");
+        m->Set("versat_rvalid","0");
+      m->Else();
+        m->Set("versat_rvalid","0");
+        m->If("csr_valid");
+          m->If("!memoryMappedAddr");
+            m->Set("versat_rdata","stateRead");
+            m->If("csr_wstrb == 0");
+              m->Set("versat_rvalid","1");
+            m->EndIf();
+          m->EndIf();
+        AddrIf(m,VersatRegister_Control);
           m->Set("versat_rdata","{31'h0,done}");
         m->EndIf();
-      m->EndIf();
 
-    if(globalOptions.useDMA){
-      // TODO: Bad using DmaInternalAddress read for this. We want DmaControl
-      m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaInternalAddress)));
-        m->If("csr_wstrb == 0");
-          m->Set("versat_rvalid","1");
+        if(globalOptions.useDMA){
+          AddrIf(m,VersatRegister_DmaControl);
+            m->Set("versat_rdata","{31'h0,!dma_running}");
+          m->EndIf();
+        }
+        if(globalOptions.insertDebugRegisters){
+
+          AddrIf(m,VersatRegister_Debug);
+          if(info.nIOs){
+            m->Set("versat_rdata","{31'h0,|m_databus_valid}");
+          } else {
+            m->Set("versat_rdata","32'h0");
+          }
+          m->EndIf();
+        }
+        if(globalOptions.insertProfilingRegisters){
+          AddrIf(m,VersatRegister_ProfileRunCount);
+          m->Set("versat_rdata","profile_runCount[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileRunCount2);
+          m->Set("versat_rdata","profile_runCount[DATA_W+:DATA_W]");
+          m->EndIf();
+
+          AddrIf(m,VersatRegister_ProfileCyclesSinceLastReset);
+          m->Set("versat_rdata","profile_cycles[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileCyclesSinceLastReset2);
+          m->Set("versat_rdata","profile_cycles[DATA_W+:DATA_W]");
+          m->EndIf();
+
+          AddrIf(m,VersatRegister_ProfileRunningCycles);
+          m->Set("versat_rdata","profile_runningCycles[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileRunningCycles2);
+          m->Set("versat_rdata","profile_runningCycles[DATA_W+:DATA_W]");
+          m->EndIf();
+
+          AddrIf(m,VersatRegister_ProfileDatabusValid);
+          m->Set("versat_rdata","profile_databusValid[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileDatabusValid2);
+          m->Set("versat_rdata","profile_databusValid[DATA_W+:DATA_W]");
+          m->EndIf();
+
+          AddrIf(m,VersatRegister_ProfileDatabusValidAndReady);
+          m->Set("versat_rdata","profile_databusValidAndReady[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileDatabusValidAndReady2);
+          m->Set("versat_rdata","profile_databusValidAndReady[DATA_W+:DATA_W]");
+          m->EndIf();
+
+          AddrIf(m,VersatRegister_ProfileConfigurationsSet);
+          m->Set("versat_rdata","profile_configurationsSet[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileConfigurationsSet2);
+          m->Set("versat_rdata","profile_configurationsSet[DATA_W+:DATA_W]");
+          m->EndIf();
+
+          AddrIf(m,VersatRegister_ProfileConfigurationsSetWhileRunning);
+          m->Set("versat_rdata","profile_configurationsSetWhileRunning[0+:DATA_W]");
+          m->EndIf();
+          AddrIf(m,VersatRegister_ProfileConfigurationsSetWhileRunning2);
+          m->Set("versat_rdata","profile_configurationsSetWhileRunning[DATA_W+:DATA_W]");
+          m->EndIf();
+        }
+
         m->EndIf();
-        m->Set("versat_rdata","{31'h0,!dma_running}");
-      m->EndIf();
-    }
-    m->EndIf();
 
-    m->EndIf();
+      m->EndIf();
 
     m->EndBlock();
     
     String content = EndVCodeAndPrint(m,temp);
-    TemplateSetString("interface",content);
+    TemplateSetString("controlReadInterface",content);
   }
   
   {
@@ -2424,59 +2628,21 @@ JoinTwoSimple #(.DATA_W(DATA_W),.ADDR_W(ADDR_W)) joiner (
 
   .s_valid(data_valid),
   .s_data(data_data),
-  .s_addr(address),
+  .s_addr(data_address),
   .s_wstrb(data_wstrb)
 );
                            )FOO";
       
       TemplateSetString("dmaInstantiation",content);
-      {      
-        VEmitter* m = StartVCode(temp);
-        m->AlwaysBlock("clk","rst_int");
-        m->If("rst_int");
-        m->Set("dma_length","0");
-        m->Set("dma_internal_address_start","0");
-        m->Set("dma_external_addr_start","0");
-        m->Else();
-        m->If("csr_valid && we");
-        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaInternalAddress)));
-        m->Set("dma_internal_address_start","csr_wdata");
-        m->EndIf();
-        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaExternalAddress)));
-        m->Set("dma_external_addr_start","csr_wdata");
-        m->EndIf();
-        m->If(SF("csr_addr == %d",GetIndex(val,VersatRegister_DmaTransferLength)));
-        m->Set("dma_length","csr_wdata[LEN_W-1:0]");
-        m->EndIf();
-        m->EndIf();
-        m->EndIf();
-        m->EndBlock();
-
-        m->Assign("dma_start",SF("csr_valid && we && csr_addr == %d",GetIndex(val,VersatRegister_DmaControl)));
-      
-        String content3 = EndVCodeAndPrint(m,temp);
-        TemplateSetString("dmaInstantiation2",content3);
-      }
-      
-      String content2 = R"FOO(
-         // DMA Read
-         if(csr_addr == 4) begin
-            if(csr_wstrb == 0) versat_rvalid <= 1'b1;
-            versat_rdata <= {31'h0,!dma_running};
-         end
-                            )FOO";
-
-      TemplateSetString("dmaRead",content2);
     } else {
       String content = R"FOO(
 assign data_valid = csr_valid;
-assign address = csr_addr;
+assign data_address = csr_addr;
 assign data_data = csr_wdata;
 assign data_wstrb = csr_wstrb;
                            )FOO";
         
       TemplateSetString("dmaInstantiation",content);
-      TemplateSetString("dmaRead",{});
     }
   }
 
@@ -2484,7 +2650,7 @@ assign data_wstrb = csr_wstrb;
     if(val.memoryMappedBytes == 0){
       TemplateSetString("memoryConfigDecisionExpr","1'b0");
     } else {
-      String content = PushString(temp,"address[%d]",val.memoryConfigDecisionBit);
+      String content = PushString(temp,"data_address[%d]",val.memoryConfigDecisionBit);
       TemplateSetString("memoryConfigDecisionExpr",content);
     }
   }
@@ -2565,7 +2731,7 @@ assign data_wstrb = csr_wstrb;
 
       for(auto info : wireInfo){
         if(info.isStatic){
-          m->Wire(info.wire.name,info.wire.bitSize);
+          m->Wire(info.wire.name,info.wire.sizeExpr);
         }
       }
 
@@ -2583,7 +2749,7 @@ assign data_wstrb = csr_wstrb;
       m->PortConnect("memoryMappedAddr","memoryMappedAddr");
       m->PortConnect("data_write","csr_valid && we");
 
-      m->PortConnect("address","address");
+      m->PortConnect("address","data_address");
       m->PortConnect("data_wstrb","data_wstrb");
       m->PortConnect("data_data","data_data");
 
@@ -3281,22 +3447,22 @@ void OutputVerilatorWrapper(Accelerator* accel,Array<Wire> allStaticsVerilatorSi
   TEMP_REGION(temp,nullptr);
   Pool<FUInstance> nodes = accel->allocated;
 
-  // We need to bundle config + static (type->config) only contains config, but not static
-  // TODO: This is not good. Eventually need to take a look at what is happening inside the wrapper.
+  struct WireExtra : public Wire{
+    String source;
+  };
+
   auto arr = StartArray<WireExtra>(temp);
   for(auto n : nodes){
     for(Wire config : n->declaration->configs){
       WireExtra* ptr = arr.PushElem();
-      *ptr = config;
+      *((Wire*) ptr) = config;
       ptr->source = "config->TOP_";
-      ptr->source2 = "config->";
     }
   }
   for(Wire& staticWire : allStaticsVerilatorSide){
     WireExtra* ptr = arr.PushElem();
-    *ptr = staticWire;
+    *((Wire*) ptr) = staticWire;
     ptr->source = "statics->";
-    ptr->source2 = "statics->";
   }
   Array<WireExtra> allConfigsVerilatorSide = EndArray(arr);
 
@@ -3723,7 +3889,7 @@ if(SimulateDatabus){
           c->RawLine(TemplateSubstitute(format,values,temp));
         }
 #endif
-          
+
         if(wire.stage == VersatStage_READ){
           c->Assignment(PushString(temp,"self->%.*s",UN(wire.name)),PushString(temp,"%.*s%.*s",UN(wire.source),UN(wire.name)));
         }
@@ -3765,13 +3931,13 @@ if(SimulateDatabus){
         c->RawLine(TemplateSubstitute(format,values,temp));
       }
 
-        if(wire.stage == VersatStage_WRITE){
-          String format = R"FOO(  COMPUTED_@{0} = 0;
+      if(wire.stage == VersatStage_WRITE){
+        String format = R"FOO(  COMPUTED_@{0} = 0;
   WRITE_@{0} = 0;)FOO";
-          String values[2] = {wire.name,wire.source};
+        String values[2] = {wire.name,wire.source};
             
-          c->RawLine(TemplateSubstitute(format,values,temp));
-        }
+        c->RawLine(TemplateSubstitute(format,values,temp));
+      }
     }
 
     c->RawLine(R"FOO(
@@ -4012,6 +4178,203 @@ static iptr WRITE_@{0} = 0;)FOO";
   ProcessTemplateSimple(output,META_WrapperTemplate_Content);
 }
 
+void OutputFirmware(String softwarePath,VersatComputedValues val){
+  TEMP_REGION(temp,nullptr);
+  
+  //TODO: The src folder is not good. We want to remove this. We should not depend on IOb stuff in Versat code. 
+  FILE* file = OpenFileAndCreateDirectories(PushString(temp,"%.*s/src/iob-versat.c",UN(softwarePath)),"w",FilePurpose_SOFTWARE);
+  DEFER_CLOSE_FILE(file);
+
+  CEmitter* c = StartCCode(temp);
+  
+  for(VersatRegister reg : VersatRegisters){
+    Opt<int> index = GetOptIndex(val,reg);
+    
+    String name = META_Repr(reg);
+    if(index.has_value()){
+      c->Define(name,SF("%d",index.value() / 4));
+    }
+  }
+  
+  String content = PushASTRepr(c,temp);
+  TemplateSetString("registerLocation",content);
+
+  String dmaExists = R"FOO(
+  if(enableDMA && (dataInsideVersat != destInsideVersat)){
+    if(destInsideVersat){
+      destInt = destInt - versat_base;
+    }
+    if(dataInsideVersat){
+      dataInt = dataInt - versat_base;
+    }
+
+    MEMSET(versat_base,VersatRegister_DmaInternalAddress,destInt); 
+    MEMSET(versat_base,VersatRegister_DmaExternalAddress,dataInt);
+    MEMSET(versat_base,VersatRegister_DmaTransferLength,size); // Byte size
+    MEMSET(versat_base,VersatRegister_DmaControl,0x1); // Start DMA
+
+    while(1){
+      int val = MEMGET(versat_base,VersatRegister_DmaControl);
+      if(val) break;
+    }
+  } else {
+    volatile int* destView = (volatile int*) dest;
+    volatile int* dataView = (volatile int*) data;
+    for(int i = 0; i < size / sizeof(int); i++){
+      destView[i] = dataView[i];
+    }
+  }
+)FOO";
+
+  String dmaDoesNotExist = R"FOO(
+    volatile int* destView = (volatile int*) dest;
+    volatile int* dataView = (volatile int*) data;
+    for(int i = 0; i < size / sizeof(int); i++){
+      destView[i] = dataView[i];
+    }
+)FOO";
+
+  if(globalOptions.useDMA){
+    TemplateSetString("dmaStuff",dmaExists);
+  } else {
+    TemplateSetString("dmaStuff",dmaDoesNotExist);
+  }
+
+  String content3 = R"FOO(
+// ======================================
+// Debug facilities
+
+static inline void DebugEndAccelerator(int upperBound){
+  for(int i = 0; i < upperBound; i++){  
+    volatile int val = MEMGET(versat_base,VersatRegister_Control);
+    if(val){
+      return;
+    }
+  } 
+  PRINT("Accelerator reached upperbound\n");
+}
+
+static inline void DebugRunAcceleratorOnce(int upperbound){ // times inside value amount
+   PRINT("Gonna start accelerator: (%x,%d,%d)\n",versat_base, VersatRegister_Control);
+
+   MEMSET(versat_base,VersatRegister_Control,1);
+   DebugEndAccelerator(upperbound);
+
+   PRINT("Ended accelerator\n");
+}
+
+void DebugRunAccelerator(int times, int maxCycles){
+  // Accelerator was previously stuck
+  if(!MEMGET(versat_base, VersatRegister_Control)){
+    PRINT("Versat accel was previously stuck, before current call to DebugRunAccelerator\n");
+    return;
+  }
+
+  for(int i = 0; i < times; i++){
+    DebugRunAcceleratorOnce(maxCycles);
+  } 
+}
+
+VersatDebugState VersatDebugGetState(){
+  VersatDebugState res = {};
+
+  int debugState = MEMGET(versat_base,VersatRegister_Debug); 
+  res.databusIsActive = (debugState & 0x1);
+
+  return res;
+}
+)FOO";
+
+  if(globalOptions.insertDebugRegisters){
+    TemplateSetString("debugStuff",content3);
+  } else {
+    TemplateSetString("debugStuff",{});
+  }
+
+  String content2 = R"FOO(
+VersatProfile VersatProfileGet(){
+  VersatProfile res = {};              
+  
+  union {
+    uint64_t u64;
+    int i32[2];
+  } conv;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileRunCount);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileRunCount2);
+  res.runCount = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileCyclesSinceLastReset);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileCyclesSinceLastReset2);
+  res.cyclesSinceLastReset = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileRunningCycles);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileRunningCycles2);
+  res.runningCycles = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileDatabusValid);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileDatabusValid2);
+  res.databusValid = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileDatabusValidAndReady);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileDatabusValidAndReady2);
+  res.databusValidAndReady = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSet);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSet2);
+  res.configurationsSet = conv.u64;
+
+  conv.i32[0] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSetWhileRunning);
+  conv.i32[1] = MEMGET(versat_base,VersatRegister_ProfileConfigurationsSetWhileRunning2);
+  res.configurationsSetWhileRunning = conv.u64;
+
+  return res;
+}
+
+void VersatProfileReset(){
+  MEMSET(versat_base,VersatRegister_ProfileControl,1);
+}
+
+// 0 to 100
+static uint64_t Percentage(uint64_t smaller,uint64_t bigger){
+  if(bigger == 0){
+    return 0;
+  }
+
+  uint64_t percent = ((smaller * 100) / bigger);
+
+  return percent;
+}
+
+void VersatPrintProfile(VersatProfile p){
+  PRINT("Runs profiled:%llu\n", p.runCount);
+  PRINT("Total cycles:%llu\n", p.cyclesSinceLastReset);
+  PRINT("  Cycles with accelerator running: %llu (%llu%%)\n", p.runningCycles,
+        Percentage(p.runningCycles, p.cyclesSinceLastReset));
+  PRINT("    Cycles databus valid: %llu (%llu%%)\n", p.databusValid,
+        Percentage(p.databusValid, p.runningCycles));
+  PRINT("    Cycles databus valid and ready: %llu (%llu%%)\n", p.databusValidAndReady,
+        Percentage(p.databusValidAndReady, p.runningCycles));
+  PRINT("      Databus efficiency: %llu%%\n",
+        Percentage(p.databusValidAndReady, p.databusValid));
+
+  PRINT("Configurations set: %llu\n", p.configurationsSet);
+  PRINT("  Configurations set while accel running: %llu\n",
+        p.configurationsSetWhileRunning);
+  PRINT("  Configurations efficiency: %llu%%\n",
+        Percentage(p.configurationsSet, p.configurationsSetWhileRunning));
+}
+)FOO";
+
+  if(globalOptions.insertProfilingRegisters){
+    TemplateSetString("profileStuff",content2);
+  } else {
+    TemplateSetString("profileStuff",{});
+  }
+  
+  ProcessTemplateSimple(file,META_FirmwareTemplate_Content);
+}
+
 void OutputPCEmulControl(AccelInfo info,String softwarePath){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -4020,7 +4383,6 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
 
   Array<Array<InstanceInfo*>> unitInfoPerMerge = VUnitInfoPerMerge(info,temp);
 
-  
   bool debug = false;
   for(int i = 0; i <  unitInfoPerMerge.size; i++){
     Array<InstanceInfo*> merge  =  unitInfoPerMerge[i];
@@ -4054,7 +4416,7 @@ void OutputPCEmulControl(AccelInfo info,String softwarePath){
   fprintf(file,"%.*s",UN(content));
 }
 
-void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external){
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
@@ -4188,12 +4550,12 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String h
 
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
 
-  OutputTopLevel(accel,allStaticsVerilatorSide,info,topLevelDecl,structuredConfigs,hardwarePath,val,external,wireInfo);
+  OutputTopLevel(accel,allStaticsVerilatorSide,info,topDecl,structuredConfigs,hardwarePath,val,external,wireInfo);
   OutputHeader(structuredConfigs,info,isSimple,accel,softwarePath,allStaticsVerilatorSide,val);
-  
-  OutputVerilatorWrapper(accel,allStaticsVerilatorSide,info,topLevelDecl,structuredConfigs,softwarePath);
-  OutputMakefile(accel->name,topLevelDecl,softwarePath);
+  OutputVerilatorWrapper(accel,allStaticsVerilatorSide,info,topDecl,structuredConfigs,softwarePath);
+  OutputMakefile(accel->name,topDecl,softwarePath);
   OutputPCEmulControl(info,softwarePath);
+  OutputFirmware(softwarePath,val);
 
   {
     // TODO: Need to add some form of error checking and handling inside the script for the case where verilator root is not found
@@ -4259,7 +4621,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
 
   VerilogModuleInterface* interface = GenerateModuleInterface(decl,temp);
   Array<VerilogPortSpec> databus = ObtainGroupByName(interface,"Databus");
-  Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,"MemoryMapped");
+  //Array<VerilogPortSpec> memoryMapped = ObtainGroupByName(interface,"MemoryMapped");
   Array<VerilogPortSpec> externalMemory = ObtainGroupByName(interface,"ExternalMemory");
   
   bool containsRun = false;
@@ -4361,10 +4723,14 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   bool containsMemoryMapped = RemoveGroupInPlace(interface,"MemoryMapped");
   bool containsMemories = RemoveGroupInPlace(interface,"ExternalMemory");
   
-  auto AdvanceClock = [m]() -> void{
-    m->Blank();
+  auto AdvanceClock = [m](bool blanks = true) -> void{
+    if(blanks){
+      m->Blank();
+    }
     m->RawStatement("`ADVANCE");
-    m->Blank();
+    if(blanks){
+      m->Blank();
+    }
   };
 
   if(containsMemoryMapped){
@@ -4434,7 +4800,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
     m->Set("addrToInsert","addr_i");
     m->Set("valueToInsert","data_i");
 
-    AdvanceClock();
+    AdvanceClock(true);
 
     m->Set("insertValue","0");
     m->Set("addrToInsert","0");
@@ -4496,48 +4862,64 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   }
   
   if(containsRun){
+    if(!containsDone){
+      m->LocalParam("SIM_TIME_NO_DONE","10");
+      m->Integer("i");
+    }
+   
     m->Task("RunAccelerator");
 
-    m->Set("run","1");
+    m->SetForced("run","1",true);
 
     AdvanceClock();
 
-    m->Set("run","0");
+    m->SetForced("run","0",true);
     if(containsRunning){
-      m->Set("running","1");
+      m->SetForced("running","1",true);
     }
 
     AdvanceClock();
     
     if(containsDone){
-      m->Loop("","done","");
-      AdvanceClock();
+      m->Loop("","~done","");
+      AdvanceClock(false);
+      m->EndLoop();
+    } else {
+      m->Loop("i = 0","i < SIM_TIME_NO_DONE","i = i + 1");
+      AdvanceClock(false);
       m->EndLoop();
     }
 
     if(containsRunning){
-      m->Set("running","0");
+      m->SetForced("running","0",true);
     }
   
     m->EndTask();
   } else if(containsRunning){
+    if(!containsDone){
+      m->LocalParam("SIM_TIME_NO_DONE","10");
+      m->Integer("i");
+    }
+
     m->Task("SetRunning");
-    m->Set("running","1");
+    m->SetForced("running","1",true);
     
     AdvanceClock();
 
     if(containsDone){
-      m->Loop("","done","");
+      m->Loop("","~done","");
       AdvanceClock();
+      m->EndLoop();
+    } else {
+      m->Loop("i = 0","i < SIM_TIME_NO_DONE","i = i + 1");
+      AdvanceClock(false);
       m->EndLoop();
     }
 
-    m->Set("running","0");
+    m->SetForced("running","0",true);
 
     m->EndTask();
   }
-  
-  printf("Contains running %d\n\n\n\n",containsRunning);
   
   m->InitialBlock();
 

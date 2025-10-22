@@ -64,6 +64,10 @@ String TrimRightWhitespaces(String in){
 }
 
 String TrimWhitespaces(String in){
+  if(in.data == nullptr || in.size == 0){
+    return in;
+  }
+  
   const char* start = in.data;
   const char* end = &in.data[in.size-1];
 

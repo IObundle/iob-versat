@@ -925,6 +925,12 @@ int main(int argc,const char* argv[]){
       h->FunctionDeclOnlyBlock("String","META_Repr");
       h->Argument(def->name,"val");
       h->EndBlock();
+      
+      h->ArrayDeclareBlock(SF("const %.*s",UN(def->name)),SF("%.*ss",UN(def->name)),true);
+      for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
+        h->Elem(p.first);
+      }
+      h->EndBlock();
     }
 
     h->Comment("Table definition");

@@ -262,7 +262,9 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_INTERFACE_DECL:
     case VASTType_INTEGER_DECL:
     case VASTType_LOCAL_PARAM:
+    case VASTType_SIMPLE_OP:
     case VASTType_SET:
+    case VASTType_FORCED_SET:
     case VASTType_EXPR:
     case VASTType_PORT_CONNECT:
     case VASTType_ASSIGN_DECL:
@@ -333,7 +335,9 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     FULL_SWITCH(type){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
+    case VASTType_SIMPLE_OP:
     case VASTType_SET:
+    case VASTType_FORCED_SET:
     case VASTType_LOCAL_PARAM:
     case VASTType_INTERFACE_DECL:
     case VASTType_EXPR:
@@ -385,8 +389,10 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     case VASTType_VAR_DECL:
     case VASTType_INTEGER_DECL:
     case VASTType_INTERFACE_DECL:
+    case VASTType_SIMPLE_OP:
     case VASTType_LOCAL_PARAM:
     case VASTType_SET:
+    case VASTType_FORCED_SET:
     case VASTType_EXPR:
     case VASTType_ASSIGN_DECL:
     case VASTType_BLANK:
@@ -818,6 +824,25 @@ void VEmitter::Set(String identifier,String expr){
   
   setDecl->assignOrSet.name = PushString(arena,identifier);
   setDecl->assignOrSet.expr = PushString(arena,expr);
+
+  InsertDeclaration(setDecl);
+}
+
+void VEmitter::Increment(String identifier){
+  VAST* incrDecl = PushVAST(VASTType_SIMPLE_OP,arena);
+  
+  incrDecl->simpleOp.identifier = PushString(arena,identifier);
+  incrDecl->simpleOp.op = '+';
+  
+  InsertDeclaration(incrDecl);
+}
+
+void VEmitter::SetForced(String identifier,String expr,bool isCombLike){
+  VAST* setDecl = PushVAST(VASTType_FORCED_SET,arena);
+  
+  setDecl->assignOrSet.name = PushString(arena,identifier);
+  setDecl->assignOrSet.expr = PushString(arena,expr);
+  setDecl->assignOrSet.isForcedCombLike = isCombLike;
 
   InsertDeclaration(setDecl);
 }
@@ -1380,6 +1405,29 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       b->PushString("%.*s <= %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
     }
   } break;
+
+  case VASTType_SIMPLE_OP:{
+    b->PushSpaces(level * 2);
+    String name = top->simpleOp.identifier;
+    char op = top->simpleOp.op;
+    
+    String eq = "<=";
+    if(state->isComb){
+      eq = "=";
+    }
+    
+    b->PushString("%.*s %.*s %.*s %c 1;",UN(name),UN(eq),UN(name),op);
+  } break;
+
+  case VASTType_FORCED_SET:{
+    b->PushSpaces(level * 2);
+    if(top->assignOrSet.isForcedCombLike){
+      b->PushString("%.*s = %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
+    } else {
+      b->PushString("%.*s <= %.*s;",UN(top->assignOrSet.name),UN(top->assignOrSet.expr));
+    }
+  } break;
+
   
   case VASTType_BLANK: {
     // Do nothing. Outer code should add a new line by itself since we are a declaration

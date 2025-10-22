@@ -23,7 +23,7 @@ enum Direction{
 struct PortInstance{
   FUInstance* inst;
   int port;
-  Direction dir; // NOTE: At the moment a Direction_NONE is most likely an error. TODO: Does it make sense to remove this and just have two different types, a InputPortInstance and an OutputPortInstance?
+  Direction dir; // NOTE: At the moment a Direction_NONE is most likely an error. TODO: Does it make sense to remove this and just have two different types, an InputPortInstance and an OutputPortInstance?
 };
 
 static inline PortInstance MakePortOut(FUInstance* inst,int port){
@@ -263,6 +263,7 @@ struct AcceleratorMapping{
   int secondId;
 
   // After port instance change, do not need two maps for input/output differences. Should be able to only use 1.
+  TrieMap<FUInstance*,FUInstance*>* instanceMap;
   TrieMap<PortInstance,PortInstance>* inputMap;
   TrieMap<PortInstance,PortInstance>* outputMap;
 };
@@ -274,29 +275,6 @@ struct EdgeIterator{
   
   bool HasNext();
   Edge Next();
-};
-
-// Strange forward declare
-//template<typename T> struct WireTemplate;
-//typedef WireTemplate<int> Wire;
-
-// TODO: Kinda not good, need to look at the wrapper again to simplif this part.
-//       Too many stuff is dependent on explicit data and complications are starting to pile up.
-struct WireExtra{
-  String source;
-  String source2;
-  String name;
-  int bitSize;
-  VersatStage stage;
-  bool isStatic;
-
-  WireExtra& operator=(Wire& w){
-    this->stage = w.stage;
-    this->bitSize = w.bitSize;
-    this->isStatic = w.isStatic;
-    this->name = w.name;
-    return *this;
-  }
 };
 
 struct StaticId{
@@ -420,6 +398,7 @@ DAGOrderNodes CalculateDAGOrder(Accelerator* accel,Arena* out);
 bool IsCombinatorial(Accelerator* accel);
 bool IsUnitCombinatorial(FUInstance* inst);
 bool NameExists(Accelerator* accel,String name);
+String GenerateNewValidName(Accelerator* accel,String base,Arena* out);
 
 Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out);
 

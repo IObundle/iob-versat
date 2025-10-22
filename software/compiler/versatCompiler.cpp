@@ -193,7 +193,11 @@ parse_opt (int key, char *arg,
     } break;
 
     case 128: {
-      opts->options->insertAdditionalDebugRegisters = true;
+      opts->options->insertDebugRegisters = true;
+    } break;
+
+    case 129: {
+      opts->options->insertProfilingRegisters = true;
     } break;
       
     case 'g': opts->options->debugPath = arg; opts->options->debug = true; break;
@@ -210,7 +214,8 @@ parse_opt (int key, char *arg,
 // TODO: Better error handling
 struct argp_option options[] =
   {
-    { "debug", 128 ,0, 0, "Insert debug utilities on the generated accelerator"},
+    { "debug", 128 ,0, 0, "Insert debug registers on the generated accelerator"},
+    { "profile", 129 ,0, 0, "Insert profiling registers on the generated accelerator"},
     { 0, 'b',"Size",   0, "Databus size connected to external RAM (8,16,default:32,64,128,256)"},
     { 0, 'd', 0,       0, "Use DMA"},
     { 0, 'D', 0,       0, "Architecture has databus"},
@@ -890,10 +895,6 @@ int main(int argc,char* argv[]){
   if(res){
     return res;
   }
-  res = CopyFileGroup(defaultSoftwareFiles,globalOptions.softwareOutputFilepath,false,FilePurpose_SOFTWARE);
-  if(res){
-    return res;
-  }
   
   // TODO: We probably need to move this to a better place
   fs::path hardwareDestinationPath(StaticFormat("%.*s",UN(globalOptions.hardwareOutputFilepath)));
@@ -984,6 +985,10 @@ Module Test(){
 // ============================================================================
 // Bugs
 
+BUG: Need more tests for modules that contain units but are not connected to anything. Also test merge for these cases as well.
+
+BUG: Debug folder gets created inside the iob-soc-versat repo when running ./test.py tests. Something about the python3 script -> makefile is causing the path to not be the same as if just calling makefile directly.
+
 BUG: localOrder appears to be broken. 
 
 BUG: Since the name of the units are copied directly to the header file, it is possible to have conflict with C reserved keywords, like const, static, and stuff like that. 
@@ -1018,9 +1023,19 @@ An empty AddressGen is not working correctly. The address gen parser is programm
 
 /*
 
+Code generation for customizable features:
+
+- There exists a bunch of code that gets generated even though it is not needed. Stuff like profile functions are declared and even defined in wrapper and firmware. While this is not a problem, since the stuff that is extra does not affect the correctness or causes any error, one thing that is does is slow down the testing, since now every change affects all the tests even though it should only change the tests that actually use the features.
+
+-- Basically, it is not enough to control generation of functions, we also should control stuff like function declarations and the likes in order to make it so that tests that do not use the features are not forced to be recompiled and retested for a change that does not affect them.
+
 Code generation lint friendly:
 
 - If a module is composed of units that do not contain certain signals, like clk, rst, run and the likes, then the module should not have those signals as well. The only thing missing to implement this is changing the wrapper to support the verilated unit not containing these signals.
+
+More user error checking:
+
+- Verilog parsed content does not check direction of ports. We should encode all the interfaces that we expect as data and 
 
 Error handling:
 
@@ -1073,12 +1088,6 @@ address Test(a,b){
   stride = stride;
   }
 
-Versat Spec:
-
-- The using stuff is kinda weird syntax. What we probably want is to think about types as parameterizable.
--- Insteand of "using(Addr) VRead ...", we probably want "VRead(Addr) ...", where Addr is a parameter for the VRead type.
--- We then end up with two types of parameters, Versat parameters and Verilog parameters, which we probably want to collapse into a single type from the perspective of the user and let Versat handle how to route the parameter itself.
-
 Usability:
 x
 - Need to check parameters and sizes and report stuff at Versat compile time.
@@ -1091,9 +1100,7 @@ Code Generation:
 
 - Header file generating code that should depend on Metadata.
 
-- Usability.
-
-- Optimizations:
+Optimizations:
 
 -- We could collapse certain loops, assuming that we have the info needed (or we can push it into runtime).
 -- Leftover loops can be used to reduce the preassure on the lower loops (less bits needed and stuff like that, we currently pay for the upper loops bits wether we use them or not)
@@ -1137,14 +1144,6 @@ Blindness:
 - We currently do not keep track of memory usage. Which functions use the most memory, which file uses the most memory, etc. This can easily be accomplished by adding code to the ARENA macros used.
 
 Features:
-
-- I'm considering removing the usage of the template engine for the generation of code and instead replace it with an "emitter" based approach. Templates work for a good amount of static and low amount of dynamic data but for a lot of dynamic data they kinda fall apart. Furthermore, the amount of complexity required to implement them is kinda not worth it.
-
--- I'm considering writting an emitter for Verilog that should be useful for a lot of situations.
-
-- The template engine could be updated to compile at build time, offer compile time checks instead of runtime and simplify data management since we could pass and use C code to access and iterate the data. This means that passing large structures is preferebly instead of doing what we do now where we want to minimize data passing this way. Read the NOTEs that are contained inside the OutputTopLevelFiles.
-
-- The Address gen are kinda adhoc in the generated code. Need to find a way of binding them to the accelerator that uses them (some declaration inside the module/merge that indicates to Versat that the address gen is intended to be used for that unit.). As a consequence of this, we might need to generate different address gens for different structs because of merge. I think I have a good enough merge backbone to implement this in a couple of days, but I also would probably like to finalize the static portion before progressing to tackle this problem.
 
 - We could implement a shared delay as well as config. To make it even more powerful, we could make it so we could share the delay of some units and the config of others and have it overlap somewhat. How I would represent that in syntax I do not know.
 

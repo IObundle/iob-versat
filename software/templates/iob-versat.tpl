@@ -37,6 +37,8 @@ typeof(accelConfig) accelConfig  = 0;
 typeof(accelState)  accelState   = 0;
 typeof(accelStatic) accelStatic = 0;
 
+@{registerLocation}
+
 void versat_init(int base){
   versat_base = (iptr) base;
   enableDMA = false; // It is more problematic for the general case if we start enabled. More error prone, especially when integrating with linux.
@@ -44,7 +46,7 @@ void versat_init(int base){
   // TODO: Need to receive a printf like function from outside to enable this, I do not want to tie the implementation to IObSoC.
   //PRINT("Embedded Versat\n");
 
-  MEMSET(versat_base,0x0,0x80000000); // Soft reset
+  MEMSET(versat_base,VersatRegister_Control,0x80000000); // Soft reset
 
   accelConfig = (typeof(accelConfig)) (versat_base + configStart);
   accelState  = (typeof(accelState))  (versat_base + stateStart);
@@ -55,51 +57,44 @@ void versat_init(int base){
 
 void SetVersatDebugPrintfFunction(VersatPrintf function){
   versatPrintf = function;
-}
-
-void StartAccelerator(){
-  //PRINT("Start accelerator\n");
-  MEMSET(versat_base,0x0,1);
+  PRINT("Versat successfully set print function\n");
 }
 
 void EndAccelerator(){
   //PRINT("End accelerator\n");
   while(1){
-    volatile int val = MEMGET(versat_base,0x0);
+    volatile int val = MEMGET(versat_base,VersatRegister_Control);
     if(val){
-      break;
+      return;
     }
   } 
 }
 
+void StartAccelerator(){
+  EndAccelerator();
+  MEMSET(versat_base,VersatRegister_Control,1);
+}
+
 void ResetAccelerator(){
-  MEMSET(versat_base,0x0,0x80000000); // Soft reset
+  MEMSET(versat_base,VersatRegister_Control,0x80000000); // Soft reset
   VersatLoadDelay(delayBuffer);
 }
 
-static inline void RunAcceleratorOnce(int times){ // times inside value amount
-   MEMSET(versat_base,0x0,times);
-   EndAccelerator();
-}
-
 void RunAccelerator(int times){
-  for(; times > 0xffff; times -= 0xffff){
-    RunAcceleratorOnce(times);
+  for(int i = 0; i < times; i++){
+    StartAccelerator();
   } 
-
-  RunAcceleratorOnce(times);
+  EndAccelerator();
 }
 
 void SignalLoop(){
-  MEMSET(versat_base,0x0,0x40000000);
+  MEMSET(versat_base,VersatRegister_Control,0x40000000);
 }
 
 void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   if(size <= 0){
     return;
   }
-
-  //TIME_IT("Memory copy");
 
   iptr destInt = (iptr) dest;
   iptr dataInt = (iptr) data;
@@ -124,30 +119,7 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
     //PRINT("Using a simple copy loop for now\n");
   }
 
-  if(enableDMA && acceleratorSupportsDMA && (dataInsideVersat != destInsideVersat)){
-    if(destInsideVersat){
-      destInt = destInt - versat_base;
-    }
-    if(dataInsideVersat){
-      dataInt = dataInt - versat_base;
-    }
-
-    MEMSET(versat_base,0x1,destInt); // Dest inside 
-    MEMSET(versat_base,0x2,dataInt); // Memory address
-    MEMSET(versat_base,0x3,size); // Byte size
-    MEMSET(versat_base,0x4,0x1); // Start DMA
-
-    while(1){
-      int val = MEMGET(versat_base,0x1);
-      if(val) break;
-    }
-  } else {
-    volatile int* destView = (volatile int*) dest;
-    volatile int* dataView = (volatile int*) data;
-    for(int i = 0; i < size / sizeof(int); i++){
-      destView[i] = dataView[i];
-    }
-  }
+@{dmaStuff}
 }
 
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val){
@@ -181,3 +153,7 @@ void VersatLoadDelay(volatile const unsigned int* buffer){
   volatile void* delayBase = (void*) (versat_base + delayStart);
   VersatMemoryCopy(delayBase,buffer,sizeof(int) * ARRAY_SIZE(delayBuffer));
 }
+
+@{debugStuff}
+
+@{profileStuff}
