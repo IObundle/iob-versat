@@ -4,5 +4,3 @@
 
 // Unused submodule outputs
 lint_off -rule PINCONNECTEMPTY -file "**/Mem.v" -match "Instance pin connected by name with empty reference: 'store_o'"
-
-lint_off -rule PINCONNECTEMPTY -file "**/Mem.v" -match "Instance pin connected by name with empty reference: 'store_o'"
