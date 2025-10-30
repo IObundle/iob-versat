@@ -2240,6 +2240,8 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_instance.v",UN(hardwarePath)),"w",FilePurpose_VERILOG_CODE);
   DEFER_CLOSE_FILE(s);
 
+  DEBUG_BREAK();
+
   auto AddrIf = [&val](VEmitter* m,VersatRegister r){
     int index = GetIndex(val,r);
     m->If(SF("csr_addr >= %d && csr_addr < %d",index,index+4));

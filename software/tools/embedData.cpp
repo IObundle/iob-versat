@@ -80,8 +80,7 @@ bool _ExpectError(Tokenizer* tok,String expected){
     auto builder = StartString(temp);
     builder->PushString("Parser Error.\n Expected to find:  '");
     builder->PushString(PushEscapedString(temp,expected,' '));
-    builder->PushString("'\n");
-    builder->PushString("  Got:");
+    builder->PushString("'\n  Got:");
     builder->PushString(PushEscapedString(temp,got,' '));
     builder->PushString("\n");
     String text = EndString(temp,builder);

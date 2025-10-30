@@ -2,6 +2,7 @@
 
 #include "declaration.hpp"
 #include "embeddedData.hpp"
+#include "symbolic.hpp"
 #include "templateEngine.hpp"
 #include "utilsCore.hpp"
 
@@ -729,6 +730,72 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   return res;
 }
 
+Opt<ConfigExpression*> ParseConfigAtom(Tokenizer* tok,Arena* out){
+  Token id = tok->PeekToken();
+  
+  if(IsValidIdentifier(id)){
+    tok->AdvancePeek();
+    
+    ConfigExpression* idExpr = PushStruct<ConfigExpression>(out);
+    idExpr->type = ConfigExpressionType_IDENTIFIER;
+    idExpr->identifier = id;
+    
+    if(tok->IfNextToken(".")){
+      Token accessIdentifier = tok->NextToken();
+      CHECK_IDENTIFIER(accessIdentifier);
+
+      ConfigExpression* accessExpr = PushStruct<ConfigExpression>(out);
+      accessExpr->type = ConfigExpressionType_ACCESS;
+      accessExpr->identifier = accessIdentifier;
+      accessExpr->child = idExpr;
+
+      return accessExpr;
+    } else {
+      return idExpr;
+    }
+  } else if(IsNum(id[0])){
+    Opt<int> number = ParseNumber(tok);
+    PROPAGATE(number);
+    
+    ConfigExpression* numberExpr = PushStruct<ConfigExpression>(out);
+    numberExpr->number = number.value();
+    
+    return numberExpr;
+  }
+
+  return nullptr;
+}
+
+Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  Token peek = tok->PeekToken();
+
+  if(CompareString(peek,"for")){
+    // For loop
+    NOT_IMPLEMENTED();
+  } else {
+    // Assignment
+
+    Opt<ConfigExpression*> lhs = ParseConfigAtom(tok,out);
+    PROPAGATE(lhs);
+    EXPECT(tok,"=");
+
+    SymbolicExpression* rhs = ParseSymbolicExpression(tok,out);
+    PROPAGATE(rhs);
+    
+    EXPECT(tok,";");
+
+    ConfigStatement* stmt = PushStruct<ConfigStatement>(out);
+    stmt->type = ConfigType_ASSIGNMENT;
+    stmt->lhs = lhs.value();
+    stmt->rhs = rhs;
+
+    return stmt;
+  }
+  return nullptr;
+}
+
 // Any returned String points to tokenizer content.
 // As long as tokenizer is valid, strings returned by this function are also valid.
 Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
@@ -787,14 +854,64 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
     if(CompareString(peek,"}")){
       break;
     }
+    if(CompareString(peek,"##")){
+      break;
+    }
 
     Opt<ConnectionDef> optCon = ParseConnection(tok,out);
-    PROPAGATE(optCon); // TODO: We could try to keep going and find more errors
-    
+    PROPAGATE(optCon);
+ 
     *cons->PushElem() = optCon.value();
   }
+
+  auto configFunctions = PushArenaList<ConfigFunction>(temp);
+
+  if(tok->IfNextToken("##")){
+    while(!tok->Done()){
+      if(tok->IfNextToken("config")){
+        Token configName = tok->NextToken();
+        CHECK_IDENTIFIER(configName);
+
+        Opt<Array<VarDeclaration>> vars = ParseModuleInputDeclaration(tok,out);
+        PROPAGATE(vars);
+
+        EXPECT(tok,"{");
+
+        auto configs = PushArenaList<ConfigStatement*>(temp);
+        while(!tok->Done()){
+          Token peek = tok->PeekToken();
+
+          if(CompareString(peek,";")){
+            tok->AdvancePeek();
+            continue;
+          }
+          if(CompareString(peek,"}")){
+            break;
+          }
+        
+          Opt<ConfigStatement*> config = ParseConfigStatement(tok,out);
+          PROPAGATE(config);
+
+          *configs->PushElem() = config.value();
+        }
+
+        EXPECT(tok,"}");
+        
+        ConfigFunction func = {};
+        func.name = configName;
+        func.variables = vars.value();
+        func.statements = PushArrayFromList(out,configs);
+
+        *configFunctions->PushElem() = func;
+      } else {
+        break;
+      }
+    }
+  }
+  
   EXPECT(tok,"}");
   def.connections = PushArrayFromList(out,cons);
+  def.configs = PushArrayFromList(out,configFunctions);
   
   return def;
 }
@@ -1523,6 +1640,9 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   
   FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
+  
+  res->functions = CopyArray(def.configs,perm);
+  
   return res;
 }
 
@@ -1542,7 +1662,7 @@ void Synchronize(Tokenizer* tok,BracketList<String> syncPoints){
 
 Array<ConstructDef> ParseVersatSpecification(String content,Arena* out){
   TEMP_REGION(temp,out);
-  Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"->=","->",">><","><<",">>","<<","..","^="});
+  Tokenizer tokenizer = Tokenizer(content,".%=#[](){}+:;,*~-",{"##","->=","->",">><","><<",">>","<<","..","^="});
   Tokenizer* tok = &tokenizer;
 
   ArenaList<ConstructDef>* typeList = PushArenaList<ConstructDef>(temp);

@@ -105,11 +105,46 @@ struct DefBase{
   Token name;
 };
 
+enum ConfigExpressionType{
+  ConfigExpressionType_IDENTIFIER,
+  ConfigExpressionType_ACCESS
+};
+
+struct ConfigExpression{
+  ConfigExpressionType type;
+
+  Token identifier;
+
+  // TODO: Union
+  ConfigExpression* child;
+  int number;
+};
+
+enum ConfigType{
+  ConfigType_ASSIGNMENT,
+  ConfigType_ADDRESS_GEN
+};
+
+struct ConfigStatement{
+  ConfigType type;
+
+  // TODO: Union
+  ConfigExpression* lhs;
+  SymbolicExpression* rhs;
+};
+
+struct ConfigFunction{
+  String name;
+  Array<VarDeclaration> variables;
+  Array<ConfigStatement*> statements;
+};
+
 struct ModuleDef : public DefBase{
   Token numberOutputs; // TODO: Not being used. Not sure if we gonna actually add this or not.
   Array<VarDeclaration> inputs;
   Array<InstanceDeclaration> declarations;
   Array<ConnectionDef> connections;
+  Array<ConfigFunction> configs;
 };
 
 struct MergeDef : public DefBase{

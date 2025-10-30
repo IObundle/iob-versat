@@ -3,6 +3,7 @@
 #include "configurations.hpp"
 #include "addressGen.hpp"
 #include "verilogParsing.hpp"
+#include "versatSpecificationParser.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
@@ -73,14 +74,16 @@ struct FUDeclaration{
   // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
   Accelerator* baseCircuit; // For merge, baseCircuit contains muxes but not buffers.
   Accelerator* fixedDelayCircuit;
-  Accelerator* flattenedBaseCircuit
-;
+  Accelerator* flattenedBaseCircuit;
   
   String operation;
 
   SubMap* flattenMapping;
 
   AddressGenInst supportedAddressGen;
+  
+  // TODO: Compile config function into a easier to use form.
+  Array<ConfigFunction> functions;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
