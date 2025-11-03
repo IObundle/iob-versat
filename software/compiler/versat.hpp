@@ -29,7 +29,7 @@ struct WireInformation{
   Wire wire;
   int addr;
   bool isStatic;
-  SymbolicExpression* bitExpr;
+  SymbolicExpression* startBitExpr;
 };
 
 // Global parameters are verilog parameters that Versat assumes that exist and that it uses through the entire accelerator.

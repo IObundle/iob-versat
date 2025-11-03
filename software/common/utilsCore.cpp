@@ -44,31 +44,41 @@ char* StaticFormat(const char* format,...){
   static const int BUFFER_SIZE = 1024*4;
   static char buffer[BUFFER_SIZE];
   static char buffer2[BUFFER_SIZE];
+  static char buffer3[BUFFER_SIZE];
+  static char buffer4[BUFFER_SIZE];
   static int currentBuffer = 0;
   
   va_list args;
   va_start(args,format);
   int written;
-  if(currentBuffer == 0){
-    written = vsnprintf(buffer,BUFFER_SIZE,format,args);
-  } else {
-    written = vsnprintf(buffer2,BUFFER_SIZE,format,args);
+
+  char* ptr = buffer;
+  if(currentBuffer == 1){
+    ptr = buffer2;
   }
-    
-  va_end(args);
+  if(currentBuffer == 2){
+    ptr = buffer3;
+  }
+  if(currentBuffer == 3){
+    ptr = buffer4;
+  }
+
+  written = vsnprintf(ptr,BUFFER_SIZE,format,args);
 
   if(written == BUFFER_SIZE - 1){
     Assert(false); // NOTE: We are probably using StaticFormat in a situation where we shouldn't.
   }
 
-  char* toReturn = buffer;
-  if(currentBuffer == 1){
-    toReturn = buffer2;
-  }
-
-  currentBuffer = 1 - currentBuffer;
+  currentBuffer = (currentBuffer + 1) % 4;
+    
+  va_end(args);
   
-  return toReturn;
+  return ptr;
+}
+
+void ReportNotImplemented(String msg){
+  // TODO: We might want to make this a bit prettier since this is user side stuff
+  printf("%.*s",UN(msg));
 }
 
 int CountNonZeros(Array<int> arr){

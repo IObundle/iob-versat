@@ -10,7 +10,8 @@
 
 module Muladd #(
    parameter DELAY_W = 7,
-   parameter DATA_W = 32
+   parameter DATA_W = 32,
+   parameter LOOP_W = 10
 ) (
    input      rst,
    input      clk,
@@ -24,22 +25,22 @@ module Muladd #(
 
    // config interface
    input       opcode,
-   input [9:0] iter,
-   input [9:0] period,
+   input [LOOP_W-1:0] iter,
+   input [LOOP_W-1:0] period,
 
    input [DELAY_W-1:0] delay0
 );
 
    reg [DELAY_W-1:0] delay;
-   reg [ 9:0] currentIteration;
-   reg [ 9:0] currentPeriod;
+   reg [LOOP_W-1:0] currentIteration;
+   reg [LOOP_W-1:0] currentPeriod;
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          done             <= 1'b0;
          delay            <= {DELAY_W{1'b0}};
-         currentIteration <= 10'b0;
-         currentPeriod    <= 10'b0;
+         currentIteration <= {LOOP_W{1'b0}};
+         currentPeriod    <= {LOOP_W{1'b0}};
       end else if (run) begin
          delay <= delay0 + 2; // Add 2 because it takes 2 cycles for the accumulator to start working and this whole logic is just the control for the accumulator
          done <= 1'b0;
@@ -51,14 +52,14 @@ module Muladd #(
             end
             currentIteration <= 0;
             currentPeriod    <= 0;
-         end else if (delay == 0 && !done) begin
+         end else if (!done) begin
             currentPeriod <= currentPeriod + 1;
 
-            if (currentPeriod + 1 >= period) begin
+            if ((currentPeriod + 1) >= period) begin
                currentPeriod    <= 0;
 
                currentIteration <= currentIteration + 1;
-               if (currentIteration + 1 >= iter) begin
+               if ((currentIteration + 1) >= iter) begin
                   done <= 1'b1;
                end
             end
@@ -88,7 +89,7 @@ module Muladd #(
             else acc <= acc - result_mult_reg;
          end
 
-         dsp_out0 <= acc[31:0];
+         dsp_out0 <= acc[DATA_W-1:0];
       end
    end
 

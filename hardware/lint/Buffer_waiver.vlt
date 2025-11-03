@@ -3,8 +3,8 @@
 `verilator_config
 
 // Unused submodule outputs
-lint_off -rule PINCONNECTEMPTY -file "**/Buffer.v" -match "Cell pin connected by name with empty reference: 'r_empty_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/Buffer.v" -match "Instance pin connected by name with empty reference: 'r_empty_o'"
 
-lint_off -rule PINCONNECTEMPTY -file "**/Buffer.v" -match "Cell pin connected by name with empty reference: 'w_full_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/Buffer.v" -match "Instance pin connected by name with empty reference: 'w_full_o'"
 
-lint_off -rule PINCONNECTEMPTY -file "**/Buffer.v" -match "Cell pin connected by name with empty reference: 'ext_mem_clk_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/Buffer.v" -match "Instance pin connected by name with empty reference: 'ext_mem_clk_o'"

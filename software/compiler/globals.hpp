@@ -42,6 +42,8 @@ struct Options{
   bool generateFSTFormat;
   bool useDMA;
   bool exportInternalMemories;
+  bool insertDebugRegisters;
+  bool insertProfilingRegisters;
   
   bool extraIOb;
   bool useSymbolAddress; // If the system removes the LSB bits of the address (alignment info) and if we must generate code to account for that.

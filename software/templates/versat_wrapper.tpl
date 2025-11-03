@@ -60,31 +60,6 @@ static VerilatedVcdC* tfp = NULL;
 #include "VSuperAddress.h"
 #endif
 
-static V@{typeName}* dut = NULL;
-
-extern VersatPrintf versatPrintf;
-extern bool CreateVCD;
-extern bool SimulateDatabus;
-
-#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
-
-// TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
-#ifdef TRACE
-#define UPDATE(unit) \
-   unit->clk = 0; \
-   unit->eval(); \
-   if(CreateVCD) tfp->dump(contextp->time()); \
-   contextp->timeInc(2); \
-   unit->clk = 1; \
-   unit->eval();
-#else
-#define UPDATE(unit) \
-   unit->clk = 0; \
-   unit->eval(); \
-   unit->clk = 1; \
-   unit->eval();
-#endif
-
 template<typename T>
 class ArrayIterator{
 public:
@@ -105,6 +80,52 @@ struct Array{
   ArrayIterator<T> end() const{return ArrayIterator<T>{data + size};};
 };
 
+struct DatabusAccess{
+   int counter;
+   int latencyCounter;
+};
+
+// ============================================================================
+// Global data 
+
+static V@{typeName}* dut = NULL;
+
+VersatPrintf versatPrintf;
+bool CreateVCD;
+bool SimulateDatabus;
+bool versatInitialized;
+
+static @{typeName}Config configBuffer = {};
+static @{typeName}State stateBuffer = {};
+static AcceleratorStatic staticBuffer = {};
+static DatabusAccess databusBuffer[@{nIOs}] = {}; 
+
+volatile @{typeName}Config* accelConfig = (volatile @{typeName}Config*) &configBuffer;
+volatile @{typeName}State* accelState = (volatile @{typeName}State*) &stateBuffer;
+volatile AcceleratorStatic* accelStatic = (volatile AcceleratorStatic*) &staticBuffer;
+
+// ============================================================================
+// Utilities
+
+#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
+
+// TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
+#ifdef TRACE
+#define UPDATE(unit) \
+   unit->clk = 0; \
+   unit->eval(); \
+   if(CreateVCD) tfp->dump(contextp->time()); \
+   contextp->timeInc(2); \
+   unit->clk = 1; \
+   unit->eval();
+#else
+#define UPDATE(unit) \
+   unit->clk = 0; \
+   unit->eval(); \
+   unit->clk = 1; \
+   unit->eval();
+#endif
+
 static char* Bin(unsigned int value){
    static char buffer[33];
    buffer[32] = '\0';
@@ -118,11 +139,6 @@ static char* Bin(unsigned int value){
    return buffer;
 }
 
-struct DatabusAccess{
-   int counter;
-   int latencyCounter;
-};
-
 static const int INITIAL_MEMORY_LATENCY = 5;
 static const int MEMORY_LATENCY = 0;
 
@@ -132,27 +148,10 @@ typedef char Byte;
 
 @{declareExternalMemory}
 
-static AcceleratorConfig configBuffer = {};
-static AcceleratorState stateBuffer = {};
-static AcceleratorStatic staticBuffer = {};
-static DatabusAccess databusBuffer[@{nIOs}] = {}; 
-
 extern "C" void InitializeVerilator(){
 #ifdef TRACE
   Verilated::traceEverOn(true);
 #endif
-}
-
-extern "C" AcceleratorConfig* GetStartOfConfig(){
-  return &configBuffer;
-}
-
-extern "C" AcceleratorState* GetStartOfState(){
-  return &stateBuffer;
-}
-
-extern "C" AcceleratorStatic* GetStartOfStatic(){
-  return &staticBuffer;
 }
 
 static void CloseWaveform(){
@@ -842,3 +841,183 @@ struct VUnitInfo{
 };
 
 @{simulationStuff}
+
+
+// ============================================================================
+// Start of Versat public interface
+
+#if 1
+#include "versat_accel.h"
+
+#ifdef __cplusplus
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#else
+#define nullptr 0
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#endif
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+
+iptr versat_base;
+
+#ifdef __cplusplus
+extern "C"{
+#endif
+
+// Functions exported by wrapper that allow the accelerator to be simulated
+int VersatAcceleratorCyclesElapsed();
+void VersatReset();
+void InitializeVerilator();
+void VersatAcceleratorCreate();
+void VersatAcceleratorSimulate();
+void VersatSignalLoop();
+int MemoryAccess(int address,int value,int write);
+
+int GetAcceleratorCyclesElapsed();
+
+#ifdef __cplusplus
+  }
+#endif
+
+void ConfigEnableDMA(bool value){
+}
+
+void ConfigCreateVCD(bool value){
+  CreateVCD = value;
+}
+
+void ConfigSimulateDatabus(bool value){
+  SimulateDatabus = value;
+}
+
+void versat_init(int base){
+  versatInitialized = true;
+  CreateVCD = true;
+  SimulateDatabus = true;
+  versat_base = base;
+
+  InitializeVerilator();
+  VersatAcceleratorCreate();
+
+  VersatLoadDelay(delayBuffer);
+  
+  accelStatic = &staticBuffer;
+}
+
+void SetVersatDebugPrintfFunction(VersatPrintf function){
+  versatPrintf = function;
+}
+
+static void CheckVersatInitialized(){
+  if(!versatInitialized){
+    printf("Versat has not been initialized\n");
+    fflush(stdout);
+    exit(-1);
+  }
+}
+
+void ResetAccelerator(){
+  VersatReset();
+  VersatLoadDelay(delayBuffer);
+}
+
+void SignalLoop(){
+  VersatSignalLoop();
+}
+
+int GetAcceleratorCyclesElapsed(){
+  return VersatAcceleratorCyclesElapsed();
+}
+
+void RunAccelerator(int times){
+  CheckVersatInitialized();
+
+  for(int i = 0; i < times; i++){
+    VersatAcceleratorSimulate();
+  }
+}
+
+void StartAccelerator(){
+  CheckVersatInitialized();
+
+  VersatAcceleratorSimulate();
+}
+
+void EndAccelerator(){
+  // Do nothing. Start accelerator does everything, for now
+}
+
+void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
+  CheckVersatInitialized();
+
+  char* byteViewDest = (char*) dest;
+  char* configView = (char*) accelConfig;
+  int* view = (int*) data;
+
+  bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + AcceleratorConfigSize);
+  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + AcceleratorConfigSize);
+
+  if(destEndOutsideConfig){
+    printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");
+    printf("This is most likely an error, no transfer is being made\n");
+    return;
+  }
+  
+  if(destInsideConfig){
+    memcpy((void*) dest,(void*) data,size);
+  } else {
+    for(int i = 0; i < (size / 4); i++){
+      VersatUnitWrite(dest,i,view[i]);
+    }
+  }
+}
+
+void VersatUnitWrite(volatile const void* baseaddr,int index,int val){
+  CheckVersatInitialized();
+
+  iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based address
+  MemoryAccess(addr,val,1);
+}
+
+int VersatUnitRead(volatile const void* baseaddr,int index){
+  CheckVersatInitialized();
+
+  iptr addr = (iptr) baseaddr + (index * sizeof(int)) - (versat_base + memMappedStart); // Convert back to zero based byte space address
+  int res = MemoryAccess(addr,0,0);
+  return res;
+}
+
+float VersatUnitReadFloat(volatile const void* base,int index){
+  int res = VersatUnitRead(base,index);
+  float* view = (float*) &res;
+  return *view;
+}
+
+// ======================================
+// Debug stuff currently disabled for pc-emul, altough we could do something in here to provide some data back.
+
+void DebugRunAccelerator(int times, int maxCycles){
+  RunAccelerator(times);
+} 
+
+VersatDebugState VersatDebugGetState(){
+  return (VersatDebugState){};
+}
+
+VersatProfile VersatProfileGet(){
+  return (VersatProfile){};
+}
+
+void VersatPrintProfile(VersatProfile p){
+}
+
+void VersatProfileReset(){
+
+}
+
+#endif

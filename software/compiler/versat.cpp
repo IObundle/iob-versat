@@ -53,6 +53,16 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     decl.parameters[i].name = info->defaultParameters[i].name;
     decl.parameters[i].valueExpr = SymbolicExpressionFromVerilog(info->defaultParameters[i].expr,perm);
   }
+
+  decl.inputSize = PushArray<SymbolicExpression*>(out,info->inputs.size);
+  decl.outputSize = PushArray<SymbolicExpression*>(out,info->outputs.size);
+
+  for(int i = 0; i < info->inputs.size; i++){
+    decl.inputSize[i] = SymbolicExpressionFromVerilog(info->inputs[i].range,out);
+  }
+  for(int i = 0; i < info->outputs.size; i++){
+    decl.outputSize[i] = SymbolicExpressionFromVerilog(info->outputs[i].range,out);
+  }
     
   for(int i = 0; i < instantiated.size; i++){
     ParameterExpression def = info->defaultParameters[i];
@@ -140,11 +150,12 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
     }
   }
   
+
   decl.name = info->name;
 
   decl.info.infos = PushArray<MergePartition>(globalPermanent,1);
-  decl.info.infos[0].inputDelays = info->inputDelays;
-  decl.info.infos[0].outputLatencies = info->outputLatencies;
+  decl.info.infos[0].inputDelays = Extract(info->inputs,out,&PortInfo::delay);
+  decl.info.infos[0].outputLatencies = Extract(info->outputs,out,&PortInfo::delay);
   
   decl.configs = configs;
   decl.states = states;
@@ -745,9 +756,9 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.wire = w;
       info.addr = 4 * addr++; // TODO: This 4 is because we are using addresses that are byte aligned in a 32 bit system. We could make this proper instead of hardcoded.
 
-      info.bitExpr = Normalize(expr,out);
+      info.startBitExpr = Normalize(expr,out);
       
-      expr = SymbolicAdd(info.bitExpr,w.sizeExpr,temp);
+      expr = SymbolicAdd(info.startBitExpr,w.sizeExpr,temp);
       *list->PushElem() = info;
     }
   }
@@ -772,9 +783,9 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       info.addr = 4 * addr++;
       info.isStatic = true;
 
-      info.bitExpr = Normalize(expr,out);
+      info.startBitExpr = Normalize(expr,out);
 
-      expr = SymbolicAdd(info.bitExpr,info.wire.sizeExpr,temp);
+      expr = SymbolicAdd(info.startBitExpr,info.wire.sizeExpr,temp);
 
       *list->PushElem() = info;
     }
@@ -795,9 +806,9 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
       
       info.addr = 4 * addr++;
 
-      info.bitExpr = Normalize(expr,out);
+      info.startBitExpr = Normalize(expr,out);
 
-      expr = SymbolicAdd(info.bitExpr,PushVariable(temp,"DELAY_W"),temp);
+      expr = SymbolicAdd(info.startBitExpr,PushVariable(temp,"DELAY_W"),temp);
 
       *list->PushElem() = info;
     }

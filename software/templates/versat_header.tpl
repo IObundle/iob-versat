@@ -58,16 +58,44 @@ void SetVersatDebugPrintfFunction(VersatPrintf function);
 // In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
 int GetAcceleratorCyclesElapsed();
 
-void RunAccelerator(int times);
-void StartAccelerator();
-void EndAccelerator();
+void RunAccelerator(int times); // Runs accelerator n times and waits for it to finish before ending. Mostly used to flush the final computations and for simple invocations
+void StartAccelerator(); // Also waits for previous run to end if accelerator is still running
+void EndAccelerator(); // Ensure the accelerator as finished running
 void ResetAccelerator();
+
+// Fast data movement using internal Versat DMA if possible, otherwise regular memcpy style functions
 void VersatMemoryCopy(volatile void* dest,volatile const void* data,int byteSize);
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val);
 int VersatUnitRead(volatile const void* baseaddr,int index);
 float VersatUnitReadFloat(volatile const void* baseaddr,int index);
+
 void SignalLoop();
 void VersatLoadDelay(volatile const unsigned int* delayBuffer);
+
+// ======================================
+// Debug facilities
+
+// TODO: Only generate this if the flag is set.
+
+typedef struct{
+  bool databusIsActive;
+} VersatDebugState;
+
+typedef struct{
+  uint64_t runCount;
+  uint64_t cyclesSinceLastReset;
+  uint64_t runningCycles;
+  uint64_t databusValid;
+  uint64_t databusValidAndReady;
+  uint64_t configurationsSet;
+  uint64_t configurationsSetWhileRunning;
+} VersatProfile;
+
+void             DebugRunAccelerator(int times, int maxCycles); // Mainly for cases where the accelerator is hanging, we put a upper bound in the amount of cycles that we wait for.
+VersatDebugState VersatDebugGetState();
+VersatProfile    VersatProfileGet();
+void             VersatProfileReset();
+void             VersatPrintProfile(VersatProfile profile);
 
 // PC-Emul side functions that allow to enable or disable certain portions of the emulation
 // Their embedded counterparts simply do nothing
@@ -122,8 +150,7 @@ static const int stateStart = @{stateStart} * sizeof(int);
 static const unsigned int AcceleratorConfigSize = sizeof(@{typeName}Config);
 
 extern volatile @{typeName}Config* accelConfig; // @{nConfigs}
-
-@{accelStateDecl}
+extern volatile @{typeName}State* accelState; // @{nStates}
 
 static inline iptr ALIGN(iptr base,iptr alignment){
   // TODO: Because alignment is power of 2 (unless we want to support weird AXI_DATA_W values), we can use a faster implementation here.

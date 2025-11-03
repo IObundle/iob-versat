@@ -1,92 +1,93 @@
 `timescale 1ns / 1ps
 
 module Generator #(
-   parameter PERIOD_W = 16,
-   parameter DELAY_W = 7
+    parameter PERIOD_W = 16,
+    parameter DELAY_W  = 7,
+    parameter ADDR_W   = 32
 ) (
-   input clk,
-   input rst,
+    input clk,
+    input rst,
 
-   input running,
-   input run,
+    input running,
+    input run,
 
-   //configurations 
-   input [          31:0] iter,
-   input [          31:0] shift,
+    //configurations 
+    input [ADDR_W-1:0] iter,
+    input [ADDR_W-1:0] shift,
 
-   input [PERIOD_W - 1:0] per,
-   input [          31:0] incr,
+    input [PERIOD_W - 1:0] per,
+    input [ADDR_W-1:0] incr,
 
-   input [          31:0] iter2,
-   input [          31:0] shift2,
+    input [ADDR_W-1:0] iter2,
+    input [ADDR_W-1:0] shift2,
 
-   input [PERIOD_W - 1:0] per2,
-   input [          31:0] incr2,
+    input [PERIOD_W - 1:0] per2,
+    input [ADDR_W-1:0] incr2,
 
-   input [          31:0] iter3,
-   input [          31:0] shift3,
+    input [ADDR_W-1:0] iter3,
+    input [ADDR_W-1:0] shift3,
 
-   input [PERIOD_W - 1:0] per3,
-   input [          31:0] incr3,
+    input [PERIOD_W - 1:0] per3,
+    input [ADDR_W-1:0] incr3,
 
-   input [PERIOD_W - 1:0] duty,
-   input [          31:0] start,
+    input [PERIOD_W - 1:0] duty,
+    input [ADDR_W-1:0] start,
 
-   input [DELAY_W-1:0] delay0,
+    input [DELAY_W-1:0] delay0,
 
-   //outputs 
-   (* versat_latency = 0 *)
-   output [31:0] out0 // Latency zero because Address Gen is one cycle ahead in providing the address
+    //outputs 
+    (* versat_latency = 0 *)
+    output [ADDR_W-1:0] out0 // Latency zero because Address Gen is one cycle ahead in providing the address
 );
 
-   wire [31:0] genOut;
+  wire [ADDR_W-1:0] genOut;
 
-   assign out0 = genOut;  //done ? off_value : genOut;
+  assign out0 = genOut;  //done ? off_value : genOut;
 
-   AddressGen3 #(
-      .ADDR_W  (32),
+  AddressGen3 #(
+      .ADDR_W  (ADDR_W),
       .DATA_W  (8),
       .DELAY_W (DELAY_W),
       .PERIOD_W(PERIOD_W)
-   ) addrGen (
+  ) addrGen (
       .clk_i(clk),
       .rst_i(rst),
 
       .run_i(run),
 
-      .ignore_first_i(0),
+      .ignore_first_i(1'b0),
 
       //configurations 
-      .duty_i  (duty),
-      .start_i (start),
+      .duty_i (duty),
+      .start_i(start),
 
-      .per_i   (per),
-      .incr_i  (incr),
+      .per_i (per),
+      .incr_i(incr),
 
-      .iter_i  (iter),
-      .shift_i (shift),
+      .iter_i (iter),
+      .shift_i(shift),
 
-      .per2_i  (per2),
-      .incr2_i (incr2),
+      .per2_i (per2),
+      .incr2_i(incr2),
 
       .iter2_i (iter2),
       .shift2_i(shift2),
 
-      .per3_i  (per3),
-      .incr3_i (incr3),
+      .per3_i (per3),
+      .incr3_i(incr3),
 
       .iter3_i (iter3),
       .shift3_i(shift3),
 
-      .delay_i (delay0),
+      .delay_i(delay0),
 
       //outputs 
-      .valid_o (),
-      .ready_i (running),
-      .addr_o  (genOut),
-      .store_o (),
+      .valid_o(),
+      .ready_i(running),
+      .addr_o (genOut),
+      .store_o(),
 
-      .done_o  ()
-   );
+      .done_o()
+  );
 
 endmodule

@@ -7,18 +7,6 @@ import subprocess as sp
 import codecs
 
 from iob_module import iob_module
-from re import match
-
-# Submodules
-from iob_utils import iob_utils
-from iob_regfile_sp import iob_regfile_sp
-from iob_fifo_sync import iob_fifo_sync
-from iob_ram_2p import iob_ram_2p
-from iob_ram_sp import iob_ram_sp
-from iob_reg import iob_reg
-from iob_reg_re import iob_reg_re
-from iob_ram_sp_be import iob_ram_sp_be
-from iob_fp_fpu import iob_fp_fpu # Will also import all the other fp files
 
 # This class is not intended to be used.
 # It exists because some tools/scripts only expect to find a class 
@@ -35,8 +23,7 @@ class iob_versat(iob_module):
         ''' Create submodules list with dependencies of this module
         '''
 
-        submodules = [iob_fifo_sync,iob_ram_sp,iob_ram_2p]
-
+        submodules = []
         if(True): # HAS_AXI
             submodules += [
                 {"interface": "axi_m_port"},
@@ -45,7 +32,6 @@ class iob_versat(iob_module):
                 {"interface": "axi_m_m_write_portmap"},
                 {"interface": "axi_m_read_port"},
                 {"interface": "axi_m_m_read_portmap"},
-                #iob_fp_fpu # Imports all the FPU related files
             ]
 
         super()._create_submodules_list(submodules)
@@ -134,15 +120,15 @@ class iob_versat(iob_module):
         cls.block_groups += []
 
 
-def RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path):
+def RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path,profile):
     versat_dir = os.path.dirname(__file__)
 
     versat_args = ["versat",os.path.realpath(versat_spec),
+                    "--debug",
                     "-s",
                     f"-b{axi_data_w}",
                     "-d", # DMA
                     "-t",versat_top,
-                    "-I",os.path.realpath(build_dir  + "/hardware/src/"),
                     "-o",os.path.realpath(build_dir + "/hardware/src"), # Output hardware files
                     "-O",os.path.realpath(build_dir + "/software") # Output software files
                     ]
@@ -152,6 +138,9 @@ def RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_pat
 
     if(versat_extra):
         versat_args = versat_args + ["-u",versat_extra]
+
+    if(profile):
+        versat_args.append("--profile")
 
     print(*versat_args,"\n",file=sys.stderr)
     result = None
@@ -184,7 +173,7 @@ def SaveSetupInfo(filepath,lines):
         print(f"Failed to open versat setup file: {filepath}",file=sys.stderr)
         print("This might cause versat to run multiple times even if not needed",file=sys.stderr)
 
-def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path=None):
+def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path=None,profile=None):
     versat_dir = os.path.dirname(__file__)
 
     versatSetupFilepath = os.path.realpath(build_dir + "/software/versatSetup.txt")
@@ -197,13 +186,11 @@ def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,d
             with open(versatSetupFilepath,"r") as file:
                lines = [x.strip() for x in file.readlines()]
         except:
-            lines = RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path)
+            lines = RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path,profile)
             SaveSetupInfo(versatSetupFilepath,lines)
     else:
-        lines = RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path)
+        lines = RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_path,profile)
         SaveSetupInfo(versatSetupFilepath,lines)
-
-    #print("Lines:",lines,file=sys.stderr)
 
     # Info needed by class, ADDR_W, HAS_AXI, lines
     ADDR_W = 32
@@ -276,14 +263,6 @@ def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,d
         def _post_setup(cls):
             super()._post_setup()
 
-            # MARKED
-            #shutil.copytree(
-            #    f"{versat_dir}/hardware/src/units", f"{build_dir}/hardware/src",dirs_exist_ok = True
-            #)
-            # MARKED
-            #shutil.copytree(
-            #    f"{build_dir}/hardware/src/modules", f"{build_dir}/hardware/src",dirs_exist_ok = True
-            #)
             shutil.rmtree(f"{build_dir}/software/common")
             shutil.rmtree(f"{build_dir}/software/compiler")
             shutil.rmtree(f"{build_dir}/software/templates")
@@ -294,8 +273,7 @@ def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,d
             ''' Create submodules list with dependencies of this module
             '''
 
-            submodules = [iob_fifo_sync,iob_ram_sp,iob_ram_2p]
-
+            submodules = []
             if(True): # HAS_AXI
                 submodules += [
                     {"interface": "axi_m_port"},
@@ -304,7 +282,6 @@ def CreateVersatClass(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,d
                     {"interface": "axi_m_m_write_portmap"},
                     {"interface": "axi_m_read_port"},
                     {"interface": "axi_m_m_read_portmap"},
-                    #iob_fp_fpu # Imports all the FPU related files
                 ]
 
             super()._create_submodules_list(submodules)

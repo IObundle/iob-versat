@@ -2,8 +2,8 @@
 
 module VRead #(
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 17,
-   parameter PERIOD_W   = 15, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter ADDR_W     = 18,
+   parameter PERIOD_W   = 16, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter DELAY_W    = 7,
@@ -103,7 +103,8 @@ module VRead #(
       else if (run) pingPongState <= pingPong ? (!pingPongState) : 1'b0;
    end
 
-   wire [ADDR_W-1:0] constant1 = 1;
+   wire [ADDR_W-1:0] amount;
+   assign amount = amount_minus_one + 1'b1;
    
    //wire [ADDR_W-1:0] gen_addr_temp;
    //wire gen_valid, gen_ready;
@@ -118,7 +119,7 @@ module VRead #(
    always @(posedge clk,posedge rst) begin
       if(rst) begin
          gen_addr_temp <= 0;
-      end else if(run && enabled) begin
+      end else if(run && enabled && length != 0) begin
          gen_addr_temp <= 0;
          gen_valid <= 1'b1;
       end else begin
@@ -142,7 +143,7 @@ module VRead #(
       ) reader (
       .clk_i(clk),
       .rst_i(rst),
-      .run_i(run && enabled),
+      .run_i(run && enabled && length != 0),
       .done_o(transferDone),
 
       .ignore_first_i(1'b0),
@@ -190,9 +191,8 @@ module VRead #(
       .data_valid_i(1'b0),
       .data_ready_i(data_ready),
       .reading(1'b1),
-      .data_last_o(),
 
-      .count_i(amount_minus_one + constant1),
+      .count_i(amount),
       .start_address_i(ext_addr),
       .address_shift_i(addr_shift),
       .databus_length(length)
@@ -287,17 +287,6 @@ assign data_data = databus_rdata_0;
    localparam DIFF = AXI_DATA_W / DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
    localparam DECISION_BIT_START = $clog2(DATA_W / 8);
-
-   function [ADDR_W-DECISION_BIT_W-1:0] symbolSpaceConvert(input [ADDR_W-1:0] in);
-      reg [ADDR_W-1:0] noPingPong;
-      reg [ADDR_W-1:0] shiftRes;
-      begin
-         noPingPong           = in;
-         noPingPong[ADDR_W-1] = 1'b0;
-         shiftRes             = noPingPong >> DECISION_BIT_W;
-         symbolSpaceConvert   = shiftRes[ADDR_W-DECISION_BIT_W-1:0];
-      end
-   endfunction
 
    generate
       if (AXI_DATA_W > DATA_W) begin

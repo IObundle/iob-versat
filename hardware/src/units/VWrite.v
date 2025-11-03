@@ -1,11 +1,11 @@
 `timescale 1ns / 1ps
 
 module VWrite #(
-   parameter DATA_W     = 32, // Internal datapath width
+   parameter DATA_W     = 32,  // Internal datapath width
    parameter ADDR_W     = 16,
-   parameter PERIOD_W   = 14, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
-   parameter AXI_ADDR_W = 32, 
-   parameter AXI_DATA_W = 32, // External databus width
+   parameter PERIOD_W   = 14,  // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
+   parameter AXI_ADDR_W = 32,
+   parameter AXI_DATA_W = 32,  // External databus width
    parameter DELAY_W    = 7,
    parameter LEN_W      = 16
 ) (
@@ -45,7 +45,7 @@ module VWrite #(
    (* versat_stage="Write" *) input                  enabled,
    (* versat_stage="Write" *) input [AXI_ADDR_W-1:0] addr_shift,
 
-   input                  pingPong,
+   input pingPong,
 
    input [  ADDR_W-1:0] iter,
    input [PERIOD_W-1:0] per,
@@ -64,10 +64,10 @@ module VWrite #(
    input [  ADDR_W-1:0] shift3,
    input [  ADDR_W-1:0] incr3,
 
-   input                ignore_first,
-   input [ 20-1:0]      extra_delay,
+   input          ignore_first,
+   input [20-1:0] extra_delay,
 
-   input [ DELAY_W-1:0] delay0
+   input [DELAY_W-1:0] delay0
 );
    localparam DELAY_STORE_W = (DELAY_W > 20) ? DELAY_W : 20;
    localparam EXTRA_DELAY_W = 20;
@@ -78,30 +78,27 @@ module VWrite #(
    wire doneStore_int;
    assign done = (transferDone & doneStore);
 
-   wire data_valid,data_ready,data_last;
-   wire [AXI_DATA_W-1:0] data_data;
+   wire data_valid, data_ready;
+   wire [   AXI_DATA_W-1:0] data_data;
    wire [DELAY_STORE_W-1:0] delay_store;
 
    generate
-        if (DELAY_W < EXTRA_DELAY_W) begin : gen_delay_smaller
-           assign delay_store = {{(EXTRA_DELAY_W-DELAY_W){1'b0}},delay0} + extra_delay;
-        end else if (DELAY_W > EXTRA_DELAY_W) begin : gen_delay_bigger
-           assign delay_store = {{(DELAY_W-EXTRA_DELAY_W){1'b0}},extra_delay} + delay0;
-        end else begin : gen_delay_equal
-           assign delay_store = delay0 + extra_delay;
-        end
+      if (DELAY_W < EXTRA_DELAY_W) begin : gen_delay_smaller
+         assign delay_store = {{(EXTRA_DELAY_W - DELAY_W) {1'b0}}, delay0} + extra_delay;
+      end else if (DELAY_W > EXTRA_DELAY_W) begin : gen_delay_bigger
+         assign delay_store = {{(DELAY_W - EXTRA_DELAY_W) {1'b0}}, extra_delay} + delay0;
+      end else begin : gen_delay_equal
+         assign delay_store = delay0 + extra_delay;
+      end
    endgenerate
 
    always @(posedge clk, posedge rst) begin
       if (rst) begin
-         //doneWrite <= 1'b1;
          doneStore <= 1'b1;
       end else if (run) begin
-         //doneWrite <= !enabled;
          doneStore <= 1'b0;
       end else if (running) begin
          doneStore <= doneStore_int;
-         //if (databus_valid_0 && databus_ready_0 && databus_last_0) doneWrite <= 1'b1;
       end
    end
 
@@ -120,69 +117,70 @@ module VWrite #(
    wire [ADDR_W-1:0] store_addr_temp;
 
    // mem enables output by addr gen
-   wire store_en,do_store;
+   wire store_en, do_store;
 
    wire [DATA_W-1:0] store_data = in0;
 
-   reg [ADDR_W-1:0] gen_addr_temp;
-   reg gen_valid;
-   wire gen_ready;
+   reg  [ADDR_W-1:0] gen_addr_temp;
+   reg               gen_valid;
+   wire              gen_ready;
 
    localparam OFFSET_TEMP = AXI_DATA_W / 8;
    localparam [ADDR_W-1:0] OFFSET_W = OFFSET_TEMP[ADDR_W-1:0];
 
-   always @(posedge clk,posedge rst) begin
-      if(rst) begin
+   always @(posedge clk, posedge rst) begin
+      if (rst) begin
          gen_addr_temp <= 0;
-      end else if(run && enabled) begin
+      end else if(run && enabled && length != 0) begin
          gen_addr_temp <= 0;
-         gen_valid <= 1'b1;
+         gen_valid     <= 1'b1;
       end else begin
-         if(gen_valid && gen_ready) begin
+         if (gen_valid && gen_ready) begin
             gen_addr_temp <= gen_addr_temp + OFFSET_W;
          end
-         if(!running) begin
+         if (!running) begin
             gen_valid <= 0;
          end
       end
    end
 
-   wire [ADDR_W-1:0] constant1 = 1;
+   wire [ADDR_W-1:0] amount;
+   assign amount = amount_minus_one + 1'b1;
 
    SuperAddress #(
       .AXI_ADDR_W(AXI_ADDR_W),
-      .LEN_W(LEN_W),
-      .COUNT_W(ADDR_W),
-      .ADDR_W(ADDR_W),
-      .DATA_W(DATA_W),
-      .PERIOD_W(PERIOD_W),
-      .DELAY_W(1)
-      ) writer (
-      .clk_i(clk),
-      .rst_i(rst),
-      .run_i(run && enabled),
+      .LEN_W     (LEN_W),
+      .COUNT_W   (ADDR_W),
+      .ADDR_W    (ADDR_W),
+      .DATA_W    (DATA_W),
+      .PERIOD_W  (PERIOD_W),
+      .DELAY_W   (1)
+   ) writer (
+      .clk_i (clk),
+      .rst_i (rst),
+      .run_i (run && enabled && (length != 0)),
       .done_o(transferDone),
 
       .ignore_first_i(1'b0),
 
       //configurations 
-      .per_i({PERIOD_W{1'b0}}),
-      .delay_i (1'b0),
+      .per_i  ({PERIOD_W{1'b0}}),
+      .delay_i(1'b0),
       //.start_i (0),
-      .start_i (0),
-      .incr_i  ({ADDR_W{1'b0}}),
-      .iter_i({ADDR_W{1'b0}}),
-      .duty_i      ({PERIOD_W{1'b0}}),
-      .shift_i     ({ADDR_W{1'b0}}),
+      .start_i(0),
+      .incr_i ({ADDR_W{1'b0}}),
+      .iter_i ({ADDR_W{1'b0}}),
+      .duty_i ({PERIOD_W{1'b0}}),
+      .shift_i({ADDR_W{1'b0}}),
 
-      .per2_i({PERIOD_W{1'b0}}),
-      .incr2_i({ADDR_W{1'b0}}),
-      .iter2_i({ADDR_W{1'b0}}),
+      .per2_i  ({PERIOD_W{1'b0}}),
+      .incr2_i ({ADDR_W{1'b0}}),
+      .iter2_i ({ADDR_W{1'b0}}),
       .shift2_i({ADDR_W{1'b0}}),
 
-      .per3_i({PERIOD_W{1'b0}}),
-      .incr3_i({ADDR_W{1'b0}}),
-      .iter3_i({ADDR_W{1'b0}}),
+      .per3_i  ({PERIOD_W{1'b0}}),
+      .incr3_i ({ADDR_W{1'b0}}),
+      .iter3_i ({ADDR_W{1'b0}}),
       .shift3_i({ADDR_W{1'b0}}),
 
       .doneDatabus(),
@@ -195,32 +193,33 @@ module VWrite #(
 
       .databus_ready(databus_ready_0),
       .databus_valid(databus_valid_0),
-      .databus_addr(databus_addr_0),
-      .databus_len(databus_len_0),
-      .databus_last(databus_last_0),
+      .databus_addr (databus_addr_0),
+      .databus_len  (databus_len_0),
+      .databus_last (databus_last_0),
 
       // Data interface
       .data_valid_i(data_valid),
       .data_ready_i(1'b1),
-      .reading(1'b0),
-      .data_last_o(data_last),
+      .reading     (1'b0),
 
-      .count_i(amount_minus_one + constant1),
+      .count_i        (amount),
       .start_address_i(ext_addr),
       .address_shift_i(addr_shift),
-      .databus_length(length)
+      .databus_length (length)
    );
 
-   assign data_ready = databus_ready_0;
+   assign data_ready      = databus_ready_0;
    assign databus_wstrb_0 = ~0;
-   assign databus_wdata_0 = data_data; 
+   assign databus_wdata_0 = data_data;
 
-   wire [ADDR_W-1:0] gen_addr = {pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1],gen_addr_temp[ADDR_W-2:0]};
+   wire [ADDR_W-1:0] gen_addr = {
+      pingPong ? !pingPongState : gen_addr_temp[ADDR_W-1], gen_addr_temp[ADDR_W-2:0]
+   };
 
    AddressGen3 #(
-      .ADDR_W(ADDR_W),
-      .DATA_W(DATA_W),
-      .DELAY_W(DELAY_STORE_W),
+      .ADDR_W  (ADDR_W),
+      .DATA_W  (DATA_W),
+      .DELAY_W (DELAY_STORE_W),
       .PERIOD_W(PERIOD_W)
    ) addrgenStore (
       .clk_i(clk),
@@ -230,23 +229,23 @@ module VWrite #(
       .ignore_first_i(ignore_first),
 
       //configurations 
-      .per_i(per),
-      .delay_i (delay_store),
-      .start_i ({1'b0,start[ADDR_W-2:0]}),
-      .incr_i  (incr),
+      .per_i  (per),
+      .delay_i(delay_store),
+      .start_i({1'b0, start[ADDR_W-2:0]}),
+      .incr_i (incr),
 
-      .iter_i(iter),
-      .duty_i      (duty),
-      .shift_i     (shift),
+      .iter_i (iter),
+      .duty_i (duty),
+      .shift_i(shift),
 
-      .per2_i(per2),
-      .incr2_i(incr2),
-      .iter2_i(iter2),
+      .per2_i  (per2),
+      .incr2_i (incr2),
+      .iter2_i (iter2),
       .shift2_i(shift2),
 
-      .per3_i(per3),
-      .incr3_i(incr3),
-      .iter3_i(iter3),
+      .per3_i  (per3),
+      .incr3_i (incr3),
+      .iter3_i (iter3),
       .shift3_i(shift3),
 
       //outputs 
@@ -257,10 +256,12 @@ module VWrite #(
       .done_o (doneStore_int)
    );
 
-   wire [ADDR_W-1:0] store_addr = {pingPong ? pingPongState : store_addr_temp[ADDR_W-1],store_addr_temp[ADDR_W-2:0]};
+   wire [ADDR_W-1:0] store_addr = {
+      pingPong ? pingPongState : store_addr_temp[ADDR_W-1], store_addr_temp[ADDR_W-2:0]
+   };
 
-   wire                  read_en;
-   wire [    ADDR_W-1:0] read_addr;
+   wire read_en;
+   wire [ADDR_W-1:0] read_addr;
    wire [AXI_DATA_W-1:0] read_data;
 
    MemoryReader #(
@@ -277,7 +278,7 @@ module VWrite #(
       .m_ready_i(data_ready),
       .m_addr_o (),
       .m_data_o (data_data),
-      .m_last_i (data_last),
+      .m_last_i (1'b0),
 
       // Connect to memory
       .mem_enable_o(read_en),
@@ -304,27 +305,27 @@ module VWrite #(
 
    // Reports most common errors
    always @(posedge clk) begin
-      if(run) begin
+      if (run) begin
          reportedA <= 1'b0;
-      end else if(pingPong && gen_addr_temp[ADDR_W-1] && reportedA == 1'b0) begin
+      end else if (pingPong && gen_addr_temp[ADDR_W-1] && reportedA == 1'b0) begin
          $display("%m: Overflow of memory when using PingPong for reading");
          reportedA <= 1'b1;
       end
    end
 
    always @(posedge clk) begin
-      if(run) begin
+      if (run) begin
          reportedB <= 1'b0;
-      end else if(pingPong && store_addr_temp[ADDR_W-1] && reportedB == 1'b0) begin
+      end else if (pingPong && store_addr_temp[ADDR_W-1] && reportedB == 1'b0) begin
          $display("%m: Overflow of write memory when using PingPong for outputting");
          reportedB <= 1'b1;
       end
    end
 
    always @(posedge clk) begin
-      if(run) begin
+      if (run) begin
          reportedC <= 1'b0;
-      end else if(pingPong && start[ADDR_W-1] && reportedC == 1'b0) begin
+      end else if (pingPong && start[ADDR_W-1] && reportedC == 1'b0) begin
          $display("%m: Last bit of output start ignored when using PingPong");
          reportedC <= 1'b1;
       end

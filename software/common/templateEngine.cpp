@@ -205,7 +205,7 @@ void TemplateSetNumber(String id,int number){
 void TemplateSetString(String id,String str){
   Value val = {};
   val.type = ValueType_STRING;
-  val.str = str;
+  val.str = TrimWhitespaces(str);
 
   SetValue(globalFrame,id,val);
 }

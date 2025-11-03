@@ -1,5 +1,6 @@
 #include "verilogParsing.hpp"
 
+#include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
 #include "templateEngine.hpp"
@@ -185,7 +186,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
           filepath = string + '/' + filename;
         }
 
-        file = fopen(filepath.c_str(),"r"); // For now, do not change to OpenFile. This code needs to be partially rewritten anyway.
+        file = OpenFile(filepath.c_str(),"r",FilePurpose_READ_CONTENT);
 
         if(file){
           break;
@@ -799,11 +800,11 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
   info.defaultParameters = module.parameters;
 
-  auto outputLatency = StartArray<int>(out);
-  auto inputDelay = StartArray<int>(out);
+  auto inputs = StartArray<PortInfo>(out);
+  auto outputs = StartArray<PortInfo>(out);
   auto configs = StartArray<WireExpression>(out);
   auto states = StartArray<WireExpression>(out);
-  
+
   info.name = module.name;
   info.isSource = module.isSource;
 
@@ -889,22 +890,24 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
       }
     } else if(CheckFormat("in%d",decl.name)){
       port.AssertNextToken("in");
-      int input = ParseInt(port.NextToken());
+      int index = ParseInt(port.NextToken());
       Value* delayValue = decl.attributes->Get(VERSAT_LATENCY);
 
       int delay = 0;
       if(delayValue) delay = delayValue->number;
-      
-      inputDelay[input] = delay;
+
+      inputs[index].delay = delay;
+      inputs[index].range = decl.range;
     } else if(CheckFormat("out%d",decl.name)){
       port.AssertNextToken("out");
-      int output = ParseInt(port.NextToken());
+      int index = ParseInt(port.NextToken());
       Value* latencyValue = decl.attributes->Get(VERSAT_LATENCY);
 
       int latency = 0;
       if(latencyValue) latency = latencyValue->number;
-      
-      outputLatency[output] = latency;
+
+      outputs[index].delay = latency;
+      outputs[index].range = decl.range;
     } else if(CheckFormat("delay%d",decl.name)){
       port.AssertNextToken("delay");
       int delay = ParseInt(port.NextToken());
@@ -976,10 +979,10 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
     }
   }
 
-  info.inputDelays = inputDelay.AsArray();
-  info.outputLatencies = outputLatency.AsArray();
   info.configs = configs.AsArray();
   info.states = states.AsArray();
+  info.inputs = inputs.AsArray();
+  info.outputs = outputs.AsArray();
 
   if(info.doesIO){
     info.nIO += 1;
@@ -1055,6 +1058,3 @@ Value Eval(Expression* expr,Array<ParameterExpression> parameters){
 
   return ret;
 }
-
-
-

@@ -11,6 +11,7 @@
 #include <cstdarg>
 #include <cstdlib>
 
+#include "filesystem.hpp"
 #include "intrinsics.hpp"
 #include "utilsCore.hpp"
 
@@ -402,7 +403,7 @@ String PushFile(Arena* out,String filepath){
 
 //TODO: Replace return with Optional. Handle errors
 String PushFile(Arena* out,const char* filepath){
-  FILE* file = fopen(filepath,"r");
+  FILE* file = OpenFile(filepath,"r",FilePurpose_READ_CONTENT);
   DEFER_CLOSE_FILE(file);
   
   if(!file){

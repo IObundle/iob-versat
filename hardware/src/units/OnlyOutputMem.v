@@ -6,7 +6,8 @@ module OnlyOutputMem #(
    parameter DATA_W        = 32,
    parameter SIZE_W        = 32,
    parameter DELAY_W       = 7,
-   parameter ADDR_W        = 12
+   parameter ADDR_W        = 12,
+   parameter PERIOD_W      = 10
 ) (
    //control
    input clk,
@@ -38,8 +39,8 @@ module OnlyOutputMem #(
 
    // Configuration
    input [ADDR_W-1:0] iterA,
-   input [       9:0] perA,
-   input [       9:0] dutyA,
+   input [PERIOD_W-1:0] perA,
+   input [PERIOD_W-1:0] dutyA,
    input [ADDR_W-1:0] startA,
    input [ADDR_W-1:0] shiftA,
    input [ADDR_W-1:0] incrA,
@@ -60,13 +61,15 @@ module OnlyOutputMem #(
    //port addresses and enables
    wire [ADDR_W-1:0] addrA;
    wire enA;
+   wire ready_int = ~rst;
 
    //address generators
 
    AddressGen #(
       .ADDR_W(ADDR_W),
       .DATA_W(SIZE_W),
-      .DELAY_W(DELAY_W)
+      .DELAY_W(DELAY_W),
+      .PERIOD_W(PERIOD_W)
    ) addrgenA (
       .clk_i(clk),
       .rst_i(rst),
@@ -86,7 +89,7 @@ module OnlyOutputMem #(
 
       //outputs 
       .valid_o(enA),
-      .ready_i(1'b1),
+      .ready_i(ready_int),
       .addr_o (addrA),
       .store_o(), // TODO: Handle duty
 

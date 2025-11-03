@@ -114,6 +114,14 @@ bool ContainsGroup(VerilogModuleInterface* interface,String name);
 // to support VHDL, we would have the higher level generate the AST
 // for VHDL that way.
 
+// TODO: Right now we kinda are doing everything manually but there is
+// a couple of ways we can improve the Verilog emission. When
+// declaring a variable we could keep track of the size and use it to
+// simplify later code.  There are a bunch of high level methods we
+// could make, depending on how the Emitter is used and if it would
+// simplify the code or would help make it linter friendly.
+
+
 enum VASTType{
   VASTType_TOP_LEVEL,
   VASTType_MODULE_DECL,
@@ -131,6 +139,8 @@ enum VASTType{
   VASTType_IF,
   VASTType_LOOP,
   VASTType_SET,
+  VASTType_SIMPLE_OP,
+  VASTType_FORCED_SET,
   VASTType_EXPR,
   VASTType_ALWAYS_BLOCK,
   VASTType_INITIAL_BLOCK,
@@ -197,6 +207,11 @@ struct VAST{
     } alwaysBlock;
 
     struct {
+      String identifier;
+      char op;
+    } simpleOp;
+
+    struct {
       ArenaList<VAST*>* declarations;
     } initialBlock;
 
@@ -208,6 +223,7 @@ struct VAST{
     struct {
       String name;
       String expr;
+      bool isForcedCombLike;
     } assignOrSet; 
 
     struct {
@@ -331,6 +347,10 @@ struct VEmitter{
   void Set(String identifier,int val);
   void Set(String identifier,String expr);
 
+  void Increment(String identifier);
+
+  void SetForced(String identifier,String expr,bool isCombLike); // isCombLike is '=', otherwise it is '<=" 
+
   void If(String expr);
   void ElseIf(String expr);
   void Else();
@@ -364,3 +384,5 @@ VEmitter* StartVCode(Arena* out);
 VAST* EndVCode(VEmitter* m);
 
 void Repr(VAST* top,StringBuilder* b);
+
+String EndVCodeAndPrint(VEmitter* v,Arena* out);

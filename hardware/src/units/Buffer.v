@@ -2,21 +2,13 @@
 
 module Buffer #(
    parameter DELAY_W = 7,
-   parameter DATA_W = 32
+   parameter DATA_W  = 32
 ) (
    //control
    input clk,
    input rst,
 
    input running,
-
-   // External memory
-   //output [DELAY_W-1:0]     ext_2p_addr_out_0,
-   //output [DELAY_W-1:0]     ext_2p_addr_in_0,
-   //output                  ext_2p_write_0,
-   //output                  ext_2p_read_0,
-   //input  [DATA_W-1:0]     ext_2p_data_in_0,
-   //output [DATA_W-1:0]     ext_2p_data_out_0,
 
    //input / output data
    input [DATA_W-1:0] in0,
@@ -28,21 +20,19 @@ module Buffer #(
 
    wire [  DELAY_W:0] occupancy;
 
-   wire [  DELAY_W:0] trueAmount = {1'b0, amount};
+   wire               aboveOrEqual = (occupancy >= {1'b0, amount});
+   wire               belowOrEqual = (occupancy <= {1'b0, amount});
 
-   wire aboveOrEqual = (occupancy >= trueAmount);
-   wire belowOrEqual = (occupancy <= trueAmount);
+   wire               read_en = (running && aboveOrEqual);
+   wire               write_en = (running && belowOrEqual);
 
-   wire read_en = (running && aboveOrEqual);
-   wire write_en = (running && belowOrEqual);
+   wire               ext_2p_write;
+   wire [DELAY_W-1:0] ext_2p_addr_out;
+   wire [ DATA_W-1:0] ext_2p_data_out;
 
-   wire                                                        ext_2p_write;
-   wire                                           [DELAY_W-1:0] ext_2p_addr_out;
-   wire                                           [DATA_W-1:0] ext_2p_data_out;
-
-   wire                                                        ext_2p_read;
-   wire                                           [DELAY_W-1:0] ext_2p_addr_in;
-   wire                                           [DATA_W-1:0] ext_2p_data_in;
+   wire               ext_2p_read;
+   wire [DELAY_W-1:0] ext_2p_addr_in;
+   wire [ DATA_W-1:0] ext_2p_data_in;
 
    my_2p_asym_ram #(
       .W_DATA_W(DATA_W),
@@ -51,12 +41,12 @@ module Buffer #(
    ) ext_2p (
       // Writting port
       .w_en_i  (ext_2p_write),
-      .w_addr_i(ext_2p_addr_out << 2),
+      .w_addr_i(ext_2p_addr_out),
       .w_data_i(ext_2p_data_out),
 
       // Reading port
       .r_en_i  (ext_2p_read),
-      .r_addr_i(ext_2p_addr_in << 2),
+      .r_addr_i(ext_2p_addr_in),
       .r_data_o(ext_2p_data_in),
 
       .clk_i(clk)
