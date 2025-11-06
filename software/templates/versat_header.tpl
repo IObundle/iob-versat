@@ -176,5 +176,10 @@ static bool forceSingleLoop = false;
 
 @{allAddrGen}
 
+// ============================================================================
+// User configuration functions, user defined inside the specification file
+
+@{userConfigFunctions}
+
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
 

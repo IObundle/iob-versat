@@ -39,6 +39,38 @@ struct Parameter{
   SymbolicExpression* valueExpr;
 };
 
+enum UserConfigType{
+  UserConfigurationType_CONFIG,
+  UserConfigurationType_MEM,
+  UserConfigurationType_STATE
+};
+
+struct UserConfigStatement{
+  FUInstance* inst;
+  Wire* wire;
+  SymbolicExpression* expr;
+};
+
+enum ConfigVariableType{
+  ConfigVariableType_INTEGER,
+  ConfigVariableType_POINTER
+};
+
+struct ConfigVariable{
+  ConfigVariableType type;
+  String name;
+};
+
+struct UserConfigFunction{
+  UserConfigType type;
+  
+  String name;
+  Array<ConfigVariable> variables;
+  // For now, only tackling config.
+  // TODO: Union
+  Array<UserConfigStatement> configs;
+};
+
 // TODO: A lot of duplicated data exists since the change to merge.
 
 // TODO: There is a lot of crux between parsing and creating the FUDeclaration for composite accelerators 
@@ -83,7 +115,7 @@ struct FUDeclaration{
   AddressGenInst supportedAddressGen;
   
   // TODO: Compile config function into a easier to use form.
-  Array<ConfigFunction> functions;
+  Array<UserConfigFunction> userFunctions;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
@@ -168,6 +200,10 @@ FUDeclaration* GetTypeByName(String str);
 FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
-
 // Because of merge, we need units that can delay the datapath for different values depending on the datapath that is being configured.
 bool HasVariableDelay(FUDeclaration* decl);
+
+// ======================================
+// Declaration inspection
+
+Wire* GetConfigWireByName(FUDeclaration* decl,String name);

@@ -3,6 +3,7 @@
 #include "embeddedData.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
+#include "parser.hpp"
 #include "symbolic.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
@@ -131,6 +132,15 @@ void Repr(StringBuilder* builder,AddressAccess* access){
   builder->PushString("\n");
 }
 
+String Repr(Arena* out,AddressAccess* access){
+  TEMP_REGION(temp,out);
+  
+  // TODO: Performance
+  auto b = StartString(temp);
+  Repr(b,access);
+  return EndString(out,b);
+}
+
 void Print(AddressAccess* access){
   TEMP_REGION(temp,nullptr);
 
@@ -245,7 +255,7 @@ static SymbolicExpression* GetLoopSize(LoopLinearSumTerm def,Arena* out,bool rem
 
 String GetLoopSizeRepr(LoopLinearSumTerm def,Arena* out,bool removeOne = false){
   TEMP_REGION(temp,out);
-  return PushRepresentation(GetLoopSize(def,temp,removeOne),out);
+  return PushRepr(out,GetLoopSize(def,temp,removeOne));
 };
 
 static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,SymbolicExpression* dutyExpr,Arena* out){
@@ -270,12 +280,12 @@ static ExternalMemoryAccess CompileExternalMemoryAccess(LoopLinearSum* access,Sy
     result.addrShift = "0";
   } else {
     SymbolicExpression* derived = Normalize(Derivate(fullExpression,outer.var,temp),temp);
-    result.addrShift = PushRepresentation(derived,out);
+    result.addrShift = PushRepr(out,derived);
     
     SymbolicExpression* outerLoopSize = GetLoopSize(outer,temp);
     SymbolicExpression* all = Normalize(SymbolicMult(GetLoopSize(inner,temp),outerLoopSize,temp),temp);
 
-    result.totalTransferSize = PushRepresentation(all,out);
+    result.totalTransferSize = PushRepr(out,all);
     result.amountMinusOne = GetLoopSizeRepr(outer,out,true);
   }
   
@@ -325,17 +335,17 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
       SymbolicExpression* firstDerived = Normalize(derived,temp);
         
       res.periodExpression = GetLoopSizeRepr(l0,out);
-      res.incrementExpression = PushRepresentation(firstDerived,out);
+      res.incrementExpression = PushRepr(out,firstDerived);
 
       if(i == 0){
         if(duty){
           result[0].dutyExpression = "1";
         } else {
-          result[0].dutyExpression = PushString(out,PushRepresentation(loops[0].loopEnd,temp)); // For now, do not care too much about duty. Use a full duty
+          result[0].dutyExpression = PushString(out,PushRepr(temp,loops[0].loopEnd)); // For now, do not care too much about duty. Use a full duty
         }
       }
       
-      String firstEnd = PushRepresentation(l0.loopEnd,out);
+      String firstEnd = PushRepr(temp,l0.loopEnd);
       SymbolicExpression* firstEndSym = ParseSymbolicExpression(firstEnd,temp);
 
       res.shiftWithoutRemovingIncrement = "0"; // By default
@@ -345,7 +355,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
         res.iterationExpression = GetLoopSizeRepr(l1,out);
         SymbolicExpression* derived = Normalize(Derivate(expr,l1.var,temp),temp);
 
-        res.shiftWithoutRemovingIncrement = PushRepresentation(derived,out);
+        res.shiftWithoutRemovingIncrement = PushRepr(out,derived);
         
         // We handle shifts very easily. We just remove the effects of all the previous period increments and then apply the shift.
         // That way we just have to calculate the derivative in relation to the shift, instead of calculating the change from a period term to a iteration term.
@@ -357,7 +367,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
         replaced = SymbolicReplace(replaced,"term",derived,temp);
         replaced = Normalize(replaced,temp,false);
         
-        res.shiftExpression = PushRepresentation(replaced,out);
+        res.shiftExpression = PushRepr(out,replaced);
       } else {
         res.iterationExpression = "0";
         res.shiftExpression = "0";
@@ -368,7 +378,7 @@ static CompiledAccess CompileAccess(LoopLinearSum* access,SymbolicExpression* du
     com.internalAccess = result;
 
     if(duty){
-      com.dutyDivExpression = PushRepresentation(duty,out);
+      com.dutyDivExpression = PushRepr(out,duty);
     }
     
     return com;
@@ -388,7 +398,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,int maxLo
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
-  String start = PushRepresentation(freeTerm,temp);
+  String start = PushRepr(temp,freeTerm);
 
   *list->PushElem() = {"start",start};
 
@@ -457,7 +467,7 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   // NOTE: We push the start term to the ext pointer in order to save memory inside the unit. This is being done in a  kinda hacky way, but nothing major.
   String ext_addr = "ext"; // TODO: Should be a parameter or something, not randomly hardcoded here
   if(!IsZero(freeTerm)){
-    String repr = PushRepresentation(freeTerm,temp);
+    String repr = PushRepr(temp,freeTerm);
 
     ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UN(repr));
   }
@@ -533,7 +543,7 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
   ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
-  String start = PushRepresentation(freeTerm,temp);
+  String start = PushRepr(temp,freeTerm);
 
   if(port == 0){
     *list->PushElem() = {"startA",start};
@@ -615,9 +625,10 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
   Arena* out = globalPermanent;
   
   TEMP_REGION(temp,out);
- 
-  // Check if variables inside for loops and inside symbolic expression appear in the input list.
 
+  Array<Token> symbolicTokens = def->symbolicTokens;
+
+  // TODO: Issue a warning if a variable is declared but not used.
   // TODO: Better error reporting by allowing code to call the ReportError from the spec parser 
   bool anyError = false;
   for(AddressGenForDef loop : def->loops){
@@ -627,25 +638,18 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
       ReportError2(content,loop.loopVariable,sameNameAsInput.value(),"Loop variable","Overshadows input variable");
       anyError = true;
     }
-
-    Array<String> allStart = GetAllSymbols(loop.start,temp);
-    Array<String> allEnd = GetAllSymbols(loop.end,temp);
-
-    for(String str : allStart){
-      Token asToken = {};
-      asToken = str;
-      if(!Contains(def->inputs,asToken)){
+    
+    for(Token tok : loop.startSym){
+      if(IsIdentifier(tok) && !Contains(def->inputs,tok)){
         printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
-        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(str));
+        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
         anyError = true;
       }
     }
-    for(String str : allEnd){
-      Token asToken = {};
-      asToken = str;
-      if(!Contains(def->inputs,asToken)){
+    for(Token tok : loop.endSym){
+      if(IsIdentifier(tok) && !Contains(def->inputs,tok)){
         printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
-        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(str));
+        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
         anyError = true;
       }
     }
@@ -656,14 +660,11 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
     *list->PushElem() = loop.loopVariable;
   }
   auto allVariables = PushArrayFromList(temp,list);
-  
-  Array<String> symbSymbols = GetAllSymbols(def->symbolic,temp);
-  for(String str : symbSymbols){
-    Token asToken = {};
-    asToken = str;
-    if(!Contains(def->inputs,asToken) && !Contains(allVariables,asToken)){
+
+  for(Token tok : symbolicTokens){
+    if(IsIdentifier(tok) && !Contains(def->inputs,tok) && !Contains(allVariables,tok)){
       printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
-      printf("\t[Error] Symbol '%.*s' inside address expression does not exist (check if name is correct, symbols inside expressions can only be inputs or loop variables)\n",UN(str));
+      printf("\t[Error] Symbol '%.*s' inside address expression does not exist (check if name is correct, symbols inside expressions can only be inputs or loop variables)\n",UN(tok));
       anyError = true;
     }
   }
@@ -683,14 +684,23 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
   // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
   SymbolicExpression* loopExpression = PushLiteral(temp,1);
   for(AddressGenForDef loop : def->loops){
-    SymbolicExpression* diff = SymbolicSub(loop.end,loop.start,temp);
+    // TODO: Handle parsing errors
+    // TODO: Performance, we are parsing this twice, there is another below. Maybe we can join the loops into a single one
+
+    SymbolicExpression* start = ParseSymbolicExpression(loop.startSym,temp);
+    SymbolicExpression* end = ParseSymbolicExpression(loop.endSym,temp);
+
+    SymbolicExpression* diff = SymbolicSub(end,start,temp);
 
     loopExpression = SymbolicMult(loopExpression,diff,temp);
   }
   SymbolicExpression* finalExpression = Normalize(loopExpression,temp);
 
   // Building expression for the external address
-  SymbolicExpression* normalized = Normalize(def->symbolic,temp);
+  // TODO: Handle parsing errors
+  SymbolicExpression* symbolicExpr = ParseSymbolicExpression(symbolicTokens,globalPermanent);
+  Assert(symbolicExpr);
+  SymbolicExpression* normalized = Normalize(symbolicExpr,temp);
 
   SymbolicExpression* fullExpr = normalized;
   SymbolicExpression* dutyDiv = nullptr;
@@ -719,10 +729,12 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
     }
 
     AddressGenForDef loop = def->loops[i];
-
-    SymbolicExpression* end = loop.end;
     
-    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,loop.start,end,temp);
+    // TODO: Performance, we are parsing the start and end stuff twice. This is the second, the first is above.
+    SymbolicExpression* start = ParseSymbolicExpression(loop.startSym,temp);
+    SymbolicExpression* end = ParseSymbolicExpression(loop.endSym,temp);
+    
+    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,start,end,temp);
     expr = AddLoopLinearSum(sum,expr,temp);
   }
   
@@ -799,12 +811,12 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
     AddressAccess* singleLoop = ConvertAccessTo1External(access,temp);
 
     region(temp){
-      String repr = PushRepresentation(GetLoopLinearSumTotalSize(doubleLoop->external,temp),temp);
+      String repr = PushRepr(temp,GetLoopLinearSumTotalSize(doubleLoop->external,temp));
       c->VarDeclare("int","doubleLoop",repr);
     }
 
     region(temp){
-      String repr2 = PushRepresentation(GetLoopLinearSumTotalSize(singleLoop->external,temp),temp);
+      String repr2 = PushRepr(temp,GetLoopLinearSumTotalSize(singleLoop->external,temp));
       c->VarDeclare("int","singleLoop",repr2);
     }
 
@@ -895,7 +907,7 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
   if(initial->external->terms.size > 1){
     for(int i = 0; i <  initial->external->terms.size; i++){
       LoopLinearSumTerm term  =  initial->external->terms[i];
-      String repr = PushRepresentation(GetLoopHighestDecider(&term),temp);
+      String repr = PushRepr(temp,GetLoopHighestDecider(&term));
       String name = PushString(temp,"a%d",i);
       String comment = PushString(temp,"Loop var: %.*s",UN(term.var));
       m->Comment(comment);

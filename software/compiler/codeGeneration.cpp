@@ -699,8 +699,8 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
     
     int configDataIndex = 0;
     for(Wire w : decl->configs){
-      String repr = PushRepresentation(configDataExpr,temp);
-      String size = PushRepresentation(w.sizeExpr,temp);
+      String repr = PushRepr(temp,configDataExpr);
+      String size = PushRepr(temp,w.sizeExpr);
       
       m->PortConnect(w.name,PushString(temp,"configdata[(%.*s)+:%.*s]",UN(repr),UN(size)));
       
@@ -720,7 +720,7 @@ void EmitTopLevelInstanciateUnits(VEmitter* m,VersatComputedValues val,Pool<FUIn
     // Delays
     SymbolicExpression* delayExpr = val.delayStart;
     for(int i = 0; i < decl->numberDelays; i++){
-      String repr = PushRepresentation(delayExpr,temp);
+      String repr = PushRepr(temp,delayExpr);
 
       m->PortConnectIndexed("delay%d",i,PushString(temp,"configdata[(%.*s)+:DELAY_W]",UN(repr)));
       delayExpr = Normalize(SymbolicAdd(delayExpr,PushVariable(temp,"DELAY_W"),temp),temp);
@@ -1239,10 +1239,10 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
         for(WireInformation info : wireInfo){
           m->If(SF("address[%d:0] == %d",configurationAddressBits + 1,info.addr));
 
-          String configStartExpr = PushRepresentation(info.startBitExpr,temp);
+          String configStartExpr = PushRepr(temp,info.startBitExpr);
           
           if(info.wire.sizeExpr && info.wire.sizeExpr->type != SymbolicExpressionType_LITERAL){
-            String repr = PushRepresentation(info.wire.sizeExpr,temp);
+            String repr = PushRepr(temp,info.wire.sizeExpr);
             
             // TODO: Need to handle endianess
             m->Loop("i = 0",SF("i < %.*s",UN(repr)),"i++");
@@ -1267,16 +1267,16 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
         m->Set("configdata",0);
         m->ElseIf("change_config_pulse");
         for(WireInformation info : wireInfo){
-          String start = PushRepresentation(info.startBitExpr,temp);
-          String size = PushRepresentation(info.wire.sizeExpr,temp);
+          String start = PushRepr(temp,info.startBitExpr);
+          String size = PushRepr(temp,info.wire.sizeExpr);
           
           if(info.wire.stage == VersatStage_READ){
             m->Set(SF("configdata[(%.*s)+:%.*s]",UN(start),UN(size)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
           }
         }
         for(WireInformation info : wireInfo){
-          String start = PushRepresentation(info.startBitExpr,temp);
-          String size = PushRepresentation(info.wire.sizeExpr,temp);
+          String start = PushRepr(temp,info.startBitExpr);
+          String size = PushRepr(temp,info.wire.sizeExpr);
 
           if(info.wire.stage == VersatStage_COMPUTE || info.wire.stage == VersatStage_WRITE){
             m->Set(SF("configdata[%.*s+:%.*s]",UN(start),UN(size)),SF("Compute_%.*s",UN(info.wire.name)));
@@ -1298,8 +1298,8 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
       }
       m->ElseIf("change_config_pulse");
       for(WireInformation info : wireInfo){
-        String start = PushRepresentation(info.startBitExpr,temp);
-        String size = PushRepresentation(info.wire.sizeExpr,temp);
+        String start = PushRepr(temp,info.startBitExpr);
+        String size = PushRepr(temp,info.wire.sizeExpr);
         if(info.wire.stage == VersatStage_COMPUTE){
           m->Set(SF("Compute_%.*s",UN(info.wire.name)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
         }
@@ -1324,8 +1324,8 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
       }
       m->ElseIf("change_config_pulse");
       for(WireInformation info : wireInfo){
-        String start = PushRepresentation(info.startBitExpr,temp);
-        String size = PushRepresentation(info.wire.sizeExpr,temp);
+        String start = PushRepr(temp,info.startBitExpr);
+        String size = PushRepr(temp,info.wire.sizeExpr);
         if(info.wire.stage == VersatStage_WRITE){
           m->Set(SF("Write_%.*s",UN(info.wire.name)),SF("shadow_configdata[(%.*s)+:%.*s]",UN(start),UN(size)));
         }
@@ -1336,7 +1336,7 @@ String EmitConfiguration(VersatComputedValues val,Array<WireInformation> wireInf
 
     for(WireInformation info : wireInfo){
       if(info.isStatic){
-        String start = PushRepresentation(info.startBitExpr,temp);
+        String start = PushRepr(temp,info.startBitExpr);
         m->Assign(info.wire.name,PushString(temp,"configdata[(%.*s)+:%d]",UN(start),info.wire.bitSize));
       }
     }
@@ -2137,7 +2137,7 @@ void EmitIOUnpacking(VEmitter* m,int arraySize,Array<VerilogPortSpec> spec,Strin
   for(int i = 0; i < arraySize; i++){
     for(VerilogPortSpec info : spec){
 
-      String repr = PushRepresentation(info.size,temp);
+      String repr = PushRepr(temp,info.size);
 
       String unpackedName = PushString(temp,"%.*s",UN(info.name));
       String packedName = PushString(temp,"%.*s_%.*s",UN(packedBase),UN(info.name));
@@ -2239,8 +2239,6 @@ void OutputTopLevel(Accelerator* accel,Array<Wire> allStaticsVerilatorSide,Accel
   // Top accelerator
   FILE* s = OpenFileAndCreateDirectories(PushString(temp,"%.*s/versat_instance.v",UN(hardwarePath)),"w",FilePurpose_VERILOG_CODE);
   DEFER_CLOSE_FILE(s);
-
-  DEBUG_BREAK();
 
   auto AddrIf = [&val](VEmitter* m,VersatRegister r){
     int index = GetIndex(val,r);
@@ -2829,8 +2827,9 @@ assign data_wstrb = csr_wstrb;
     
   ProcessTemplateSimple(s,META_TopInstanceTemplate_Content);
 }
-  
-void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,bool isSimple,Accelerator* accel,String softwarePath,Array<Wire> allStaticsVerilatorSide,VersatComputedValues val){
+
+// TODO: Remove topLevelDecl after changing userConfig to work with Merge
+void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,bool isSimple,Accelerator* accel,String softwarePath,Array<Wire> allStaticsVerilatorSide,VersatComputedValues val){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
 
@@ -3083,6 +3082,7 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
         String typeName = unit->structInfo->name;
 
         // TODO: We need to do this check beforehand. Backend code should assume that everything is working correctly and that the data is all good.
+        //       Basically move this check to the module instantiation?
         if((int) unit->decl->supportedAddressGen.type == 0){
           printf("[USER_ERROR] Unit '%.*s' does not support address gen '%.*s'\n",UN(unit->decl->name),UN(addressGenName));
           exit(-1);
@@ -3252,6 +3252,33 @@ void OutputHeader(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info,
 
     String content = PushASTRepr(c,temp);
     TemplateSetString("addrStructs",content);
+  }
+
+
+  {
+    CEmitter* c = StartCCode(temp);
+    for(UserConfigFunction func : topLevelDecl->userFunctions){
+      c->FunctionBlock("void",func.name);
+
+      for(ConfigVariable var : func.variables){
+        FULL_SWITCH(var.type){
+        case ConfigVariableType_INTEGER:{
+          c->Argument("int",var.name);
+        } break;
+        case ConfigVariableType_POINTER:{
+          c->Argument("void*",var.name);
+        } break;
+        }
+      }
+      
+      for(UserConfigStatement stmt : func.configs){
+        String repr = PushRepr(temp,stmt.expr);
+        c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.inst->name),UN(stmt.wire->name),UN(repr)));
+      }
+    }
+
+    String content = PushASTRepr(c,temp);
+    TemplateSetString("userConfigFunctions",content);
   }
 
   {
@@ -4553,7 +4580,9 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topDecl,String hardwa
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
 
   OutputTopLevel(accel,allStaticsVerilatorSide,info,topDecl,structuredConfigs,hardwarePath,val,external,wireInfo);
-  OutputHeader(structuredConfigs,info,isSimple,accel,softwarePath,allStaticsVerilatorSide,val);
+  
+  // MARK - We do not want to pass topDecl to outputHeader, we only do it because we are still trying to check how the userConfig functions would work and are mostly ignoring Merge stuff currently.
+  OutputHeader(topDecl,structuredConfigs,info,isSimple,accel,softwarePath,allStaticsVerilatorSide,val);
   OutputVerilatorWrapper(accel,allStaticsVerilatorSide,info,topDecl,structuredConfigs,softwarePath);
   OutputMakefile(accel->name,topDecl,softwarePath);
   OutputPCEmulControl(info,softwarePath);
@@ -4688,7 +4717,7 @@ void OutputTestbench(FUDeclaration* decl,FILE* file){
   m->Module(SF("%.*s_tb",UN(decl->name)));
 
   for(Parameter p : decl->parameters){
-    String repr = PushRepresentation(p.valueExpr,temp);
+    String repr = PushRepr(temp,p.valueExpr);
 
     // NOTE: Since AXI_ADDR_W is usually used to instantiate a memory,
     // need to severely reduce size otherwise simulation can get stuck

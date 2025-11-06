@@ -341,52 +341,62 @@ public:
 
 typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
 
-// ============================================================================
+// ======================================
 // Accelerator creation
 
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose);
 Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds);
 Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* accel,AcceleratorPurpose purpose,bool preserveIds,Arena* out);
 
-//
+// ======================================
 // Unit creation and operations
+
 FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entityName);
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
+FUInstance* GetUnit(Accelerator* accel,String name);
 
-// Returns false if parameter does not exist 
-bool SetParameter(FUInstance* inst,String parameterName,String parameterValue);
+bool SetParameter(FUInstance* inst,String parameterName,String parameterValue); // False if param does not exist
+bool IsUnitCombinatorial(FUInstance* inst);
 
-int GetFreeShareIndex(Accelerator* accel);
-void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
-void SetStatic(FUInstance* instance);
+Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
+Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
 
-// 
-// Edge iteration and edge operations, including connecting units
-Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
-EdgeIterator IterateEdges(Accelerator* accel);
+// If we have A:X -> B:Y and we give this function B:Y, it returns A:X
+PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
 
-Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
-Opt<Edge> FindEdge(PortInstance out,PortInstance in,int delay);
+// Fixes edges such that unit before connected to after, are reconnected to new unit
+void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnitOutput,PortInstance newUnitInput,int delay = 0);
+void RemoveFUInstance(Accelerator* accel,FUInstance* toRemove);
+
+// ======================================
+// Edges
+
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnitsGetEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay,Edge* previous);
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay = 0);
 void ConnectUnits(PortInstance out,PortInstance in,int delay = 0);
 void ConnectUnits(PortInstance out,PortInstance in,int delay);
+
 void RemoveConnection(Accelerator* accel,FUInstance* out,int outPort,FUInstance* in,int inPort);
 
-// Fixes edges such that unit before connected to after, are reconnected to new unit
-void InsertUnit(Accelerator* accel,PortInstance before, PortInstance after, PortInstance newUnitOutput,PortInstance newUnitInput,int delay = 0);
-void RemoveFUInstance(Accelerator* accel,FUInstance* toRemove);
-//
-// Graph info and connection calculations
+Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay);
+Opt<Edge> FindEdge(PortInstance out,PortInstance in,int delay);
+
+Array<Edge> GetAllEdges(Accelerator* accel,Arena* out);
+EdgeIterator IterateEdges(Accelerator* accel);
+
+// ======================================
+// Config sharing
+
+int GetFreeShareIndex(Accelerator* accel);
+void ShareInstanceConfig(FUInstance* instance, int shareBlockIndex);
+void SetStatic(FUInstance* instance);
+
+// ======================================
+// Graph inputs and outputs
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
-Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
-Array<Array<PortInstance>> GetAllInputs(FUInstance* node,Arena* out);
-
-// If we have A:X -> B:Y and we give this function B:Y, it returns A:X
-PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex);
 
 //
 // Graph fixes and operations
@@ -394,9 +404,7 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays);
 Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times);
 DAGOrderNodes CalculateDAGOrder(Accelerator* accel,Arena* out);
 
-
 bool IsCombinatorial(Accelerator* accel);
-bool IsUnitCombinatorial(FUInstance* inst);
 bool NameExists(Accelerator* accel,String name);
 String GenerateNewValidName(Accelerator* accel,String base,Arena* out);
 
@@ -433,9 +441,6 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
 Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 void PrintSubMappingInfo(SubMap* info);
-
-// ============================================================================
-// MARKED
 
 struct FlattenWithMergeResult{
   Accelerator* accel;

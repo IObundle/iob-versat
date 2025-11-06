@@ -90,20 +90,38 @@ static bool operator==(const AccessAndType& l,const AccessAndType& r){
   return false;
 }
 
-void Repr(StringBuilder* builder,AddressAccess* access);
-void Print(AddressAccess* access);
+// ======================================
+// Representation
+
+void   Repr(StringBuilder* builder,AddressAccess* access);
+String PushRepr(Arena* out,AddressAccess* access);
+void   Print(AddressAccess* access);
+
+// ======================================
+// Compilation 
 
 AddressAccess* CompileAddressGen(AddressGenDef* def,String content);
 
+// ======================================
+// Global getter for compiled address gens
+
 AddressAccess* GetAddressGenOrFail(String name);
+
+// ======================================
+// Conversion
 
 AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out);
 AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopIndex,Arena* out);
 
-SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
+// ======================================
+// Codegen
 
-// Code generation functions
 String GenerateAddressGenCompilationFunction(AccessAndType access,Arena* out);
 String GenerateAddressLoadingFunction(String structName,AddressGenInst type,Arena* out);
 String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenInst type,Arena* out);
 String GenerateAddressPrintFunction(AddressAccess* initial,Arena* out);
+
+// ======================================
+// LoopLinearSumTerm handling
+
+SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);

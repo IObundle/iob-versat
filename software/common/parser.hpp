@@ -179,6 +179,7 @@ public:
   TokenizerTemplate* SetTemplate(TokenizerTemplate* tmpl); // Returns old template
 };
 
+bool IsIdentifier(String str); // Default identifier rules (starts with alpha or '_' and can contain numbers after)
 bool IsOnlyWhitespace(String tok);
 bool Contains(String str,String toCheck);
 bool StartsWith(String toSearch,String starter);
@@ -201,6 +202,8 @@ double ParseDouble(String str);
 float ParseFloat(String str);
 bool IsNum(char ch);
 
+// TODO: This is BROKEN. The main problem is that we do not want to have to indicate symbols that we do not care about. The default way of handling stuff is that every single single symbol should be parsed individually EXPECT unless specialChars contains a multi line symbol at which point the tokenizer attemps to parse bigger. (Basically, we want identifier, numbers and single symbol rules by default and the only difference between templates is which symbols are grouped into a bigger symbol [basically wether stuff like == gets parsed into two symbols or just one]).
+
 TokenizerTemplate* CreateTokenizerTemplate(Arena* out,String singleChars,BracketList<String> specialChars);
 
 struct TemplateMarker{
@@ -213,7 +216,7 @@ struct TemplateMarker{
 
 #define TOKENIZER_REGION(TOK,TMPL) TemplateMarker _marker(__LINE__)(TOK,TMPL)
 
-// TODO: We probably want to simplify this. Kinda sucks forcing template stuff into what should just be a simple parser. 
+// TODO: We want to remove this. Trying to make a generic parser for this kind of stuff is more trouble than it is worth. It is easier to copy code and make changes than it is trying to force everything into a single interface. It also makes it easier to make changes later on which we probably need to do since different languages have different ways of handling this kind of stuff.
 
 /* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
      Array<ExpressionType> expressions;

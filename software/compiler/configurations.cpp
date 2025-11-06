@@ -1127,7 +1127,7 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   }
 
   // TODO: HACK, VERY BAD
-  info->staticExpr = PushRepresentation(staticExpr,globalPermanent);
+  info->staticExpr = PushRepr(globalPermanent,staticExpr);
   
   for(FUInstance* ptr : accel->allocated){
     info->numberConnections += Size(ptr->allOutputs);

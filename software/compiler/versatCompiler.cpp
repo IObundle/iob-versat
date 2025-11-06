@@ -621,13 +621,7 @@ int main(int argc,char* argv[]){
     for(auto p : typeToWork){
       Work work = *p.second;
 
-      FUDeclaration* decl = nullptr;
-      
-      if(work.definition.type == ConstructType_MODULE){
-        decl = InstantiateBarebonesSpecifications(content,p.second->definition);
-      } else if(work.definition.type == ConstructType_MERGE){
-        decl = InstantiateSpecifications(content,p.second->definition);
-      }
+      FUDeclaration* decl = InstantiateSpecifications(content,p.second->definition);
       decl->singleInterfaces |= SingleInterfaces_SIGNAL_LOOP;
       
 #if 0
@@ -910,6 +904,19 @@ int main(int argc,char* argv[]){
 
   return 0;
 }
+
+/*
+
+Code style changes:
+
+After studing the other code base, is there a reason why each graph has its own arena? Why not have a single arena that contains all the nodes and edges and be done with it?
+
+Maybe it would be best to create a global String repository and every time we have a string from the outside we just push it there and be done with it. We only have problem with strings that come from outside code, so why not just push it a global arena and be done with it. The biggest problem is just the strings from the parsed verilog modules, the rest should never be big enough to matter much.
+
+We are not properly handling persistant data and it is becoming a bit of a pain to ignore stuff for so long.
+
+*/
+
 
 /* ============================================================================
 // Major todo:

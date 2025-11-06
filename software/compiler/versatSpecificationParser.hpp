@@ -1,6 +1,5 @@
 #pragma once
 
-#include "symbolic.hpp"
 #include "merge.hpp"
 
 #include "embeddedData.hpp"
@@ -107,13 +106,14 @@ struct DefBase{
 
 enum ConfigExpressionType{
   ConfigExpressionType_IDENTIFIER,
-  ConfigExpressionType_ACCESS
+  ConfigExpressionType_NUMBER
 };
 
 struct ConfigExpression{
   ConfigExpressionType type;
 
   Token identifier;
+  Token access; // Only single access supported, do not see why would need more than one.
 
   // TODO: Union
   ConfigExpression* child;
@@ -125,12 +125,17 @@ enum ConfigType{
   ConfigType_ADDRESS_GEN
 };
 
+struct ConfigIdentifier{
+  Token name;
+  Token wire;
+};
+
 struct ConfigStatement{
   ConfigType type;
 
   // TODO: Union
-  ConfigExpression* lhs;
-  SymbolicExpression* rhs;
+  ConfigIdentifier lhs; // We currently only support <name>.<wire> assignments
+  Array<Token> rhs; // Symbolic expression tokens
 };
 
 struct ConfigFunction{
@@ -155,15 +160,15 @@ struct MergeDef : public DefBase{
 
 struct AddressGenForDef{
   Token loopVariable;
-  SymbolicExpression* start;
-  SymbolicExpression* end;
+  Array<Token> startSym;
+  Array<Token> endSym;
 };
 
 struct AddressGenDef : public DefBase{
   AddressGenType type;
   Array<Token> inputs;
   Array<AddressGenForDef> loops;
-  SymbolicExpression* symbolic;
+  Array<Token> symbolicTokens;
 };
 
 struct ConstructDef{
@@ -187,8 +192,6 @@ struct HierarchicalName{
   Var subInstance;
 };
 
-struct SymbolicExpression;
-
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
 void ReportError(String content,Token faultyToken,String error);
@@ -200,7 +203,7 @@ Array<Token> AddressGenUsed(ConstructDef def,Array<ConstructDef> allConstructs,A
 
 Array<ConstructDef> ParseVersatSpecification(String content,Arena* out);
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def);
+// TODO: Move this function to a better place, no reason to be inside spec parser
 FUDeclaration* InstantiateSpecifications(String content,ConstructDef def);
 
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);

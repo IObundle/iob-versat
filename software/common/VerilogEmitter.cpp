@@ -546,7 +546,7 @@ void VEmitter::Input(String name,String expr){
 void VEmitter::Input(String name,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
 
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
   Input(name,repr);
 }
 
@@ -565,7 +565,7 @@ void VEmitter::InputIndexed(const char* format,int index,String expression){
 
 void VEmitter::InputIndexed(const char* format,int index,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
 
   InputIndexed(format,index,repr);
 }
@@ -590,7 +590,7 @@ void VEmitter::Output(String name,String expr){
 
 void VEmitter::Output(String name,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
 
   Output(name,repr);
 }
@@ -610,7 +610,7 @@ void VEmitter::OutputIndexed(const char* format,int index,String expression){
 
 void VEmitter::OutputIndexed(const char* format,int index,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
 
   OutputIndexed(format,index,repr);
 }
@@ -639,7 +639,7 @@ void VEmitter::Wire(String name,String bitsizeExpr){
 
 void VEmitter::Wire(String name,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
 
   Wire(name,repr);
 }
@@ -668,7 +668,7 @@ void VEmitter::WireArray(String name,int count,String bitsizeExpr){
 
 void VEmitter::WireArray(String name,int count,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
 
   WireArray(name,count,repr);
 }
@@ -719,7 +719,7 @@ void VEmitter::Reg(String name,String bitsize){
 
 void VEmitter::Reg(String name,SymbolicExpression* expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepresentation(expr,temp);
+  String repr = PushRepr(temp,expr);
 
   Reg(name,repr);
 }
@@ -963,7 +963,7 @@ void VEmitter::InstanceParam(String paramName,String paramValue){
 void VEmitter::InstanceParam(String paramName,SymbolicExpression* sym){
   TEMP_REGION(temp,arena);
 
-  String repr = PushRepresentation(sym,temp);
+  String repr = PushRepr(temp,sym);
   InstanceParam(paramName,CS(repr));
 }
 
@@ -1292,7 +1292,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       for(VerilogPortSpec spec : group.ports){
         b->PushSpaces(level * 2);
 
-        String repr = PushRepresentation(spec.size,temp);
+        String repr = PushRepr(temp,spec.size);
 
         if(spec.dir == WireDir_INPUT){
           b->PushString("reg ");

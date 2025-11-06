@@ -73,29 +73,6 @@ void _UnexpectError(Token token){
   printf("%.*s\n",UN(content));
 }
 
-static bool IsValidIdentifier(String str){
-  auto CheckSingle = [](char ch){
-    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
-  };
-
-  if(str.size <= 0){
-    return false;
-  }
-
-  if(!CheckSingle(str.data[0])){
-    return false;
-  }
-
-  for(int i = 1; i < str.size; i++){
-    char ch = str.data[i];
-    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
-      return false;
-    }
-  }
-
-  return true;
-}
-
 // Macro because we want to return as well
 #define EXPECT(TOKENIZER,STR) \
   do{ \
@@ -112,7 +89,7 @@ static bool IsValidIdentifier(String str){
   } while(0)
 
 #define CHECK_IDENTIFIER(ID) \
-  if(!IsValidIdentifier(ID)){ \
+  if(!IsIdentifier(ID)){ \
     ReportError(tok,ID,StaticFormat("type name '%.*s' is not a valid name",UN(ID))); \
     return {}; \
   }
@@ -730,40 +707,23 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   return res;
 }
 
-Opt<ConfigExpression*> ParseConfigAtom(Tokenizer* tok,Arena* out){
+Opt<ConfigIdentifier> ParseConfigIdentifier(Tokenizer* tok,Arena* out){
   Token id = tok->PeekToken();
+  CHECK_IDENTIFIER(id);
+  tok->AdvancePeek();
   
-  if(IsValidIdentifier(id)){
-    tok->AdvancePeek();
-    
-    ConfigExpression* idExpr = PushStruct<ConfigExpression>(out);
-    idExpr->type = ConfigExpressionType_IDENTIFIER;
-    idExpr->identifier = id;
-    
-    if(tok->IfNextToken(".")){
-      Token accessIdentifier = tok->NextToken();
-      CHECK_IDENTIFIER(accessIdentifier);
+  Token access = {};
+  if(tok->IfNextToken(".")){
+    access = tok->NextToken();
 
-      ConfigExpression* accessExpr = PushStruct<ConfigExpression>(out);
-      accessExpr->type = ConfigExpressionType_ACCESS;
-      accessExpr->identifier = accessIdentifier;
-      accessExpr->child = idExpr;
-
-      return accessExpr;
-    } else {
-      return idExpr;
-    }
-  } else if(IsNum(id[0])){
-    Opt<int> number = ParseNumber(tok);
-    PROPAGATE(number);
-    
-    ConfigExpression* numberExpr = PushStruct<ConfigExpression>(out);
-    numberExpr->number = number.value();
-    
-    return numberExpr;
+    CHECK_IDENTIFIER(access);
   }
 
-  return nullptr;
+  ConfigIdentifier res = {};
+  res.name = id;
+  res.wire = access;
+  
+  return res;
 }
 
 Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
@@ -771,29 +731,34 @@ Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
   
   Token peek = tok->PeekToken();
 
+  ConfigStatement* stmt = nullptr;
+
   if(CompareString(peek,"for")){
     // For loop
     NOT_IMPLEMENTED();
   } else {
     // Assignment
-
-    Opt<ConfigExpression*> lhs = ParseConfigAtom(tok,out);
+    Opt<ConfigIdentifier> lhs = ParseConfigIdentifier(tok,out);
     PROPAGATE(lhs);
     EXPECT(tok,"=");
-
-    SymbolicExpression* rhs = ParseSymbolicExpression(tok,out);
-    PROPAGATE(rhs);
     
+    Array<Token> rhs = TokenizeSymbolicExpression(tok,out);
+
+    if(rhs.size == 0){
+      return {};
+    }
+
+    //SymbolicExpression* rhs = ParseSymbolicExpression(tok,out);
+    //PROPAGATE(rhs);
     EXPECT(tok,";");
 
-    ConfigStatement* stmt = PushStruct<ConfigStatement>(out);
+    stmt = PushStruct<ConfigStatement>(out);
     stmt->type = ConfigType_ASSIGNMENT;
     stmt->lhs = lhs.value();
     stmt->rhs = rhs;
-
-    return stmt;
   }
-  return nullptr;
+
+  return stmt;
 }
 
 // Any returned String points to tokenizer content.
@@ -1390,6 +1355,7 @@ FUInstance* CreateFUInstanceWithParameters(Accelerator* accel,FUDeclaration* typ
   return inst;
 }
 
+// TODO: Move this function to a better place
 FUDeclaration* InstantiateModule(String content,ModuleDef def){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -1641,7 +1607,83 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
   
-  res->functions = CopyArray(def.configs,perm);
+  auto userConfigs = PushArenaList<UserConfigFunction>(temp);
+  for(auto funcDecl : def.configs){
+    // Need to transform this into a simple format that the code generation does not need to verify for correctness. 
+
+    Array<VarDeclaration> variables = funcDecl.variables;
+    Array<Token> variableNames = Extract(variables,temp,&VarDeclaration::name);
+    
+    Array<ConfigStatement*> statements = funcDecl.statements;
+
+    auto configStmts = PushArenaList<UserConfigStatement>(temp);
+    
+    for(ConfigStatement* stmt : statements){
+      FULL_SWITCH(stmt->type){
+      case ConfigType_ASSIGNMENT: {
+        ConfigIdentifier id = stmt->lhs;
+        Token name = id.name;
+        Token wireName = id.wire;
+        Array<Token> symbolicTokens = stmt->rhs;
+        
+        FUInstance* inst = GetUnit(res->baseCircuit,name);
+        if(!inst){
+          // TODO: Better error handling.
+          printf("Instance %.*s does not exist. Make sure you spelled it correct.\n",UN(name));
+          exit(-1);
+        }
+
+        Wire* wire = GetConfigWireByName(inst->declaration,wireName);
+        if(!wire){
+          // TODO: Better error handling.
+          printf("Instance %.*s does not contain the following wire: %.*s. Make sure you spelled it correctly.\n",UN(name),UN(wireName));
+
+          // TODO: We probably want to move all this error reporting code into a single place. The important part is the fact that everytime that we can report to the user the possible values that something can take, we should do it and we should make it a function because we probably do this (or should do this) in multiple places.
+          printf("Entity of type %.*s contains:\n",UN(inst->declaration->name));
+          for(Wire w : inst->declaration->configs){
+            printf("  %.*s\n",UN(w.name));
+          }
+          exit(-1);
+        }
+        
+        for(Token tok : symbolicTokens){
+          if(IsIdentifier(tok) && !Contains(variableNames,tok)){
+            printf("\t[Error] Symbol '%.*s' does not exist)\n",UN(tok));
+            exit(-1);
+          }
+        }
+        
+        SymbolicExpression* expr = ParseSymbolicExpression(symbolicTokens,globalPermanent);
+        Assert(expr); // TODO: Better error handling
+
+        UserConfigStatement* stmt = configStmts->PushElem();
+        stmt->inst = inst;
+        stmt->wire = wire;
+        stmt->expr = expr;
+      } break;
+      case ConfigType_ADDRESS_GEN: {
+        NOT_IMPLEMENTED();
+      } break;
+    }
+    }
+
+    auto vars = PushArenaList<ConfigVariable>(temp);
+    
+    for(VarDeclaration var : variables){
+      ConfigVariable* configVar = vars->PushElem();
+
+      configVar->name = PushString(globalPermanent,var.name);
+      configVar->type = ConfigVariableType_INTEGER;
+    }
+
+    UserConfigFunction* func = userConfigs->PushElem();
+    func->name = PushString(globalPermanent,funcDecl.name);
+    func->type = UserConfigurationType_CONFIG;
+    func->variables = PushArrayFromList(perm,vars);
+    func->configs = PushArrayFromList(perm,configStmts);
+  }
+  
+  res->userFunctions = PushArrayFromList(perm,userConfigs);
   
   return res;
 }
@@ -1808,25 +1850,7 @@ Array<Token> AddressGenUsed(ConstructDef def,Array<ConstructDef> allConstructs,A
   return PushArrayFromList(out,list);
 }
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def){
-  FULL_SWITCH(def.type){
-  case ConstructType_MERGE: {
-    return InstantiateMerge(def.merge);
-  } break;
-  case ConstructType_MODULE: {
-    return InstantiateModule(content,def.module);
-  } break;
-  case ConstructType_ITERATIVE:{
-    NOT_IMPLEMENTED("yet");
-  } break;
-  case ConstructType_ADDRESSGEN:{
-    Assert(false);
-  } break;
-  } END_SWITCH();
-
-  return nullptr;
-}
-  
+// TODO: Move this function to a better place, no reason to be inside the spec parser.
 FUDeclaration* InstantiateSpecifications(String content,ConstructDef def){
   FULL_SWITCH(def.type){
   case ConstructType_MERGE: {
@@ -1882,7 +1906,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   EXPECT(tok,"{");
 
   ArenaList<AddressGenForDef>* loops = PushArenaList<AddressGenForDef>(temp);
-  SymbolicExpression* symbolic = nullptr;
+  Array<Token> symbolicTokens = {};
   while(!tok->Done()){
     Token construct = tok->PeekToken();
     
@@ -1895,25 +1919,33 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
       
       Token loopVariable = tok->NextToken();
       CHECK_IDENTIFIER(loopVariable);
-
-      SymbolicExpression* start = ParseSymbolicExpression(tok,out);
-      PROPAGATE(start);
+      
+      Array<Token> startSym = TokenizeSymbolicExpression(tok,out);
+      if(Empty(startSym)){
+        return {};
+      }
       
       EXPECT(tok,"..");
 
-      SymbolicExpression* end = ParseSymbolicExpression(tok,out);
-      PROPAGATE(end);
+      Array<Token> endSym = TokenizeSymbolicExpression(tok,out);
+      if(Empty(endSym)){
+        return {};
+      }
+
+      EXPECT(tok,":");
       
-      *loops->PushElem() = (AddressGenForDef){.loopVariable = loopVariable,.start = start,.end = end};
+      *loops->PushElem() = (AddressGenForDef){.loopVariable = loopVariable,.startSym = startSym,.endSym = endSym};
     } else if(CompareString(construct,"addr")){
       tok->AdvancePeek();
 
       EXPECT(tok,"=");
-
-      auto symbolicExpression = ParseSymbolicExpression(tok,out);
-      PROPAGATE(symbolicExpression);
-      symbolic = symbolicExpression;
       
+      symbolicTokens = TokenizeSymbolicExpression(tok,out);
+      
+      if(symbolicTokens.size == 0){
+        return {};
+      }
+
       EXPECT(tok,";");
       break;
     }
@@ -1922,7 +1954,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   EXPECT(tok,"}");
 
   // TODO: We actually want to return something here. An "Empty" address gen, which basically does nothing but still lets the program run the normal flow. It just does nothing in the sense that we do not actually generate anything for such address gen.
-  if(!symbolic){
+  if(Empty(symbolicTokens)){
     return {};
   }
   
@@ -1930,7 +1962,7 @@ Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out){
   def.name = name;
   def.inputs = inputsArr;
   def.loops = PushArrayFromList(out,loops);
-  def.symbolic = symbolic;
+  def.symbolicTokens = symbolicTokens;
   
   return def;
 }
