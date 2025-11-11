@@ -3053,6 +3053,57 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
   Array<String> allStates = ExtractStates(info.infos[0].info,temp2);
   Array<Pair<String,int>> allMem = ExtractMem(info.infos[0].info,temp2);
 
+  {
+    CEmitter* c = StartCCode(temp);
+
+    for(MergePartition part : info.infos){
+      for(UserConfigFunction func : part.userFunctions){
+        String fullFunctionName = PushString(temp,"%.*s_%.*s",UN(part.name),UN(func.name));
+        c->FunctionBlock("static inline void",fullFunctionName);
+        
+        for(ConfigVariable var : func.variables){
+          FULL_SWITCH(var.type){
+          case ConfigVariableType_INTEGER:{
+            c->Argument("int",var.name);
+          } break;
+          case ConfigVariableType_POINTER:{
+            c->Argument("void*",var.name);
+          } break;
+        }
+        }
+        
+        for(UserConfigStatement stmt : func.configs){
+          String repr = PushRepr(temp,stmt.expr);
+          c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.inst),UN(stmt.wire),UN(repr)));
+        }
+      }
+    }
+
+    for(UserConfigFunction func : topLevelDecl->userFunctions){
+      String fullFunctionName = PushString(temp,"%.*s_%.*s",UN(topLevelDecl->name),UN(func.name));
+      c->FunctionBlock("static inline void",fullFunctionName);
+
+      for(ConfigVariable var : func.variables){
+        FULL_SWITCH(var.type){
+        case ConfigVariableType_INTEGER:{
+          c->Argument("int",var.name);
+        } break;
+        case ConfigVariableType_POINTER:{
+          c->Argument("void*",var.name);
+        } break;
+        }
+      }
+      
+      for(UserConfigStatement stmt : func.configs){
+        String repr = PushRepr(temp,stmt.expr);
+        c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.inst),UN(stmt.wire),UN(repr)));
+      }
+    }
+
+    String content = PushASTRepr(c,temp);
+    TemplateSetString("userConfigFunctions",content);
+  }
+
   TemplateSetBool("outputChangeDelay",false);
 
   Array<String> names = Extract(info.infos,temp,&MergePartition::name);
@@ -3252,33 +3303,6 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
 
     String content = PushASTRepr(c,temp);
     TemplateSetString("addrStructs",content);
-  }
-
-
-  {
-    CEmitter* c = StartCCode(temp);
-    for(UserConfigFunction func : topLevelDecl->userFunctions){
-      c->FunctionBlock("void",func.name);
-
-      for(ConfigVariable var : func.variables){
-        FULL_SWITCH(var.type){
-        case ConfigVariableType_INTEGER:{
-          c->Argument("int",var.name);
-        } break;
-        case ConfigVariableType_POINTER:{
-          c->Argument("void*",var.name);
-        } break;
-        }
-      }
-      
-      for(UserConfigStatement stmt : func.configs){
-        String repr = PushRepr(temp,stmt.expr);
-        c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.inst->name),UN(stmt.wire->name),UN(repr)));
-      }
-    }
-
-    String content = PushASTRepr(c,temp);
-    TemplateSetString("userConfigFunctions",content);
   }
 
   {

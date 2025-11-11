@@ -307,6 +307,12 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
   }
 }
 
+FUDeclaration* GetAssociatedType(Array<Partition> parts){
+  for(Partition p : parts){
+    
+  }
+}
+
 String GetName(Array<Partition> partitions,Arena* out){
   TEMP_REGION(temp,out);
   auto builder = StartString(temp);
@@ -1198,14 +1204,14 @@ AccelInfo CalculateAcceleratorInfo(Accelerator* accel,bool recursive,Arena* out,
 
       // We do need partitions here, I think
       result.infos[i].info = GenerateInitialInstanceInfo(accel,out,partitions,calculateOrder);
+      
 
       FillInstanceInfo(iter,out);
 
       result.infos[i].inputDelays = ExtractInputDelays(iter,out);
       result.infos[i].outputLatencies = ExtractOutputLatencies(iter,out);
  
-      String name = GetName(partitions,out);
-      result.infos[i].name = name;
+      result.infos[i].name = GetName(partitions,out);
     }
   } else {
     iter.SetMergeIndex(0);

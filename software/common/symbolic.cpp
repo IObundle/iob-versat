@@ -750,7 +750,6 @@ static SymbolicExpression* ParseTerm(Array<Token> tokens,int& index,Arena* out){
     } 
 
     if(index < tokens.size && tokens[index] == "("){
-      Token peek = tokens[index];
       // Function definition.
       index += 1;
 

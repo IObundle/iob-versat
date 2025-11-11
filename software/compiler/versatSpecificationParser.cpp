@@ -1657,8 +1657,9 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         Assert(expr); // TODO: Better error handling
 
         UserConfigStatement* stmt = configStmts->PushElem();
-        stmt->inst = inst;
-        stmt->wire = wire;
+        
+        stmt->inst = id.name;
+        stmt->wire = id.wire;
         stmt->expr = expr;
       } break;
       case ConfigType_ADDRESS_GEN: {

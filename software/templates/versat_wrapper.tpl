@@ -452,6 +452,79 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   return 0;
 }
 
+// MARK
+#define NORM(VAL) ((VAL == 0 ? 1 : VAL))
+int TotalSize(AddressVArguments* args){
+   int index = 0;
+   for(int iter3 = 0; iter3 < NORM(args->iter3); iter3 += 1){
+      for(int per3 = 0; per3 < NORM(args->per3); per3 += 1){
+         for(int iter2 = 0; iter2 < NORM(args->iter2); iter2 += 1){
+            for(int per2 = 0; per2 < NORM(args->per2); per2 += 1){
+               for(int iter = 0; iter < NORM(args->iter); iter += 1){
+                  for(int per = 0; per < args->per; per += 1){
+                     if(per <= args->duty){
+                        index += 1;
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+   return index;
+}
+
+void Simulate(AddressVArguments* args,int* buffer){
+   int address = args->start;
+   int address2 = args->start;
+   int address3 = args->start;
+   int index = 0;
+
+   for(int iter3 = 0; iter3 < NORM(args->iter3); iter3 += 1){
+      for(int per3 = 0; per3 < NORM(args->per3); per3 += 1){
+         address2 = address3;
+         for(int iter2 = 0; iter2 < NORM(args->iter2); iter2 += 1){
+            for(int per2 = 0; per2 < NORM(args->per2); per2 += 1){
+               address = address2;
+               for(int iter = 0; iter < NORM(args->iter); iter += 1){
+                  for(int per = 0; per < args->per; per += 1){
+                     if(per <= args->duty){
+                        buffer[index] = address;                        
+
+                        address += args->incr;
+                        index += 1;
+                     }
+                  }
+                  address += args->shift - args->incr;
+               }
+               address2 += args->incr2;
+            }
+            address2 += args->shift2 - args->incr2;
+         }
+         address3 += args->incr3;
+      }
+      address3 += args->shift3 - args->incr3;
+   }
+}
+#undef NORM
+
+void SimulateAndPrintAddressGen2(AddressVArguments args){
+   int bufferSize = TotalSize(&args);
+   int* buffer = (int*) malloc(sizeof(int) * bufferSize);
+   
+   Simulate(&args,buffer);
+   
+   for(int i = 0; i < bufferSize; i++){
+      iptr addr = (iptr) buffer[i];
+      iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
+
+      PRINT("%d : %ld\n",i,(address - args.ext_addr) / 4);
+   }
+
+   free(buffer);
+}
+
+
 SimulateVReadResult SimulateVRead(AddressVArguments args){
    SimulateVReadResult result = {};
 

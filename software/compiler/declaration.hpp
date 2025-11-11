@@ -46,8 +46,8 @@ enum UserConfigType{
 };
 
 struct UserConfigStatement{
-  FUInstance* inst;
-  Wire* wire;
+  String inst;
+  String wire;
   SymbolicExpression* expr;
 };
 

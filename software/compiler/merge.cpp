@@ -2648,7 +2648,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   for(FUInstance* inst : flatten[0]->allocated){
     FUInstance* recon = MapOrCreateNode(merged->recons[0],merged->inputToRecon[0],inst);
     MapOrCreateNode(merged->mergedGraph,merged->reconToMerged[0],recon);
-    DEBUG_BREAK();
   }
   
   while(iter.HasNext()){
@@ -2945,8 +2944,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
       FUInstance* mergeInst = info->inst;
       FUInstance* reconInst = MappingMapNode(mergedToRecon[i],mergeInst);
 
-      DEBUG_BREAK();
-
       if(reconInst){
         info->inst = reconInst;
         info->debug = reconInst->debug;
@@ -2976,6 +2973,9 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   for(int i = 0; i < size; i++){
     decl->info.infos[i].baseType = types[i];
     
+    DEBUG_BREAK();
+    decl->info.infos[i].userFunctions = types[i]->userFunctions;
+    
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.SetMergeIndex(i);
     
@@ -2995,12 +2995,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
     }
   }
 
-
-  /*
-      Missing data:
-      - all the AccelInfo data besides the units themselves.
-  */
-  
   DebugRegionOutputDotGraph(decl->flattenedBaseCircuit,"FlattenedMergedGraph");
 
   decl->staticUnits = CollectStaticUnits(&decl->info,globalPermanent);
