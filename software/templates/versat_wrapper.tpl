@@ -108,6 +108,7 @@ volatile AcceleratorStatic* accelStatic = (volatile AcceleratorStatic*) &staticB
 // Utilities
 
 #define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
+#pragma GCC poison printf // Do not call printf, call PRINT
 
 // TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
 #ifdef TRACE
@@ -605,14 +606,18 @@ void SimulateAndPrintAddressGen2(AddressVArguments args){
    
    Simulate(&args,buffer);
    
-   printf("Total transfers: %ld\n",(args.amount_minus_one + 1) * args.length);   
-   printf("Number of samples: %d\n",bufferSize);   
+   PRINT("Total transfers: %ld\n",(args.amount_minus_one + 1) * args.length);   
+   PRINT("Number of samples: %d\n",bufferSize);   
+
+   // TODO: We need to allow the user to print out stuff based on a flag, because sometimes we just want the total transfers and total samples.
+#if 0
    for(int i = 0; i < bufferSize; i++){
       iptr addr = (iptr) buffer[i];
       iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
 
       PRINT("%d : %ld\n",i,(address - args.ext_addr) / 4);
    }
+#endif
    
    free(buffer);
 }
@@ -1084,7 +1089,7 @@ void SetVersatDebugPrintfFunction(VersatPrintf function){
 
 static void CheckVersatInitialized(){
   if(!versatInitialized){
-    printf("Versat has not been initialized\n");
+    PRINT("Versat has not been initialized\n");
     fflush(stdout);
     exit(-1);
   }
@@ -1132,8 +1137,8 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + AcceleratorConfigSize);
 
   if(destEndOutsideConfig){
-    printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");
-    printf("This is most likely an error, no transfer is being made\n");
+    PRINT("VersatMemoryCopy: Destination starts inside config and ends outside\n");
+    PRINT("This is most likely an error, no transfer is being made\n");
     return;
   }
   
