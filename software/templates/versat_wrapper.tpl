@@ -453,7 +453,6 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   return 0;
 }
 
-// MARK
 VersatAddressSimState StartAddressSimulation(AddressGenArguments* args){
    VersatAddressSimState state = {};
    state.args = args;
@@ -622,7 +621,7 @@ void SimulateAndPrintAddressGen2(AddressVArguments args){
    free(buffer);
 }
 
-
+// TODO: Cleanup all these simulation stuff. We can provide a much cleaner interface and hassle free when we finish the new API stuff
 SimulateVReadResult SimulateVRead(AddressVArguments args){
    SimulateVReadResult result = {};
 

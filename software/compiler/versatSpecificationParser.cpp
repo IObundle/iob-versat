@@ -2,9 +2,12 @@
 
 #include "declaration.hpp"
 #include "embeddedData.hpp"
+#include "parser.hpp"
 #include "symbolic.hpp"
 #include "templateEngine.hpp"
+#include "utils.hpp"
 #include "utilsCore.hpp"
+#include "userConfigs.hpp"
 
 // TODO: Rework expression parsing to support error reporting similar to module diff.
 //       A simple form of synchronization after detecting an error would vastly improve error reporting
@@ -707,60 +710,6 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   return res;
 }
 
-Opt<ConfigIdentifier> ParseConfigIdentifier(Tokenizer* tok,Arena* out){
-  Token id = tok->PeekToken();
-  CHECK_IDENTIFIER(id);
-  tok->AdvancePeek();
-  
-  Token access = {};
-  if(tok->IfNextToken(".")){
-    access = tok->NextToken();
-
-    CHECK_IDENTIFIER(access);
-  }
-
-  ConfigIdentifier res = {};
-  res.name = id;
-  res.wire = access;
-  
-  return res;
-}
-
-Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
-  TEMP_REGION(temp,out);
-  
-  Token peek = tok->PeekToken();
-
-  ConfigStatement* stmt = nullptr;
-
-  if(CompareString(peek,"for")){
-    // For loop
-    NOT_IMPLEMENTED();
-  } else {
-    // Assignment
-    Opt<ConfigIdentifier> lhs = ParseConfigIdentifier(tok,out);
-    PROPAGATE(lhs);
-    EXPECT(tok,"=");
-    
-    Array<Token> rhs = TokenizeSymbolicExpression(tok,out);
-
-    if(rhs.size == 0){
-      return {};
-    }
-
-    //SymbolicExpression* rhs = ParseSymbolicExpression(tok,out);
-    //PROPAGATE(rhs);
-    EXPECT(tok,";");
-
-    stmt = PushStruct<ConfigStatement>(out);
-    stmt->type = ConfigType_ASSIGNMENT;
-    stmt->lhs = lhs.value();
-    stmt->rhs = rhs;
-  }
-
-  return stmt;
-}
-
 // Any returned String points to tokenizer content.
 // As long as tokenizer is valid, strings returned by this function are also valid.
 Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
@@ -829,45 +778,13 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
     *cons->PushElem() = optCon.value();
   }
 
-  auto configFunctions = PushArenaList<ConfigFunction>(temp);
+  auto configFunctions = PushArenaList<ConfigFunctionDef>(temp);
 
   if(tok->IfNextToken("##")){
     while(!tok->Done()){
-      if(tok->IfNextToken("config")){
-        Token configName = tok->NextToken();
-        CHECK_IDENTIFIER(configName);
-
-        Opt<Array<VarDeclaration>> vars = ParseModuleInputDeclaration(tok,out);
-        PROPAGATE(vars);
-
-        EXPECT(tok,"{");
-
-        auto configs = PushArenaList<ConfigStatement*>(temp);
-        while(!tok->Done()){
-          Token peek = tok->PeekToken();
-
-          if(CompareString(peek,";")){
-            tok->AdvancePeek();
-            continue;
-          }
-          if(CompareString(peek,"}")){
-            break;
-          }
-        
-          Opt<ConfigStatement*> config = ParseConfigStatement(tok,out);
-          PROPAGATE(config);
-
-          *configs->PushElem() = config.value();
-        }
-
-        EXPECT(tok,"}");
-        
-        ConfigFunction func = {};
-        func.name = configName;
-        func.variables = vars.value();
-        func.statements = PushArrayFromList(out,configs);
-
-        *configFunctions->PushElem() = func;
+      if(IsNextTokenConfigFunctionStart(tok)){
+        ConfigFunctionDef* func = ParseConfigFunction(tok,out);
+        *configFunctions->PushElem() = *func;
       } else {
         break;
       }
@@ -1611,19 +1528,89 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   for(auto funcDecl : def.configs){
     // Need to transform this into a simple format that the code generation does not need to verify for correctness. 
 
-    Array<VarDeclaration> variables = funcDecl.variables;
-    Array<Token> variableNames = Extract(variables,temp,&VarDeclaration::name);
+    Array<ConfigVarDeclaration> variables = funcDecl.variables;
+    Array<Token> variableNames = Extract(variables,temp,&ConfigVarDeclaration::name);
     
     Array<ConfigStatement*> statements = funcDecl.statements;
 
     auto configStmts = PushArenaList<UserConfigStatement>(temp);
     
     for(ConfigStatement* stmt : statements){
-      FULL_SWITCH(stmt->type){
-      case ConfigType_ASSIGNMENT: {
-        ConfigIdentifier id = stmt->lhs;
-        Token name = id.name;
-        Token wireName = id.wire;
+      ConfigIdentifier id = stmt->lhs;
+      Token name = id.name;
+      Token wireName = id.wire;
+      
+      if(Empty(wireName)){
+        // Function invocation
+
+        struct FunctionInvocation{
+          Token functionName;
+          Array<Token> arguments;
+          bool error;
+        };
+
+        auto ParseFunctionInvocation = [](Array<Token> functionInvocation,Arena* out) -> FunctionInvocation{
+          TEMP_REGION(temp,out);
+          FunctionInvocation res = {};
+
+          Token functionName = functionInvocation[0];
+          if(!IsIdentifier(functionName)){
+            res.error = true;
+            printf("Error, expected a valid function identifier instead of %.*s\n",UN(functionInvocation[0]));
+            return res;
+          }
+
+          if(functionInvocation[1] != "("){
+            res.error = true;
+            printf("Error, expected '('\n");
+            return res;
+          }
+
+          auto list = PushArenaList<Token>(temp);
+
+          for(int i = 2; i < functionInvocation.size;){
+            if(functionInvocation[i] == ")"){
+              break;
+            }
+            
+            Token arg = functionInvocation[i];
+            if(!IsIdentifier(arg)){
+              res.error = true;
+              printf("Error, expected a valid function identifier instead of %.*s\n",UN(arg));
+              return res;
+            }
+
+            *list->PushElem() = arg;
+            i += 1;
+
+            if(functionInvocation[i] == ","){
+              i += 1;
+            }
+          }
+          
+          res.arguments = PushArrayFromList(out,list);
+          res.functionName = functionName;
+          return res;
+        };
+
+        Array<Token> functionInvocation = stmt->rhs;
+        FunctionInvocation func = ParseFunctionInvocation(functionInvocation,globalPermanent);
+
+        for(Token arg : func.arguments){
+          if(!Contains(variableNames,arg)){
+            printf("\t[Error] Symbol '%.*s' does not exist)\n",UN(arg));
+            exit(-1);
+          }
+        }
+        
+#if 0
+        UserConfigStatement* userStmt = configStmts->PushElem();
+        userStmt->type = UserConfigStatementType_COMPLEX;
+        
+        userStmt->function.name = func.functionName;
+        userStmt->function.arguments = CopyArray<String,Token>(func.arguments,perm);
+#endif
+      } else {
         Array<Token> symbolicTokens = stmt->rhs;
         
         FUInstance* inst = GetUnit(res->baseCircuit,name);
@@ -1656,21 +1643,18 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         SymbolicExpression* expr = ParseSymbolicExpression(symbolicTokens,globalPermanent);
         Assert(expr); // TODO: Better error handling
 
-        UserConfigStatement* stmt = configStmts->PushElem();
+        UserConfigStatement* userStmt = configStmts->PushElem();
+        userStmt->type = UserConfigStatementType_SIMPLE;
         
-        stmt->inst = id.name;
-        stmt->wire = id.wire;
-        stmt->expr = expr;
-      } break;
-      case ConfigType_ADDRESS_GEN: {
-        NOT_IMPLEMENTED();
-      } break;
-    }
+        userStmt->simple.inst = id.name;
+        userStmt->simple.wire = id.wire;
+        userStmt->simple.expr = expr;
+      }
     }
 
     auto vars = PushArenaList<ConfigVariable>(temp);
     
-    for(VarDeclaration var : variables){
+    for(ConfigVarDeclaration var : variables){
       ConfigVariable* configVar = vars->PushElem();
 
       configVar->name = PushString(globalPermanent,var.name);

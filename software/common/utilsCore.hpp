@@ -436,6 +436,11 @@ inline bool operator==(String first,String second){
    return true;
 }
 
+inline bool operator!=(String first,String second){
+  bool res = !operator==(first,second);
+  return res;
+}
+
 template<typename T>
 bool operator==(Array<T> first,Array<T> second){
    if(first.size != second.size){

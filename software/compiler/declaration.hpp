@@ -45,10 +45,26 @@ enum UserConfigType{
   UserConfigurationType_STATE
 };
 
+enum UserConfigStatementType{
+  UserConfigStatementType_SIMPLE,
+  UserConfigStatementType_COMPLEX
+};
+
 struct UserConfigStatement{
-  String inst;
-  String wire;
-  SymbolicExpression* expr;
+  UserConfigStatementType type;
+
+  union {
+    struct {
+      String inst;
+      String wire;
+      SymbolicExpression* expr;
+    } simple;
+    
+    struct {
+      String inst;
+      Array<String> accesses;
+    } function;
+  };
 };
 
 enum ConfigVariableType{

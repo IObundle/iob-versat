@@ -3056,6 +3056,7 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
   {
     CEmitter* c = StartCCode(temp);
 
+#if 0
     for(MergePartition part : info.infos){
       for(UserConfigFunction func : part.userFunctions){
         String fullFunctionName = PushString(temp,"%.*s_%.*s",UN(part.name),UN(func.name));
@@ -3073,11 +3074,12 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
         }
         
         for(UserConfigStatement stmt : func.configs){
-          String repr = PushRepr(temp,stmt.expr);
-          c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.inst),UN(stmt.wire),UN(repr)));
+          String repr = PushRepr(temp,stmt.simple.expr);
+          c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.simple.inst),UN(stmt.simple.wire),UN(repr)));
         }
       }
     }
+#endif
 
     for(UserConfigFunction func : topLevelDecl->userFunctions){
       String fullFunctionName = PushString(temp,"%.*s_%.*s",UN(topLevelDecl->name),UN(func.name));
@@ -3095,8 +3097,18 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
       }
       
       for(UserConfigStatement stmt : func.configs){
-        String repr = PushRepr(temp,stmt.expr);
-        c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.inst),UN(stmt.wire),UN(repr)));
+        FULL_SWITCH(stmt.type){
+        case UserConfigStatementType_SIMPLE:{
+          String repr = PushRepr(temp,stmt.simple.expr);
+          c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.simple.inst),UN(stmt.simple.wire),UN(repr)));
+        } break;
+        case UserConfigStatementType_COMPLEX:{
+          
+          //c->Statement(PushString(temp,"accelConfig->%.*s = %.*s(",UN(stmt.function.inst),));
+        } break;
+        }
+        
+
       }
     }
 

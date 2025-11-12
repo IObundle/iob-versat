@@ -4,6 +4,8 @@
 
 #include "embeddedData.hpp"
 
+struct ConfigFunctionDef;
+
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Set<String> InstanceName;
 
@@ -104,52 +106,12 @@ struct DefBase{
   Token name;
 };
 
-enum ConfigExpressionType{
-  ConfigExpressionType_IDENTIFIER,
-  ConfigExpressionType_NUMBER
-};
-
-struct ConfigExpression{
-  ConfigExpressionType type;
-
-  Token identifier;
-  Token access; // Only single access supported, do not see why would need more than one.
-
-  // TODO: Union
-  ConfigExpression* child;
-  int number;
-};
-
-enum ConfigType{
-  ConfigType_ASSIGNMENT,
-  ConfigType_ADDRESS_GEN
-};
-
-struct ConfigIdentifier{
-  Token name;
-  Token wire;
-};
-
-struct ConfigStatement{
-  ConfigType type;
-
-  // TODO: Union
-  ConfigIdentifier lhs; // We currently only support <name>.<wire> assignments
-  Array<Token> rhs; // Symbolic expression tokens
-};
-
-struct ConfigFunction{
-  String name;
-  Array<VarDeclaration> variables;
-  Array<ConfigStatement*> statements;
-};
-
 struct ModuleDef : public DefBase{
   Token numberOutputs; // TODO: Not being used. Not sure if we gonna actually add this or not.
   Array<VarDeclaration> inputs;
   Array<InstanceDeclaration> declarations;
   Array<ConnectionDef> connections;
-  Array<ConfigFunction> configs;
+  Array<ConfigFunctionDef> configs;
 };
 
 struct MergeDef : public DefBase{
