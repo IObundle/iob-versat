@@ -453,6 +453,97 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
 }
 
 // MARK
+VersatAddressSimState StartAddressSimulation(AddressGenArguments* args){
+   VersatAddressSimState state = {};
+   state.args = args;
+   state.address  = args->start;
+   state.address2 = args->start;
+   state.address3 = args->start;
+
+   return state;
+}
+
+int GetAddress(VersatAddressSimState* state){
+   return state->address;
+}
+
+int GetIndex(VersatAddressSimState* state){
+   return state->index;
+}
+
+void Advance(VersatAddressSimState* state){
+
+   #define NORM(VAL) ((VAL == 0 ? 1 : VAL))
+
+   AddressGenArguments* args = state->args;
+
+   if(state->finished){
+      return;
+   }
+
+   if(state->per <= args->duty){
+      state->address += args->incr;
+      state->index += 1;
+   }
+   state->per += 1;
+
+   if(state->per >= args->per){
+      state->per = 0;
+      state->iter += 1;
+      state->address += args->shift - args->incr;
+   } else {
+      return;
+   }
+
+   if(state->iter >= NORM(args->iter)){
+      state->iter = 0;
+      state->per2 += 1;
+      state->address2 += args->incr2;
+      state->address = state->address2;
+   } else {
+      return;
+   }
+
+   if(state->per2 >= NORM(args->per2)){
+      state->per2 = 0;
+      state->iter2 += 1;
+      state->address2 += args->shift2 - args->incr2;
+   } else {
+      return;
+   }
+
+   if(state->iter2 >= NORM(args->iter2)){
+      state->iter2 = 0;
+      state->per3 += 1;
+      state->address3 += args->incr3;
+      state->address2 = state->address3;
+      state->address = state->address2;
+   } else {
+      return;
+   }
+
+   if(state->per3 >= NORM(args->per3)){
+      state->per3 = 0;
+      state->iter3 += 1;
+      state->address3 += args->shift3 - args->incr3;
+   } else {
+      return;
+   }
+
+   if(state->iter3 >= NORM(args->iter3)){
+      state->iter3 = 0;
+      state->finished = true;
+   } else {
+      return;
+   }
+
+   #undef NORM
+}
+
+bool IsValid(VersatAddressSimState* state){
+   return !state->finished;
+}
+
 #define NORM(VAL) ((VAL == 0 ? 1 : VAL))
 int TotalSize(AddressVArguments* args){
    int index = 0;
@@ -514,13 +605,15 @@ void SimulateAndPrintAddressGen2(AddressVArguments args){
    
    Simulate(&args,buffer);
    
+   printf("Total transfers: %ld\n",(args.amount_minus_one + 1) * args.length);   
+   printf("Number of samples: %d\n",bufferSize);   
    for(int i = 0; i < bufferSize; i++){
       iptr addr = (iptr) buffer[i];
       iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
 
       PRINT("%d : %ld\n",i,(address - args.ext_addr) / 4);
    }
-
+   
    free(buffer);
 }
 
@@ -767,6 +860,9 @@ end:
 }
 
 void SimulateAndPrintAddressGen(AddressVArguments args){
+   SimulateAndPrintAddressGen2(args);
+   return;
+     
    static VSuperAddress* self = nullptr;
 
    Verilated::traceEverOn(true);
