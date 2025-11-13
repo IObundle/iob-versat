@@ -1603,13 +1603,6 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
           }
         }
         
-#if 0
-        UserConfigStatement* userStmt = configStmts->PushElem();
-        userStmt->type = UserConfigStatementType_COMPLEX;
-        
-        userStmt->function.name = func.functionName;
-        userStmt->function.arguments = CopyArray<String,Token>(func.arguments,perm);
-#endif
       } else {
         Array<Token> symbolicTokens = stmt->rhs;
         

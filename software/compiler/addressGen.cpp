@@ -1278,8 +1278,8 @@ String GenerateAddressPrintFunction(AddressAccess* access,Arena* out){
   }
 
   for(String input : inputVars){
-    String statement = PushString(temp,"printf(\"%.*s:%%d\\n\",%.*s)",UN(input),UN(input));
-    m->Statement(statement);
+    //String statement = PushString(temp,"printf(\"%.*s:%%d\\n\",%.*s)",UN(input),UN(input));
+    //m->Statement(statement);
   }
   
   CAST* ast = EndCCode(m);

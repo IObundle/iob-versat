@@ -1,5 +1,7 @@
 #include "userConfigs.hpp"
 
+#include "globals.hpp"
+#include "memory.hpp"
 #include "symbolic.hpp"
 
 // TODO: Copied from spec parser, we probably want to move this somewhere and reconciliate everything.
@@ -233,7 +235,7 @@ bool IsNextTokenConfigFunctionStart(Tokenizer* tok){
   res |= tok->IfPeekToken("config");
   res |= tok->IfPeekToken("state");
   res |= tok->IfPeekToken("mem");
-
+  
   return res;
 }
 
@@ -241,5 +243,52 @@ bool IsNextTokenConfigFunctionStart(Tokenizer* tok){
 // Instantiation and manipulation
 
 ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration){
+  TEMP_REGION(temp,globalPermanent);
 
+  for(ConfigStatement* stmt : def->statements){
+    ConfigIdentifier id = stmt->lhs;
+    Token name = id.name;
+    Token wireName = id.wire;
+
+    if(Empty(wireName)){
+      // Function invocation only.
+    }
+    
+    
+    
+    //stmt->
+  }
+  
+
+#if 0
+  // For a simple config
+  Array<ConfigVarDeclaration> variables = def->variables;
+  Array<Token> variableNames = Extract(variables,temp,&ConfigVarDeclaration::name);
+#endif
+
+  
+
+/*
+#if 0  
+  LEFT HERE - For composite units we probably want to instantiate stuff directly.
+            - We probably want some interface where we can instantiate a ConfigFunction for a given set of arguments.
+
+  Something like:
+
+  if have we configA(x){b.constant = x}
+  and then we have configB(y){c = configA(y)};
+
+  we probably want to be able to instantiate configA such that we end up producing something that is similar to:
+
+  configBInst(y){c.constant = y};
+
+  Furthermore, when we end up on the code generation part of the code, I probably want a function that maps from a given full configuration into the associated expression to access the config structure.
+
+  Basically transforms something like 'c.constant' into the expression 'mergeConfig->c.constant' except that we must be able to handle both merge stuff and also composite stuff.
+
+  Remember, there is no limit to composite structs meaning that we could have something like 'c.constant' transform into something like 'a.b.c.constant'
+#endif
+*/
+  
+  return nullptr;  
 }

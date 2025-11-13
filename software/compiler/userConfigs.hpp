@@ -60,4 +60,5 @@ struct ConfigFunction{
   FUDeclaration* decl; // Every config function is associated to one declaration.
 };
 
+// Can fail (parsed data is validated in here)
 ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration);
