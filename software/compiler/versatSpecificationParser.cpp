@@ -1598,7 +1598,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
 
         for(Token arg : func.arguments){
           if(!Contains(variableNames,arg)){
-            printf("\t[Error] Symbol '%.*s' does not exist)\n",UN(arg));
+            printf("\t[Error] Symbol '%.*s' does not exist\n",UN(arg));
             exit(-1);
           }
         }
@@ -1628,7 +1628,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
         
         for(Token tok : symbolicTokens){
           if(IsIdentifier(tok) && !Contains(variableNames,tok)){
-            printf("\t[Error] Symbol '%.*s' does not exist)\n",UN(tok));
+            printf("\t[Error] Symbol '%.*s' does not exist\n",UN(tok));
             exit(-1);
           }
         }

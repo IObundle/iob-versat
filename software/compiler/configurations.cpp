@@ -307,12 +307,6 @@ void IncrementPartitions(Array<Partition> partitions,int amount){
   }
 }
 
-FUDeclaration* GetAssociatedType(Array<Partition> parts){
-  for(Partition p : parts){
-    
-  }
-}
-
 String GetName(Array<Partition> partitions,Arena* out){
   TEMP_REGION(temp,out);
   auto builder = StartString(temp);

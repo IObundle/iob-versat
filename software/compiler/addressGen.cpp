@@ -132,7 +132,7 @@ void Repr(StringBuilder* builder,AddressAccess* access){
   builder->PushString("\n");
 }
 
-String Repr(Arena* out,AddressAccess* access){
+String PushRepr(Arena* out,AddressAccess* access){
   TEMP_REGION(temp,out);
   
   // TODO: Performance
