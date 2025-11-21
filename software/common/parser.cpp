@@ -402,7 +402,7 @@ Token Tokenizer::AssertNextToken(String format){
     }
     printf("^\n");
 
-    DEBUG_BREAK();
+    DEBUG_BREAK_OR_EXIT();
   }
 
   return token;

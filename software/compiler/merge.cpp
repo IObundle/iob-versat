@@ -2972,8 +2972,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   
   for(int i = 0; i < size; i++){
     decl->info.infos[i].baseType = types[i];
-    
-    DEBUG_BREAK();
     decl->info.infos[i].userFunctions = types[i]->userFunctions;
     
     AccelInfoIterator iter = StartIteration(&decl->info);

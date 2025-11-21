@@ -335,7 +335,7 @@ int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values){
 
     if(right == 0){
       PRINTF_WITH_LOCATION("Division by zero\n");
-      DEBUG_BREAK();
+      DEBUG_BREAK_OR_EXIT();
       return 0;
     }
 
@@ -996,8 +996,8 @@ void CheckIfSymbolicExpressionsShareNodes(SymbolicExpression* left,SymbolicExpre
   for(SymbolicExpression* x : allLeft){
     for(SymbolicExpression* y : allRight){
       if(x == y){
-        DEBUG_BREAK();
-        Assert(false);
+        printf("Node sharing on symbolic expressions\n");
+        DEBUG_BREAK_OR_EXIT();
       }
     }
   }

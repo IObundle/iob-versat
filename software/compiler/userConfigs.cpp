@@ -266,8 +266,6 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
         // TODO: Report error here. Parse function must return the error somewhat.
         return nullptr;
       }
-
-
     }
   }
   

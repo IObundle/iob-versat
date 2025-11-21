@@ -189,6 +189,13 @@ if(_){ \
 
 #define DEBUG_BREAK() DEBUG_BREAK_IF(true)
 
+#define DEBUG_BREAK_OR_EXIT() \
+  if(currentlyDebugging) { \
+    DEBUG_BREAK(); \
+  } else { \
+    exit(-1); \
+  }
+
 #define WARN_CODE() do{ \
     once{ \
       printf("\n\n===========\n"); \
