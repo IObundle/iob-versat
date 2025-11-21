@@ -3,6 +3,7 @@
 #include "parser.hpp"
 
 struct FUDeclaration;
+struct SymbolicExpression;
 
 // Move user configuration functions here.
 
@@ -55,6 +56,11 @@ bool IsNextTokenConfigFunctionStart(Tokenizer* tok);
 
 // ============================================================================
 // Instantiation and manipulation
+
+struct ConfigAssignment{
+  String lhs;
+  SymbolicExpression* rhs;
+};
 
 struct ConfigFunction{
   FUDeclaration* decl; // Every config function is associated to one declaration.

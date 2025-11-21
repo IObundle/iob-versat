@@ -1771,8 +1771,6 @@ bool CanBeFlattened(Accelerator* accel){
   return false;
 }
 
-// LEFT HERE - Do not care about mapping. We first want to be able to create the recons. Worry about mapping later.
-
 FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex){
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);

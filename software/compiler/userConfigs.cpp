@@ -243,20 +243,32 @@ bool IsNextTokenConfigFunctionStart(Tokenizer* tok){
 // Instantiation and manipulation
 
 ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration){
-  TEMP_REGION(temp,globalPermanent);
+  Arena* perm = globalPermanent;
+
+  TEMP_REGION(temp,perm);
 
   for(ConfigStatement* stmt : def->statements){
     ConfigIdentifier id = stmt->lhs;
     Token name = id.name;
     Token wireName = id.wire;
 
+    String functionName = {};
+    
     if(Empty(wireName)){
       // Function invocation only.
+      
+      
+    } else {
+      // Symbolic Expression
+      SymbolicExpression* expr = ParseSymbolicExpression(stmt->rhs,perm);
+      
+      if(!expr){
+        // TODO: Report error here. Parse function must return the error somewhat.
+        return nullptr;
+      }
+
+
     }
-    
-    
-    
-    //stmt->
   }
   
 
@@ -265,8 +277,6 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
   Array<ConfigVarDeclaration> variables = def->variables;
   Array<Token> variableNames = Extract(variables,temp,&ConfigVarDeclaration::name);
 #endif
-
-  
 
 /*
 #if 0  
