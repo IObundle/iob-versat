@@ -1,0 +1,6 @@
+// DESCRIPTION: Verilator output: Waivers generated with --waiver-output
+
+`verilator_config
+
+// Unused module input: keep to match Databus Interface
+lint_off -rule UNUSEDSIGNAL -file "**/DebugWriteMem.v" -match "Signal is not used: 'databus_rdata_0'*"

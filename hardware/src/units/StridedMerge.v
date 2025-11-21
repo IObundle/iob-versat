@@ -75,7 +75,7 @@ module StridedMerge #(
             if (delay == 1) begin
                delay2 <= stride;
             end
-         end else if (delay == 0) begin
+         end else begin
             if (|delay2) begin
                delay2 <= delay2 - 1;
             end

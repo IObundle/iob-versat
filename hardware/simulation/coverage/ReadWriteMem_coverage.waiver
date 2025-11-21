@@ -1,0 +1,45 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// ReadWriteMem verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive my_iob_dp_ram.v:1:79 "Waive Memory Module"
+waive my_dp_asym_ram.v:1:178 "Waive Memory Module"
+
+waive ReadWriteMem.v:50 "unused output port, kept to match standard memory interface"
+waive ReadWriteMem.v:53 "unused output port, kept to match standard memory interface"
+
+waive SuperAddress.v:29 "ignore_first_i is always 0"
+waive SuperAddress.v:41:51 "inputs always 0"
+waive SuperAddress.v:65:68 "Inputs always 0"
+waive SuperAddress.v:70:72 "Inputs always 1"
+waive SuperAddress.v:75 "Input always 1"
+waive SuperAddress.v:79 "Input always 1"
+waive SuperAddress.v:114 "ignore is always 0, since ignore_first_i is 0"
+waive SuperAddress.v:155 "ignore is always 0"
+waive SuperAddress.v:161 "ignore is always 0"
+waive SuperAddress.v:166:212 "cases never happen, per2, iter2, per3, iter3 always 0"
+waive SuperAddress.v:259:261 "branch condition never toggles, databus_lentgth always 0"
+waive SuperAddress.v:264:279 "states cases never happen, databus_lentgth always 0"
+
+waive SuperAddress.v:61 "doneDatabus is always 1, since status is always 0"
+waive SuperAddress.v:76:78 "databus output is always 0, since databus_length is always 0"
+waive SuperAddress.v:223:224 "status is always 0, since databus_length is always 0"
+waive SuperAddress.v:230 "status is always 0, since databus_length is always 0"
+waive SuperAddress.v:248 "status is always 0, since databus_length is always 0"
+waive SuperAddress.v:259:279 "status is always 0, since databus_length is always 0"
+
+waive SuperAddress.v:86:87 "iter2, iter3, per2, per3 always 0, since configs are always 0"
+waive SuperAddress.v:91:95 "conditions never toggle, configurations are always 0"
+waive SuperAddress.v:102 "cases never toggle most significant bits, configs are always 0"
+
+waive SuperAddress.v:152 "ready never toggles on this branch, always 1"
+
+waive CountNLoops.v:14 "count is always 0"
+waive CountNLoops.v:17 "advance is always 0"
+waive CountNLoops.v:25 "count is always 0"
+waive CountNLoops.v:34 "count is always 0"
+waive CountNLoops.v:37:40 "count is always 0"

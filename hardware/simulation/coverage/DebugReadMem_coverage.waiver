@@ -1,0 +1,11 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// DebugReadMem verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive SimHelper_DatabusMem.v:1:94 "Waive Helper Module"
+
+waive DebugReadMem.v:27:29 "Write, wstrb and len signals are constant"

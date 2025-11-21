@@ -1,0 +1,12 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// DebugWriteMem verilator coverage waivers
+
+// waiver structure:
+// waive filename:line[:line] [reason]
+waive SimHelper_DatabusMem.v:1:94 "Waive Helper Module"
+
+waive DebugWriteMem.v:26 "Unused rdata input"
+waive DebugWriteMem.v:28 "Databus always used for write"

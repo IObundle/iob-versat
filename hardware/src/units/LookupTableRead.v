@@ -192,6 +192,8 @@ module LookupTableRead #(
       end
    end
 
+   wire result_ready_int = ~rst;
+
    JoinTwoHandshakes #(
       .FIRST_DATA_W(ADDR_W),
       .SECOND_DATA_W(AXI_DATA_W)
@@ -205,7 +207,7 @@ module LookupTableRead #(
       .second_data_i(databus_rdata_0),
 
       .result_valid_o(write_en),
-      .result_ready_i(1'b1),
+      .result_ready_i(result_ready_int),
       .result_first_data_o(write_addr),
       .result_second_data_o(write_data),
 

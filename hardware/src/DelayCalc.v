@@ -29,7 +29,7 @@ module DelayCalc #(
       end else if(running) begin
          if (delay == 0) begin
             done <= 1'b1;
-         end else if(!done) begin
+         end else begin
             delay <= delay - 1;
          end
       end

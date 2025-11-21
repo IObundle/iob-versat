@@ -6,8 +6,8 @@
 lint_off -rule UNUSEDSIGNAL -file "**/ReadWriteMem.v" -match "Signal is not used: 'ext_dp_in_0_port_0'"
 
 // Unused submodule outputs
-lint_off -rule PINCONNECTEMPTY -file "**/ReadWriteMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/ReadWriteMem.v" -match "Instance pin connected by name with empty reference: 'store_o'"
 
-lint_off -rule PINCONNECTEMPTY -file "**/ReadWriteMem.v" -match "Cell pin connected by name with empty reference: 'store_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/ReadWriteMem.v" -match "Instance pin connected by name with empty reference: 'store_o'"
 
-lint_off -rule PINCONNECTEMPTY -file "**/ReadWriteMem.v" -match "Cell pin connected by name with empty reference: 'valid_o'"
+lint_off -rule PINCONNECTEMPTY -file "**/ReadWriteMem.v" -match "Instance pin connected by name with empty reference: 'valid_o'"
