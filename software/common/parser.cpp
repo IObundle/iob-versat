@@ -402,7 +402,7 @@ Token Tokenizer::AssertNextToken(String format){
     }
     printf("^\n");
 
-    DEBUG_BREAK();
+    DEBUG_BREAK_OR_EXIT();
   }
 
   return token;
@@ -741,6 +741,29 @@ TokenizerTemplate* Tokenizer::SetTemplate(TokenizerTemplate* tmpl){
   TokenizerTemplate* old = this->tmpl;
   this->tmpl = tmpl;
   return old;
+}
+
+bool IsIdentifier(String str){
+  auto CheckSingle = [](char ch){
+    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
+  };
+
+  if(str.size <= 0){
+    return false;
+  }
+
+  if(!CheckSingle(str.data[0])){
+    return false;
+  }
+
+  for(int i = 1; i < str.size; i++){
+    char ch = str.data[i];
+    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool IsOnlyWhitespace(String tok){

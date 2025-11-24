@@ -144,3 +144,18 @@ bool HasVariableDelay(FUDeclaration* decl){
 
   return false;
 }
+
+// ======================================
+// Declaration inspection
+
+Wire* GetConfigWireByName(FUDeclaration* decl,String name){
+  for(Wire& w : decl->configs){
+    if(w.name == name){
+      return &w;
+    }
+  }
+
+  return nullptr;
+}
+
+

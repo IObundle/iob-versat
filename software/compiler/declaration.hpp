@@ -3,6 +3,7 @@
 #include "configurations.hpp"
 #include "addressGen.hpp"
 #include "verilogParsing.hpp"
+#include "versatSpecificationParser.hpp"
 
 struct FUInstance;
 struct FUDeclaration;
@@ -36,6 +37,54 @@ enum FUDeclarationType{
 struct Parameter{
   String name;
   SymbolicExpression* valueExpr;
+};
+
+enum UserConfigType{
+  UserConfigurationType_CONFIG,
+  UserConfigurationType_MEM,
+  UserConfigurationType_STATE
+};
+
+enum UserConfigStatementType{
+  UserConfigStatementType_SIMPLE,
+  UserConfigStatementType_COMPLEX
+};
+
+struct UserConfigStatement{
+  UserConfigStatementType type;
+
+  union {
+    struct {
+      String inst;
+      String wire;
+      SymbolicExpression* expr;
+    } simple;
+    
+    struct {
+      String inst;
+      Array<String> accesses;
+    } function;
+  };
+};
+
+enum ConfigVariableType{
+  ConfigVariableType_INTEGER,
+  ConfigVariableType_POINTER
+};
+
+struct ConfigVariable{
+  ConfigVariableType type;
+  String name;
+};
+
+struct UserConfigFunction{
+  UserConfigType type;
+  
+  String name;
+  Array<ConfigVariable> variables;
+  // For now, only tackling config.
+  // TODO: Union
+  Array<UserConfigStatement> configs;
 };
 
 // TODO: A lot of duplicated data exists since the change to merge.
@@ -73,14 +122,16 @@ struct FUDeclaration{
   // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
   Accelerator* baseCircuit; // For merge, baseCircuit contains muxes but not buffers.
   Accelerator* fixedDelayCircuit;
-  Accelerator* flattenedBaseCircuit
-;
+  Accelerator* flattenedBaseCircuit;
   
   String operation;
 
   SubMap* flattenMapping;
 
   AddressGenInst supportedAddressGen;
+  
+  // TODO: Compile config function into a easier to use form.
+  Array<UserConfigFunction> userFunctions;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
@@ -165,6 +216,10 @@ FUDeclaration* GetTypeByName(String str);
 FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
-
 // Because of merge, we need units that can delay the datapath for different values depending on the datapath that is being configured.
 bool HasVariableDelay(FUDeclaration* decl);
+
+// ======================================
+// Declaration inspection
+
+Wire* GetConfigWireByName(FUDeclaration* decl,String name);

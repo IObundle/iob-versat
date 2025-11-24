@@ -96,6 +96,41 @@ struct InstanceInfo{
   StructInfo* structInfo;
 };
 
+struct UserConfigFunction;
+
+/*
+
+What problem are we trying to solve?
+
+When an accelerator contains multiple merged units, we view it as a single partition that contains each unit activated to a single type.
+
+If we have Module {A,B} where A = a | b and X = x | y, then we have 4 merge partitions: (a,x),(a,y),(b,x),(b,y).
+
+Each partition contains two activated types at the same time. The first partition (a,x) contains the activated type a for the unit A and the activated type x for the unit B.
+
+If a contains a user function and x contains a user function then this "partition" contains two user functions. One that activates the a side of the A unit and configures it and the other that activates the x side of the B unit and configures it.
+
+Which means that:
+
+  Activating one merge unit cannot change the activation of another merge unit. They need to be separated. 
+
+Info that is tied to an unit is stored inside the InstanceInfo.
+Info that is tied to a merge unit is stored inside each MergePartition.
+
+What about info that is tied to a module?
+If a module contains two merged units (of size 2) how do I save info that is tied to that unit?
+
+The thing is that I can tie info to the unit by putting it into InstanceInfo.
+  The problem is that we now have two ways of tying the UserConfig into units. The InstanceInfo and MergePartition way.
+
+Maybe I can uplift this if we change ConfigFunctions to contain the merge index that is associated to. We can also have the struct contain the name of the unit instead of putting directly to it.
+
+As long as the userFunctions can be instantiated for a given configuration 
+
+For now, lets process to handle Composite units first and then we can tackle the merge stuff.
+
+*/
+
 struct MergePartition{
   String name; // For now this appears to not affect anything.
   Array<InstanceInfo> info;
@@ -105,6 +140,8 @@ struct MergePartition{
   FUDeclaration* baseType;
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
+  
+  Array<UserConfigFunction> userFunctions;
 
   Accelerator* recon;
   

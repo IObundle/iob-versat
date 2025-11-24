@@ -108,6 +108,7 @@ volatile AcceleratorStatic* accelStatic = (volatile AcceleratorStatic*) &staticB
 // Utilities
 
 #define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
+#pragma GCC poison printf // Do not call printf, call PRINT
 
 // TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
 #ifdef TRACE
@@ -452,6 +453,175 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   return 0;
 }
 
+VersatAddressSimState StartAddressSimulation(AddressGenArguments* args){
+   VersatAddressSimState state = {};
+   state.args = args;
+   state.address  = args->start;
+   state.address2 = args->start;
+   state.address3 = args->start;
+
+   return state;
+}
+
+int GetAddress(VersatAddressSimState* state){
+   return state->address;
+}
+
+int GetIndex(VersatAddressSimState* state){
+   return state->index;
+}
+
+void Advance(VersatAddressSimState* state){
+
+   #define NORM(VAL) ((VAL == 0 ? 1 : VAL))
+
+   AddressGenArguments* args = state->args;
+
+   if(state->finished){
+      return;
+   }
+
+   if(state->per <= args->duty){
+      state->address += args->incr;
+      state->index += 1;
+   }
+   state->per += 1;
+
+   if(state->per >= args->per){
+      state->per = 0;
+      state->iter += 1;
+      state->address += args->shift - args->incr;
+   } else {
+      return;
+   }
+
+   if(state->iter >= NORM(args->iter)){
+      state->iter = 0;
+      state->per2 += 1;
+      state->address2 += args->incr2;
+      state->address = state->address2;
+   } else {
+      return;
+   }
+
+   if(state->per2 >= NORM(args->per2)){
+      state->per2 = 0;
+      state->iter2 += 1;
+      state->address2 += args->shift2 - args->incr2;
+   } else {
+      return;
+   }
+
+   if(state->iter2 >= NORM(args->iter2)){
+      state->iter2 = 0;
+      state->per3 += 1;
+      state->address3 += args->incr3;
+      state->address2 = state->address3;
+      state->address = state->address2;
+   } else {
+      return;
+   }
+
+   if(state->per3 >= NORM(args->per3)){
+      state->per3 = 0;
+      state->iter3 += 1;
+      state->address3 += args->shift3 - args->incr3;
+   } else {
+      return;
+   }
+
+   if(state->iter3 >= NORM(args->iter3)){
+      state->iter3 = 0;
+      state->finished = true;
+   } else {
+      return;
+   }
+
+   #undef NORM
+}
+
+bool IsValid(VersatAddressSimState* state){
+   return !state->finished;
+}
+
+#define NORM(VAL) ((VAL == 0 ? 1 : VAL))
+int TotalSize(AddressVArguments* args){
+   int index = 0;
+   for(int iter3 = 0; iter3 < NORM(args->iter3); iter3 += 1){
+      for(int per3 = 0; per3 < NORM(args->per3); per3 += 1){
+         for(int iter2 = 0; iter2 < NORM(args->iter2); iter2 += 1){
+            for(int per2 = 0; per2 < NORM(args->per2); per2 += 1){
+               for(int iter = 0; iter < NORM(args->iter); iter += 1){
+                  for(int per = 0; per < args->per; per += 1){
+                     if(per <= args->duty){
+                        index += 1;
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+   return index;
+}
+
+void Simulate(AddressVArguments* args,int* buffer){
+   int address = args->start;
+   int address2 = args->start;
+   int address3 = args->start;
+   int index = 0;
+
+   for(int iter3 = 0; iter3 < NORM(args->iter3); iter3 += 1){
+      for(int per3 = 0; per3 < NORM(args->per3); per3 += 1){
+         address2 = address3;
+         for(int iter2 = 0; iter2 < NORM(args->iter2); iter2 += 1){
+            for(int per2 = 0; per2 < NORM(args->per2); per2 += 1){
+               address = address2;
+               for(int iter = 0; iter < NORM(args->iter); iter += 1){
+                  for(int per = 0; per < args->per; per += 1){
+                     if(per <= args->duty){
+                        buffer[index] = address;                        
+
+                        address += args->incr;
+                        index += 1;
+                     }
+                  }
+                  address += args->shift - args->incr;
+               }
+               address2 += args->incr2;
+            }
+            address2 += args->shift2 - args->incr2;
+         }
+         address3 += args->incr3;
+      }
+      address3 += args->shift3 - args->incr3;
+   }
+}
+#undef NORM
+
+void SimulateAndPrintAddressGen2(AddressVArguments args){
+   int bufferSize = TotalSize(&args);
+   int* buffer = (int*) malloc(sizeof(int) * bufferSize);
+   
+   Simulate(&args,buffer);
+   
+   PRINT("Total transfers: %ld\n",(args.amount_minus_one + 1) * args.length);   
+   PRINT("Number of samples: %d\n",bufferSize);   
+
+   // TODO: We need to allow the user to print out stuff based on a flag, because sometimes we just want the total transfers and total samples.
+#if 0
+   for(int i = 0; i < bufferSize; i++){
+      iptr addr = (iptr) buffer[i];
+      iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
+
+      PRINT("%d : %ld\n",i,(address - args.ext_addr) / 4);
+   }
+#endif
+   
+   free(buffer);
+}
+
+// TODO: Cleanup all these simulation stuff. We can provide a much cleaner interface and hassle free when we finish the new API stuff
 SimulateVReadResult SimulateVRead(AddressVArguments args){
    SimulateVReadResult result = {};
 
@@ -694,6 +864,9 @@ end:
 }
 
 void SimulateAndPrintAddressGen(AddressVArguments args){
+   SimulateAndPrintAddressGen2(args);
+   return;
+     
    static VSuperAddress* self = nullptr;
 
    Verilated::traceEverOn(true);
@@ -915,7 +1088,7 @@ void SetVersatDebugPrintfFunction(VersatPrintf function){
 
 static void CheckVersatInitialized(){
   if(!versatInitialized){
-    printf("Versat has not been initialized\n");
+    PRINT("Versat has not been initialized\n");
     fflush(stdout);
     exit(-1);
   }
@@ -963,8 +1136,8 @@ void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + AcceleratorConfigSize);
 
   if(destEndOutsideConfig){
-    printf("VersatMemoryCopy: Destination starts inside config and ends outside\n");
-    printf("This is most likely an error, no transfer is being made\n");
+    PRINT("VersatMemoryCopy: Destination starts inside config and ends outside\n");
+    PRINT("This is most likely an error, no transfer is being made\n");
     return;
   }
   

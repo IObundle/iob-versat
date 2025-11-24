@@ -394,6 +394,12 @@ Hashmap<T,P>* PushHashmapFromList(Arena* out,ArenaList<Pair<T,P>>* list){
 }
 
 template<typename T>
+bool Empty(Array<T> arr){
+  bool empty = (arr.size == 0);
+  return empty;
+}
+
+template<typename T>
 bool Empty(ArenaList<T>* list){
   if(list == nullptr){
     return true;

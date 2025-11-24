@@ -189,6 +189,13 @@ if(_){ \
 
 #define DEBUG_BREAK() DEBUG_BREAK_IF(true)
 
+#define DEBUG_BREAK_OR_EXIT() \
+  if(currentlyDebugging) { \
+    DEBUG_BREAK(); \
+  } else { \
+    exit(-1); \
+  }
+
 #define WARN_CODE() do{ \
     once{ \
       printf("\n\n===========\n"); \
@@ -434,6 +441,11 @@ inline bool operator==(String first,String second){
       }
    }
    return true;
+}
+
+inline bool operator!=(String first,String second){
+  bool res = !operator==(first,second);
+  return res;
 }
 
 template<typename T>

@@ -13,6 +13,9 @@
 
 static Pool<Accelerator> accelerators;
 
+// ======================================
+// Accelerator creation
+
 Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose){
   static int globalID = 0;
   Accelerator* accel = accelerators.Alloc();
@@ -28,13 +31,9 @@ Accelerator* CreateAccelerator(String name,AcceleratorPurpose purpose){
 }
 
 bool NameExists(Accelerator* accel,String name){
-  for(FUInstance* ptr : accel->allocated){
-    if(ptr->name == name){
-      return true;
-    }
-  }
-
-  return false;
+  FUInstance* inst = GetUnit(accel,name);
+  bool res = (inst != nullptr);
+  return res;
 }
 
 String GenerateNewValidName(Accelerator* accel,String base,Arena* out){
@@ -192,6 +191,15 @@ FUInstance* CopyInstance(Accelerator* accel,FUInstance* oldInstance,bool preserv
   newInst->debug = oldInstance->debug;
   
   return newInst;
+}
+
+FUInstance* GetUnit(Accelerator* accel,String name){
+  for(FUInstance* inst : accel->allocated){
+    if(inst->name == name){
+      return inst;
+    }
+  }
+  return nullptr;
 }
 
 Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int mimimumAmount,Arena* out){
@@ -1752,11 +1760,6 @@ void PrintSubMappingInfo(SubMap* info){
   }
 }
 
-
-
-// ============================================================================
-// MARKED
-
 bool CanBeFlattened(Accelerator* accel){
   for(FUInstance* inst : accel->allocated){
     bool containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
@@ -1767,8 +1770,6 @@ bool CanBeFlattened(Accelerator* accel){
 
   return false;
 }
-
-// LEFT HERE - Do not care about mapping. We first want to be able to create the recons. Worry about mapping later.
 
 FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex){
   TEMP_REGION(temp,nullptr);

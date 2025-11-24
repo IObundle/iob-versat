@@ -1,9 +1,10 @@
 #pragma once
 
-#include "symbolic.hpp"
 #include "merge.hpp"
 
 #include "embeddedData.hpp"
+
+struct ConfigFunctionDef;
 
 typedef Hashmap<String,FUInstance*> InstanceTable;
 typedef Set<String> InstanceName;
@@ -110,6 +111,7 @@ struct ModuleDef : public DefBase{
   Array<VarDeclaration> inputs;
   Array<InstanceDeclaration> declarations;
   Array<ConnectionDef> connections;
+  Array<ConfigFunctionDef> configs;
 };
 
 struct MergeDef : public DefBase{
@@ -120,15 +122,15 @@ struct MergeDef : public DefBase{
 
 struct AddressGenForDef{
   Token loopVariable;
-  SymbolicExpression* start;
-  SymbolicExpression* end;
+  Array<Token> startSym;
+  Array<Token> endSym;
 };
 
 struct AddressGenDef : public DefBase{
   AddressGenType type;
   Array<Token> inputs;
   Array<AddressGenForDef> loops;
-  SymbolicExpression* symbolic;
+  Array<Token> symbolicTokens;
 };
 
 struct ConstructDef{
@@ -152,8 +154,6 @@ struct HierarchicalName{
   Var subInstance;
 };
 
-struct SymbolicExpression;
-
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
 void ReportError(String content,Token faultyToken,String error);
@@ -165,7 +165,7 @@ Array<Token> AddressGenUsed(ConstructDef def,Array<ConstructDef> allConstructs,A
 
 Array<ConstructDef> ParseVersatSpecification(String content,Arena* out);
 
-FUDeclaration* InstantiateBarebonesSpecifications(String content,ConstructDef def);
+// TODO: Move this function to a better place, no reason to be inside spec parser
 FUDeclaration* InstantiateSpecifications(String content,ConstructDef def);
 
 Opt<AddressGenDef> ParseAddressGen(Tokenizer* tok,Arena* out);

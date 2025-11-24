@@ -115,6 +115,25 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args);
 SimulateVReadResult SimulateVRead(AddressVArguments args);
 void SimulateAndPrintAddressGen(AddressVArguments args);
 
+typedef struct{
+   int address;
+   int address2;
+   int address3;
+   int index;
+
+   int iter3,iter2,iter;
+   int per3,per2,per;
+   
+   AddressGenArguments* args;
+   bool finished;
+} VersatAddressSimState;
+
+VersatAddressSimState StartAddressSimulation(AddressGenArguments* args);
+int GetAddress(VersatAddressSimState* state);
+int GetIndex(VersatAddressSimState* state);
+void Advance(VersatAddressSimState* state);
+bool IsValid(VersatAddressSimState* state);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
@@ -175,6 +194,11 @@ static bool forceDoubleLoop = false;
 static bool forceSingleLoop = false;
 
 @{allAddrGen}
+
+// ============================================================================
+// User configuration functions, user defined inside the specification file
+
+@{userConfigFunctions}
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
 

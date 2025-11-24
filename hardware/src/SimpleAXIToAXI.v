@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module SimpleAXItoAXI #(
+module SimpleAXIToAXI #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter AXI_LEN_W  = 8,
@@ -98,7 +98,7 @@ module SimpleAXItoAXI #(
       .rst_i(rst_i)      
    );
 
-   SimpleAXItoAXIWrite #(
+   SimpleAXIToAXIWrite #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
       .AXI_ID_W  (AXI_ID_W),
@@ -138,7 +138,7 @@ module SimpleAXItoAXI #(
       .rst_i(rst_i)
    );
 
-   SimpleAXItoAXIRead #(
+   SimpleAXIToAXIRead #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
       .AXI_ID_W  (AXI_ID_W),

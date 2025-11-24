@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module SimpleAXItoAXIRead #(
+module SimpleAXIToAXIRead #(
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
    parameter AXI_LEN_W  = 8,

@@ -56,7 +56,7 @@ CAST* CEmitter::FindFirstCASTType(CASTType type,bool errorIfNotFound){
     for(int i = 0; i < top; i++){
       printf("%.*s\n",UN(Repr(buffer[i]->type)));
     }
-    DEBUG_BREAK();
+    DEBUG_BREAK_OR_EXIT();
   }
     
   return nullptr;

@@ -34,7 +34,7 @@ void ReportError(String content,Token faultyToken,String error){
   printf("%.*s\n",UN(loc));
   printf("\n");
 
-  DEBUG_BREAK();
+  DEBUG_BREAK_OR_EXIT();
 }
 
 void ReportError(Tokenizer* tok,Token faultyToken,String error){
@@ -80,8 +80,7 @@ bool _ExpectError(Tokenizer* tok,String expected){
     auto builder = StartString(temp);
     builder->PushString("Parser Error.\n Expected to find:  '");
     builder->PushString(PushEscapedString(temp,expected,' '));
-    builder->PushString("'\n");
-    builder->PushString("  Got:");
+    builder->PushString("'\n  Got:");
     builder->PushString(PushEscapedString(temp,got,' '));
     builder->PushString("\n");
     String text = EndString(temp,builder);
@@ -603,7 +602,7 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
     isDefineMap = false;
   } else {
     printf("Should not be possible to reach this point\n");
-    DEBUG_BREAK();
+    DEBUG_BREAK_OR_EXIT();
   }
 
   Token mapName = tok->NextToken();

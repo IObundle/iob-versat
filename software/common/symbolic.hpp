@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils.hpp"
+#include "parser.hpp"
 
 // TODO: The logic in relation to negative is becoming a bit tiring. If we need to keep expanding this code, might need to find some pattern to simplify things. The main problem is when the structure is changed by any of the functions, in these cases the logic for how negativity is preserved is more complicated than simply copying what we already have.
 
@@ -10,6 +11,9 @@
 
 struct Tokenizer;
 struct Arena;
+
+// ============================================================================
+// Symbolic Expressions
 
 enum SymbolicExpressionType{
   SymbolicExpressionType_LITERAL,
@@ -62,14 +66,60 @@ struct MultPartition{
   SymbolicExpression* leftovers;
 }; 
 
-void Print(SymbolicExpression* expr,bool printNewLine = false);
-void Repr(StringBuilder* builder,SymbolicExpression* expr);
-char* DebugRepr(SymbolicExpression* expr);
-String PushRepresentation(SymbolicExpression* expr,Arena* out);
+// ============================================================================
+// Loop Linear Sum
+
+struct LoopLinearSumTerm{
+  String var;
+  SymbolicExpression* term;
+  SymbolicExpression* loopStart;
+  SymbolicExpression* loopEnd;
+};
+
+// A Sum of expressions in the form term * X + term * Y + term * Z + ... + constant, where X,Y and Z are loop variables that range from a start expression to a end expression.
+struct LoopLinearSum{
+  // 0 is the innermost and size-1 the outermost loop
+  Array<LoopLinearSumTerm> terms;
+  SymbolicExpression* freeTerm;
+};
+
+// ======================================
+// Globals
+
+extern SymbolicExpression* SYM_zero;
+extern SymbolicExpression* SYM_one;
+extern SymbolicExpression* SYM_two;
+extern SymbolicExpression* SYM_eight;
+extern SymbolicExpression* SYM_thirtyTwo;
+extern SymbolicExpression* SYM_dataW;
+extern SymbolicExpression* SYM_addrW;
+extern SymbolicExpression* SYM_axiAddrW;
+extern SymbolicExpression* SYM_axiDataW;
+extern SymbolicExpression* SYM_delayW;
+extern SymbolicExpression* SYM_lenW;
+extern SymbolicExpression* SYM_axiStrobeW;
+extern SymbolicExpression* SYM_dataStrobeW;
+
+// ======================================
+// Representation
+
+void   Print(SymbolicExpression* expr,bool printNewLine = false);
+void   Repr(StringBuilder* builder,SymbolicExpression* expr);
+String PushRepr(Arena* out,SymbolicExpression* expr);
+char*  DebugRepr(SymbolicExpression* expr);
+
+// ======================================
+// High level representation compilation
 
 Array<SymbolicReprAtom> CompileRepresentation(SymbolicExpression* expr,Arena* out);
 
+// ======================================
+// Evaluation, mostly debugging purposes for now.
+
 int Evaluate(SymbolicExpression* expr,Hashmap<String,int>* values);
+
+// ======================================
+// Low level symbolic building blocks
 
 SymbolicExpression* PushLiteral(Arena* out,int value,bool negate = false);
 SymbolicExpression* PushVariable(Arena* out,String name,bool negate = false);
@@ -85,22 +135,35 @@ SymbolicExpression* SymbolicDiv(SymbolicExpression* top,SymbolicExpression* bott
 
 SymbolicExpression* SymbolicFunc(String functionName,Array<SymbolicExpression*> terms,Arena* out);
 
+// ======================================
+// Parsing
+
+Array<Token> TokenizeSymbolicExpression(Tokenizer* tok,Arena* out);
+
+SymbolicExpression* ParseSymbolicExpression(Array<Token> tokens,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);
 
-SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out);
+// ======================================
+// Low level manipulation
 
 // Use this function to get the literal value of a literal type expression, takes into account negation.
 int GetLiteralValue(SymbolicExpression* expr);
+Array<String> GetAllSymbols(SymbolicExpression* expr,Arena* out);
 
 bool ExpressionEqual(SymbolicExpression* left,SymbolicExpression* right);
 bool IsZero(SymbolicExpression* expr);
+
+SymbolicExpression* SymbolicDeepCopy(SymbolicExpression* expr,Arena* out);
 
 // Must call normalizeLiteral before calling this.
 // Furthermore, the negative is removed from leftovers and pushed onto the literal (base)
 MultPartition CollectTermsWithLiteralMultiplier(SymbolicExpression* expr,Arena* out);
 
 MultPartition PartitionMultExpressionOnVariable(SymbolicExpression* expr,String variableToPartition,Arena* out);
+
+// ======================================
+// High level symbolic manipulations 
 
 SymbolicExpression* NormalizeLiterals(SymbolicExpression* expr,Arena* out);
 SymbolicExpression* RemoveParenthesis(SymbolicExpression* expr,Arena* out);
@@ -121,29 +184,22 @@ SymbolicExpression* Group(SymbolicExpression* expr,String variableToGroupWith,Ar
 
 void TestSymbolic();
 
-Array<String> GetAllSymbols(SymbolicExpression* expr,Arena* out);
+// ============================================================================
+// LoopLinearSums
 
 // Expr must be a sum of mul. Assuming that variableName only appears once. TODO: Probably would be best to create a function that first groups everything so that variableName only appears once and then call this function. Or maybe do the grouping inside here if needed.
 // TODO: This function is kinda not needed. We only use it to break apart a symbolic expression into a LoopLinearSumTerm, but even then we can do it better because we know the format of the variables inside the symbolic expression and we could simplify this.
 Opt<SymbolicExpression*> GetMultExpressionAssociatedTo(SymbolicExpression* expr,String variableName,Arena* out);
 
-struct LoopLinearSumTerm{
-  String var;
-  SymbolicExpression* term;
-  SymbolicExpression* loopStart;
-  SymbolicExpression* loopEnd;
-};
-
-// A Sum of expressions in the form term * X + term * Y + term * Z + ... + constant, where X,Y and Z are loop variables that range from a start expression to a end expression.
-struct LoopLinearSum{
-  // 0 is the innermost and size-1 the outermost loop
-  Array<LoopLinearSumTerm> terms;
-  SymbolicExpression* freeTerm;
-};
+// ======================================
+// Building
 
 LoopLinearSum* PushLoopLinearSumEmpty(Arena* out);
 LoopLinearSum* PushLoopLinearSumFreeTerm(SymbolicExpression* term,Arena* out);
 LoopLinearSum* PushLoopLinearSumSimpleVar(String loopVarName,SymbolicExpression* term,SymbolicExpression* start,SymbolicExpression* end,Arena* out);
+
+// ======================================
+// Manipulation
 
 LoopLinearSum* Copy(LoopLinearSum* in,Arena* out);
 LoopLinearSum* AddLoopLinearSum(LoopLinearSum* inner,LoopLinearSum* outer,Arena* out);
@@ -152,22 +208,8 @@ SymbolicExpression* TransformIntoSymbolicExpression(LoopLinearSum* sum,Arena* ou
 
 SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
+// ======================================
+// Representation
+
 void Print(LoopLinearSum* sum,bool printNewLine = false);
 void Repr(StringBuilder* builder,LoopLinearSum* sum);
-
-// ============================================================================
-// Global special Symbolic Expressions 
-
-extern SymbolicExpression* SYM_zero;
-extern SymbolicExpression* SYM_one;
-extern SymbolicExpression* SYM_two;
-extern SymbolicExpression* SYM_eight;
-extern SymbolicExpression* SYM_thirtyTwo;
-extern SymbolicExpression* SYM_dataW;
-extern SymbolicExpression* SYM_addrW;
-extern SymbolicExpression* SYM_axiAddrW;
-extern SymbolicExpression* SYM_axiDataW;
-extern SymbolicExpression* SYM_delayW;
-extern SymbolicExpression* SYM_lenW;
-extern SymbolicExpression* SYM_axiStrobeW;
-extern SymbolicExpression* SYM_dataStrobeW;
