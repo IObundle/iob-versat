@@ -107,7 +107,7 @@ module iob_versat #(  //the below parameters are used in cpu if includes below
    wire w_last, r_last;
 
    // TODO: To improve performance in later stages, it would be helpful to further separate into current master being served and next master to be served.
-   //       That way, the SimpleAXItoAXI module could be changed to pipeline the transfer calculations for the next master while servicing the current master.
+   //       That way, the SimpleAXIToAXI module could be changed to pipeline the transfer calculations for the next master while servicing the current master.
    MuxNative #(
       .N_SLAVES(IO),
       .ADDR_W  (AXI_ADDR_W),
@@ -147,7 +147,7 @@ wire [AXI_ADDR_W-1:0] temp_axi_araddr_o;
 
 @{AXIAddr}
 
-   SimpleAXItoAXI #(
+   SimpleAXIToAXI #(
       .AXI_ADDR_W(AXI_ADDR_W),
       .AXI_DATA_W(AXI_DATA_W),
       .AXI_ID_W  (AXI_ID_W),
