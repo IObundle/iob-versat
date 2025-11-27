@@ -12,6 +12,7 @@
 #include "addressGen.hpp"
 #include "globals.hpp"
 #include "templateEngine.hpp"
+#include "userConfigs.hpp"
 
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
@@ -3056,59 +3057,79 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
   {
     CEmitter* c = StartCCode(temp);
 
-#if 0
-    for(MergePartition part : info.infos){
-      for(UserConfigFunction func : part.userFunctions){
-        String fullFunctionName = PushString(temp,"%.*s_%.*s",UN(part.name),UN(func.name));
-        c->FunctionBlock("static inline void",fullFunctionName);
-        
-        for(ConfigVariable var : func.variables){
-          FULL_SWITCH(var.type){
-          case ConfigVariableType_INTEGER:{
-            c->Argument("int",var.name);
-          } break;
-          case ConfigVariableType_POINTER:{
-            c->Argument("void*",var.name);
-          } break;
-        }
-        }
-        
-        for(UserConfigStatement stmt : func.configs){
-          String repr = PushRepr(temp,stmt.simple.expr);
-          c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.simple.inst),UN(stmt.simple.wire),UN(repr)));
-        }
-      }
+    bool isMerge = false;
+    if(topLevelDecl->info.infos.size > 1){
+      isMerge = true;
     }
-#endif
 
-    for(UserConfigFunction func : topLevelDecl->userFunctions){
-      String fullFunctionName = PushString(temp,"%.*s_%.*s",UN(topLevelDecl->name),UN(func.name));
-      c->FunctionBlock("static inline void",fullFunctionName);
+    for(MergePartition part : topLevelDecl->info.infos){
+      String mergeName = part.name;
 
-      for(ConfigVariable var : func.variables){
-        FULL_SWITCH(var.type){
-        case ConfigVariableType_INTEGER:{
-          c->Argument("int",var.name);
-        } break;
-        case ConfigVariableType_POINTER:{
-          c->Argument("void*",var.name);
-        } break;
+      for(ConfigFunction* func : part.userFunctions){
+        bool isState = false;
+        if(!Empty(func->structToReturnName)){
+          isState = true;
         }
-      }
-      
-      for(UserConfigStatement stmt : func.configs){
-        FULL_SWITCH(stmt.type){
-        case UserConfigStatementType_SIMPLE:{
-          String repr = PushRepr(temp,stmt.simple.expr);
-          c->Statement(PushString(temp,"accelConfig->%.*s.%.*s = %.*s",UN(stmt.simple.inst),UN(stmt.simple.wire),UN(repr)));
-        } break;
-        case UserConfigStatementType_COMPLEX:{
-          
-          //c->Statement(PushString(temp,"accelConfig->%.*s = %.*s(",UN(stmt.function.inst),));
-        } break;
+
+        c->RawLine("\n");
+        for(String structs : func->newStructs){
+          c->RawLine(structs);
+        }
+        c->RawLine("\n");
+
+        String fullFunctionName = PushString(temp,"%.*s",UN(func->fullName));
+
+        if(Empty(func->structToReturnName)){
+          c->FunctionBlock("static inline void",fullFunctionName);
+        } else {
+          c->FunctionBlock(SF("static inline %.*s",UN(func->structToReturnName)),fullFunctionName);
+        }
+
+        for(String var : func->variables){
+          c->Argument("int",var);
+        }
+
+        String assignStarter = "accelConfig";
+        if(isState){
+          assignStarter = "accelState";
         }
         
+        // Because of merge, need to generate the config pointer that allow us to access the named members directly.
+        if(isMerge){
+          String stmt;
+          if(isState){
+            assignStarter = "state";
+            stmt = PushString(temp,"volatile %.*sState* state = &accelState->%.*s",UN(mergeName),UN(mergeName));
+          } else {
+            assignStarter = "config";
+            stmt = PushString(temp,"volatile %.*sConfig* config = &accelConfig->%.*s",UN(mergeName),UN(mergeName));
+          }
+          
+          c->Statement(stmt);
+        }
 
+        if(isState){
+          c->VarDeclare(func->structToReturnName,"res","{}");
+
+          for(ConfigAssignment assign : func->assignments){
+            String lhs = PushString(temp,"res.%.*s",UN(assign.lhs));
+            String rhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.rhsId));
+
+            c->Assignment(lhs,rhs);
+          }
+
+          c->Return("res");
+        } else {
+          for(ConfigAssignment assign : func->assignments){
+            String lhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.lhs));
+            SymbolicExpression* rhs = assign.rhs;
+            String repr = PushRepr(temp,rhs);
+
+            c->Assignment(lhs,repr);
+          }
+        }
+
+        c->EndBlock();
       }
     }
 

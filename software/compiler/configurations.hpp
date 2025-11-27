@@ -96,7 +96,7 @@ struct InstanceInfo{
   StructInfo* structInfo;
 };
 
-struct UserConfigFunction;
+struct ConfigFunction;
 
 /*
 
@@ -141,7 +141,7 @@ struct MergePartition{
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
   
-  Array<UserConfigFunction> userFunctions;
+  Array<ConfigFunction*> userFunctions;
 
   Accelerator* recon;
   

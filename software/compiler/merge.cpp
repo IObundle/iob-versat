@@ -2972,8 +2972,14 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   
   for(int i = 0; i < size; i++){
     decl->info.infos[i].baseType = types[i];
-    decl->info.infos[i].userFunctions = types[i]->userFunctions;
     
+    auto list = PushArenaList<ConfigFunction*>(temp);
+    for(ConfigFunction* func : types[i]->info.infos[0].userFunctions){
+      *list->PushElem() = func;
+    }
+
+    decl->info.infos[i].userFunctions = PushArrayFromList(globalPermanent,list);
+
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.SetMergeIndex(i);
     

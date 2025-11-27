@@ -10,6 +10,8 @@ struct FUDeclaration;
 struct Accelerator;
 struct Edge;
 struct AccelInfo;
+struct ConfigFunction;
+struct InstanceInfo;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -449,3 +451,25 @@ struct FlattenWithMergeResult{
 
 bool CanBeFlattened(Accelerator* accel);
 FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex);
+
+// ======================================
+// Hierarchical access (WIP)
+
+enum EntityType{
+  EntityType_NODE,
+  EntityType_CONFIG_WIRE,
+  EntityType_STATE_WIRE,
+  EntityType_CONFIG_FUNCTION
+};
+
+struct Entity{
+  EntityType type;
+  InstanceInfo* inst;
+
+  union {
+    Wire* wire;
+    ConfigFunction* func;
+  };
+};
+
+Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr);

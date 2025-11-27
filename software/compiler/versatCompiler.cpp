@@ -244,6 +244,9 @@ void ReportFileCreation(bool allFiles = false){
   }
 }
 
+// TODO: Remove this
+void InitializeUserConfigs();
+
 int main(int argc,char* argv[]){
 #ifdef VERSAT_DEBUG
   printf("Running in debug mode\n");
@@ -267,6 +270,7 @@ int main(int argc,char* argv[]){
   InitializeDefaultData(perm);
   InitializeTemplateEngine(perm);
   InitializeSimpleDeclarations();
+  InitializeUserConfigs();
 
 #if 0
   TestSymbolic();
