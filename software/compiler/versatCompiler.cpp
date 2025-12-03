@@ -601,11 +601,29 @@ int main(int argc,char* argv[]){
       allAddressGens->Insert(t);
     }
 
-    // For now we compile every single address gen that is used but eventually we want to only compile what we need, otherwise the address gen tests will always fail.
     for(String name : allAddressGens){
       ConstructDef def = GetConstructOrFail(name);
 
-      AddressAccess* access = CompileAddressGen(&def.addressGen,content);
+      AddressGenDef a = def.addressGen;
+      
+      SymbolicExpression* expr = ParseSymbolicExpression(a.symbolicTokens,perm);
+
+      auto list = PushArenaList<Token>(temp);
+      for(AddressGenForDef loop : a.loops){
+        *list->PushElem() = loop.loopVariable;
+      }
+      auto allVariables = PushArrayFromList(temp,list);
+
+      // TODO: BAD
+      for(Token tok : a.symbolicTokens){
+        if(IsIdentifier(tok) && !Contains(a.inputs,tok) && !Contains(allVariables,tok)){
+          printf("On address gen: %.*s:%d\n",UN(a.name),a.name.loc.start.line);
+          printf("\t[Error] Symbol '%.*s' inside address expression does not exist (check if name is correct, symbols inside expressions can only be inputs or loop variables)\n",UN(tok));
+          anyError = true;
+        }
+      }
+
+      AddressAccess* access = CompileAddressGen(a.name,a.inputs,a.loops,expr,content);
       
       if(!access){
         anyError = true;

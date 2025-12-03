@@ -2090,6 +2090,7 @@ FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex){
 // Hierarchical access
 
 Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr){
+  // TODO: This function can be simplified.
   FUInstance* currentInstance = nullptr;
 
   AccelInfoIterator iter = StartIteration(info);
@@ -2185,5 +2186,49 @@ Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr){
     }
   }
 
+  if(iter.IsValid()){
+    Entity res = {};
+    res.inst = iter.CurrentUnit();
+    res.type = EntityType_NODE;
+    
+    return res;
+  }
+
   return {};
+}
+
+Env* StartEnvironment(Arena* use){
+  Env* env = PushStruct<Env>(use);
+  env->arena = use;
+  env->variableTypes = PushTrieMap<String,VariableType>(use);
+  return env;
+}
+
+Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr){
+  if(accessExpr.size == 1){
+    String name = accessExpr[0];
+    for(String str : env->inputVariables){
+      if(str == name){
+        Entity res = {};
+        res.varName = name;
+        res.type = EntityType_VARIABLE_INPUT;
+        return res;
+      }
+    }
+    
+    for(String str : env->specialKeywords){
+      if(str == name){
+        Entity res = {};
+        res.varName = name;
+        res.type = EntityType_VARIABLE_SPECIAL;
+        return res;
+      }
+    }
+  }
+  
+  return GetEntityFromHierAccess(info,accessExpr);
+}
+
+void AddOrSetVariable(Env* env,String name,VariableType type){
+  env->variableTypes->Insert(name,type);
 }

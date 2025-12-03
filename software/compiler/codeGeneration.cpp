@@ -3062,14 +3062,13 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
       isMerge = true;
     }
 
+    // MARK
+
     for(MergePartition part : topLevelDecl->info.infos){
       String mergeName = part.name;
 
       for(ConfigFunction* func : part.userFunctions){
-        bool isState = false;
-        if(!Empty(func->structToReturnName)){
-          isState = true;
-        }
+        bool isState = (func->type == ConfigFunctionType_STATE);
 
         c->RawLine("\n");
         for(String structs : func->newStructs){
@@ -3078,15 +3077,10 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
         c->RawLine("\n");
 
         String fullFunctionName = PushString(temp,"%.*s",UN(func->fullName));
+        c->FunctionBlock(SF("static inline %.*s",UN(func->structToReturnName)),fullFunctionName);
 
-        if(Empty(func->structToReturnName)){
-          c->FunctionBlock("static inline void",fullFunctionName);
-        } else {
-          c->FunctionBlock(SF("static inline %.*s",UN(func->structToReturnName)),fullFunctionName);
-        }
-
-        for(String var : func->variables){
-          c->Argument("int",var);
+        for(ConfigVariable var : func->variables){
+          c->Argument(var.type,var.name);
         }
 
         String assignStarter = "accelConfig";
@@ -3107,26 +3101,188 @@ void OutputHeader(FUDeclaration* topLevelDecl,Array<TypeStructInfoElement> struc
           
           c->Statement(stmt);
         }
-
-        if(isState){
+        
+        FULL_SWITCH(func->type){
+        case ConfigFunctionType_MEM:{
+          for(ConfigStuff assign : func->stuff){
+            Assert(assign.type == ConfigStuffType_MEMORY_TRANSFER);
+            
+            FunctionMemoryTransfer transf = assign.transfer;
+            
+            FULL_SWITCH(transf.dir){
+            case TransferDirection_READ: {
+              String expr = PushString(temp,"VersatMemoryCopy(%.*s,%.*s,%.*s * sizeof(int));",UN(transf.identity),UN(transf.variable),UN(transf.sizeExpr));
+              c->RawLine(expr);
+            } break;
+            case TransferDirection_WRITE: {
+              String expr = PushString(temp,"VersatMemoryCopy(%.*s,%.*s,%.*s * sizeof(int));",UN(transf.variable),UN(transf.identity),UN(transf.sizeExpr));
+              c->RawLine(expr);
+            } break;
+            }
+          }
+        } break;
+        case ConfigFunctionType_STATE:{
           c->VarDeclare(func->structToReturnName,"res","{}");
 
-          for(ConfigAssignment assign : func->assignments){
-            String lhs = PushString(temp,"res.%.*s",UN(assign.lhs));
-            String rhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.rhsId));
+          for(ConfigStuff assign : func->stuff){
+            String lhs = PushString(temp,"res.%.*s",UN(assign.assign.lhs));
+            String rhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.assign.rhsId));
 
             c->Assignment(lhs,rhs);
           }
 
           c->Return("res");
-        } else {
-          for(ConfigAssignment assign : func->assignments){
-            String lhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.lhs));
-            SymbolicExpression* rhs = assign.rhs;
-            String repr = PushRepr(temp,rhs);
+        } break;
+        case ConfigFunctionType_CONFIG:{
+          for(ConfigStuff assign : func->stuff){
+            FULL_SWITCH(assign.type){
+            case ConfigStuffType_ASSIGNMENT:{
+              String lhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.assign.lhs));
+              SymbolicExpression* rhs = assign.assign.rhs;
+              String repr = PushRepr(temp,rhs);
 
-            c->Assignment(lhs,repr);
+              c->Assignment(lhs,repr);
+            } break;
+            case ConfigStuffType_ADDRESS_GEN:{
+              String lhs = PushString(temp,"%.*s->%.*s",UN(assignStarter),UN(assign.lhs));
+              
+              String extVarName = assign.accessVariableName;
+              String varName = lhs;
+              AddressAccess* initial = assign.access.access;
+              int maxLoops = assign.access.inst.loopsSupported;
+  
+              auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
+                TEMP_REGION(temp,emitter->arena);
+          
+                for(int i = 0; i < params.size; i++){
+                  String str = params[i].first;
+      
+                  String t = PushString(temp,"%.*s.%.*s",UN(varName),UN(str));
+                  String v = params[i].second;
+
+                  // TODO: Kinda hacky
+                  if(CompareString(str,"ext_addr")){
+                    v = PushString(temp,"(iptr) (%.*s)",UN(v));
+                  }
+
+                  emitter->Assignment(t,v);
+                }
+              };
+
+              auto EmitDoubleOrSingleLoopCode = [extVarName,maxLoops,EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess* access){
+                TEMP_REGION(temp,c->arena);
+    
+                // TODO: The way we handle the free term is kinda sketchy.
+                // NOTE: The problem is that the convert access functions do not know how to handle duty.
+                AddressAccess* doubleLoop = ConvertAccessTo2External(access,loopIndex,temp);
+                AddressAccess* singleLoop = ConvertAccessTo1External(access,temp);
+
+                region(temp){
+                  String repr = PushRepr(temp,GetLoopLinearSumTotalSize(doubleLoop->external,temp));
+                  c->VarDeclare("int","doubleLoop",repr);
+                }
+
+                region(temp){
+                  String repr2 = PushRepr(temp,GetLoopLinearSumTotalSize(singleLoop->external,temp));
+                  c->VarDeclare("int","singleLoop",repr2);
+                }
+
+                // TODO: Maybe it would be better to just not generate single or double loop if we can check that one is always gonna be better than the other, right?
+                c->If("(!forceSingleLoop && forceDoubleLoop) || (!forceSingleLoop && (doubleLoop < singleLoop))");
+                c->Comment("Double is smaller (better)");
+                region(temp){
+                  StringBuilder* b = StartString(temp);
+                  //EmitDebugAddressGenInfo(doubleLoop,c);
+                  Repr(b,doubleLoop);
+
+                  Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,maxLoops,extVarName,temp);
+                  EmitStoreAddressGenIntoConfig(c,params);
+                }
+
+                c->Else();
+                c->Comment("Single is smaller (better)");
+                region(temp){
+                  StringBuilder* b = StartString(temp);
+                  //EmitDebugAddressGenInfo(singleLoop,c);
+                  Repr(b,singleLoop);
+
+                  Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,maxLoops,extVarName,temp);
+                  EmitStoreAddressGenIntoConfig(c,params);
+                }
+
+                c->EndIf();
+              };
+  
+              auto Recurse = [EmitDoubleOrSingleLoopCode,&initial](auto Recurse,int loopIndex,CEmitter* c,Arena* out) -> void{
+                TEMP_REGION(temp,out);
+
+                LoopLinearSum* external = initial->external;
+          
+                int totalSize = external->terms.size;
+                int leftOverSize = totalSize - loopIndex;
+
+                // Last member must generate an 'else' instead of a 'else if'
+                if(leftOverSize > 1){
+                  c->StartExpression();
+                  for(int i = loopIndex + 1; i < totalSize; i++){
+                    if(i != loopIndex + 1){
+                      c->And();
+                    }
+
+                    c->Var(PushString(temp,"a%d",loopIndex));
+                    c->GreaterThan();
+                    c->Var(PushString(temp,"a%d",i));
+                  }
+      
+                  if(loopIndex == 0){
+                    c->IfFromExpression();
+                  } else {
+                    // The other 'ifs' are 'elseifs' of the (loopIndex == 0) 'if'.
+                    c->ElseIfFromExpression();
+                  }
+
+                  c->Comment(PushString(temp,"Loop var %.*s is the largest",UN(external->terms[loopIndex].var)));
+                  EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
+      
+                  Recurse(Recurse,loopIndex + 1,c,out);
+                } else {
+                  c->Else();
+
+                  c->Comment(PushString(temp,"Loop var %.*s is the largest",UN(external->terms[loopIndex].var)));
+                  EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
+
+                  c->EndIf();
+                }
+              };
+
+              String addressGenName = initial->name;
+              Array<String> inputVars = initial->inputVariableNames;
+
+              c->RawLine("{");
+              
+              if(initial->external->terms.size > 1){
+                for(int i = 0; i <  initial->external->terms.size; i++){
+                  LoopLinearSumTerm term  =  initial->external->terms[i];
+                  String repr = PushRepr(temp,GetLoopHighestDecider(&term));
+                  String name = PushString(temp,"a%d",i);
+                  String comment = PushString(temp,"Loop var: %.*s",UN(term.var));
+                  c->Comment(comment);
+                  c->VarDeclare("int",name,repr);
+                }
+  
+                Recurse(Recurse,0,c,temp);
+              } else {
+                EmitDoubleOrSingleLoopCode(c,0,initial);
+              }
+
+              c->RawLine("}");
+            } break;
+            case ConfigStuffType_MEMORY_TRANSFER:{
+              NOT_POSSIBLE();
+            } break;
           }
+          }
+        } break;
         }
 
         c->EndBlock();

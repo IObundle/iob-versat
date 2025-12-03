@@ -945,7 +945,7 @@ SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out){
   // TODO: We need to find a way of solving the problem of creating a tokenizer template once and be done with it.
   //       We probably want to move this somewhat to the META data, no point in doing this at runtime.
   TEMP_REGION(temp,out);
-  tmpl = CreateTokenizerTemplate(temp,",+-*/();",{".."});
+  tmpl = CreateTokenizerTemplate(temp,",+-*/();[]",{".."});
   
   TOKENIZER_REGION(tok,tmpl);
 

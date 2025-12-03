@@ -455,11 +455,15 @@ FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex);
 // ======================================
 // Hierarchical access (WIP)
 
+// Map from name in hierarchical access (ex: a.b.c[0].d) to an entity. The VARIABLE part is that this mapping is also used inside the parser to map stuff to things like variables or to special names that are specific to a given part of the code.
+
 enum EntityType{
   EntityType_NODE,
   EntityType_CONFIG_WIRE,
   EntityType_STATE_WIRE,
-  EntityType_CONFIG_FUNCTION
+  EntityType_CONFIG_FUNCTION,
+  EntityType_VARIABLE_INPUT,
+  EntityType_VARIABLE_SPECIAL // For variables that exist "by default"
 };
 
 struct Entity{
@@ -469,7 +473,33 @@ struct Entity{
   union {
     Wire* wire;
     ConfigFunction* func;
+    String varName;
   };
 };
 
+enum VariableType{
+  VariableType_VOID_PTR,
+  VariableType_INTEGER
+};
+
+// Env is more of a parser related thing than it is an accelerator related thing.
+// Need to copy this to a better place and start using it in other parts of the code that should use it.
+struct Env{
+  Arena* arena; // Preferably a free arena since environment needs freedom to push and pop data whenever it pleases.
+
+  // TODO: Push scope and related stuff. The usual. Then need to integrate this approach with the rest of the code.
+  
+  TrieMap<String,VariableType>* variableTypes; // Variable not existing in here means that type is not know, not that it does not exist.
+  
+  Array<String> inputVariables;
+
+  // Maybe change this to an hashmap so that we can make the mapping directly.
+  Array<String> specialKeywords;
+};
+
+Env* StartEnvironment(Arena* use);
+
 Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr);
+Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr);
+
+void AddOrSetVariable(Env* env,String name,VariableType type);

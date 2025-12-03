@@ -74,9 +74,17 @@ static Opt<ConfigIdentifier> ParseConfigIdentifier(Tokenizer* tok,Arena* out){
     CHECK_IDENTIFIER(access);
   }
 
+  SymbolicExpression* expr = nullptr;
+  if(tok->IfNextToken("[")){
+    expr = ParseSymbolicExpression(tok,out);
+    PROPAGATE(expr);
+    EXPECT(tok,"]");
+  }
+
   ConfigIdentifier res = {};
   res.name = id;
   res.wire = access;
+  res.expr = expr;
   
   return res;
 }
@@ -86,18 +94,51 @@ static Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
   
   Token peek = tok->PeekToken();
 
-  ConfigStatement* stmt = nullptr;
+  ConfigStatement* stmt = PushStruct<ConfigStatement>(out);
 
   if(CompareString(peek,"for")){
-    // For loop
-    NOT_IMPLEMENTED();
+    tok->AdvancePeek();
+      
+    Token loopVariable = tok->NextToken();
+    CHECK_IDENTIFIER(loopVariable);
+      
+    Array<Token> startSym = TokenizeSymbolicExpression(tok,out);
+    if(Empty(startSym)){
+      return {};
+    }
+      
+    EXPECT(tok,"..");
+
+    Array<Token> endSym = TokenizeSymbolicExpression(tok,out);
+    if(Empty(endSym)){
+      return {};
+    }
+
+    EXPECT(tok,"{");
+      
+    stmt->def = (AddressGenForDef){.loopVariable = loopVariable,.startSym = startSym,.endSym = endSym};
+    
+    auto list = PushArenaList<ConfigStatement*>(temp);
+    while(!tok->Done()){
+      Opt<ConfigStatement*> child = ParseConfigStatement(tok,out);
+      PROPAGATE(child);
+
+      *list->PushElem() = child.value();
+
+      if(tok->IfPeekToken("}")){
+        break;
+      }
+    }
+
+    stmt->childs = PushArrayFromList(out,list);
+    stmt->type = ConfigStatementType_FOR_LOOP;
+
+    EXPECT(tok,"}");
   } else {
     // Assignment
     Opt<ConfigIdentifier> lhs = ParseConfigIdentifier(tok,out);
     PROPAGATE(lhs);
     EXPECT(tok,"=");
-
-    stmt = PushStruct<ConfigStatement>(out);
 
     stmt->lhs = lhs.value();
 
@@ -119,7 +160,7 @@ static Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
       SymbolicExpression* expr = ParseSymbolicExpression(tok,out);
       
       stmt->expr = expr;
-      stmt->type = ConfigRHSType_SYMBOLIC_EXPR;
+      stmt->rhsType = ConfigRHSType_SYMBOLIC_EXPR;
       // TODO
     } else {
       if(tok->PeekToken(1) == "("){
@@ -145,7 +186,7 @@ static Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
         func->arguments = PushArrayFromList(out,list);
 
         stmt->func = func;
-        stmt->type = ConfigRHSType_FUNCTION_CALL;
+        stmt->rhsType = ConfigRHSType_FUNCTION_CALL;
         
         // TODO
       } else {
@@ -153,11 +194,13 @@ static Opt<ConfigStatement*> ParseConfigStatement(Tokenizer* tok,Arena* out){
         PROPAGATE(rhs);
         
         stmt->rhsId = rhs.value();
-        stmt->type = ConfigRHSType_IDENTIFIER;
+        stmt->rhsType = ConfigRHSType_IDENTIFIER;
       }
     }
 
     EXPECT(tok,";");
+    
+    stmt->type = ConfigStatementType_STATEMENT;
   }
 
   return stmt;
@@ -320,7 +363,45 @@ ConfigFunctionDef* ParseConfigFunction(Tokenizer* tok,Arena* out){
     return res;
   }
 
-  DEBUG_BREAK_OR_EXIT();
+  if(tok->IfNextToken("mem")){
+    Token memName = tok->NextToken();
+    CHECK_IDENTIFIER(memName);
+
+    Opt<Array<ConfigVarDeclaration>> vars = ParseConfigFunctionArguments(tok,out);
+    PROPAGATE(vars);
+
+    EXPECT(tok,"{");
+
+    auto configs = PushArenaList<ConfigStatement*>(temp);
+    while(!tok->Done()){
+      Token peek = tok->PeekToken();
+
+      if(CompareString(peek,";")){
+        tok->AdvancePeek();
+        continue;
+      }
+      if(CompareString(peek,"}")){
+        break;
+      }
+        
+      Opt<ConfigStatement*> config = ParseConfigStatement(tok,out);
+      PROPAGATE(config);
+
+      *configs->PushElem() = config.value();
+    }
+
+    EXPECT(tok,"}");
+
+    res = PushStruct<ConfigFunctionDef>(out);
+    res->type = UserConfigurationType_MEM;
+    res->name = memName;
+    res->variables = vars.value();
+    res->statements = PushArrayFromList(out,configs);
+
+    return res;
+  }
+
+  NOT_POSSIBLE();
   return nullptr;
 }
 
@@ -404,23 +485,74 @@ static String GlobalConfigFunctionName(String functionName,FUDeclaration* decl,A
   return name;
 }
 
-ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration){
-  Arena* perm = globalPermanent;
+ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration,String content,Arena* out){
+  TEMP_REGION(temp,out);
 
-  TEMP_REGION(temp,perm);
-
-  auto list = PushArenaList<ConfigAssignment>(temp);
+  auto list = PushArenaList<ConfigStuff>(temp);
+  ConfigFunctionType type = {};
 
   // TODO: Where is the error checking being perform to check if a given composite module contains the actual function?
-
-  String structToReturnName = {};
+  String structToReturnName = "void";
   Array<ConfigVarDeclaration> variables = def->variables;
   Array<Token> variableNames = Extract(variables,temp,&ConfigVarDeclaration::name);
-  Array<String> variableStrings = CopyArray<String,Token>(variableNames,perm);
+
+  Array<String> variableStr = CopyArray<String,Token>(variableNames,temp);
+  
+  Env env = {};
+  env.variableTypes = PushTrieMap<String,VariableType>(out);
+  env.inputVariables = variableStr;
 
   // TODO: This flow is not good. With a bit more work we probably can join state and config into the same flow or at least avoid duplicating work. For now we are mostly prototyping so gonna keep pushing what we have.
+
+  // Break apart every for loop + statement into individual statements.
+  // NOTE: Kinda slow but should not be a problem anytime soon.
+  TrieMap<ConfigStatement*,ConfigStatement*>* nodeToParent = PushTrieMap<ConfigStatement*,ConfigStatement*>(temp);
+  auto simpleStmtList = PushArenaList<ConfigStatement*>(temp);
+
+  auto Recurse = [nodeToParent,simpleStmtList](auto Recurse,ConfigStatement* top) -> void{
+    if(top->type == ConfigStatementType_FOR_LOOP){
+      for(ConfigStatement* child : top->childs){
+        nodeToParent->Insert(child,top);
+        Recurse(Recurse,child);
+      }
+    }
+    if(top->type == ConfigStatementType_STATEMENT){
+      *simpleStmtList->PushElem() = top;
+    }
+  };
+
+  for(ConfigStatement* top : def->statements){
+    Recurse(Recurse,top);
+  }
+
+  auto stmtList = PushArenaList<Array<ConfigStatement*>>(temp);
+  for(ConfigStatement* stmt : simpleStmtList){
+    auto list = PushArenaList<ConfigStatement*>(temp);
+    
+    ConfigStatement* ptr = stmt;
+    while(ptr){
+      *list->PushElem() = ptr;
+
+      ConfigStatement** possibleParent = nodeToParent->Get(ptr);
+      ConfigStatement* parent = possibleParent ? *possibleParent : nullptr;
+
+      ptr = parent;
+    }
+
+    Array<ConfigStatement*> asArray = PushArrayFromList(temp,list);
+    ReverseInPlace(asArray);
+    *stmtList->PushElem() = asArray;
+  }
+
+  // From this point on use this. Every N sized array is composed of N-1 FOR_LOOP types and 1 STATEMENT type.
+  Array<Array<ConfigStatement*>> individualStatements = PushArrayFromList(temp,stmtList);
+
   if(def->type == UserConfigurationType_CONFIG){
-    for(ConfigStatement* stmt : def->statements){
+    type = ConfigFunctionType_CONFIG;
+
+    for(Array<ConfigStatement*> stmts : individualStatements){
+      ConfigStatement* stmt = stmts[0];
+      ConfigStatement* simple = stmts[stmts.size - 1];
       // TODO: Call entity function to make sure that the entity exists and it is a config wire
 
       ConfigIdentifier id = stmt->lhs;
@@ -428,63 +560,112 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
       Token wireName = id.wire;
 
       FULL_SWITCH(stmt->type){
-      case ConfigRHSType_FUNCTION_CALL:{
-        FunctionInvocation* functionInvoc = stmt->func;
+      case ConfigStatementType_FOR_LOOP:{
+        auto forLoops = PushArenaList<AddressGenForDef>(temp);
 
-        ConfigFunction* function = nameToFunction->Get(functionInvoc->functionName);
-        if(!function){
-          // TODO: Error
-          printf("Error 2, function does not exist, make sure the name is correct\n");
-          exit(-1);
-          return nullptr;
+        for(int i = 0; i < stmts.size - 1; i++){
+          *forLoops->PushElem() = stmts[i]->def;
         }
 
-        if(functionInvoc->arguments.size != function->variables.size){
-          printf("Error 2.1, number of arguments does not match\n");
-          exit(-1);
-          return nullptr;
-        }
-      
-        // Invocation var to function argument
-        Hashmap<String,SymbolicExpression*>* argToVar = PushHashmap<String,SymbolicExpression*>(temp,functionInvoc->arguments.size);
-        for(int i = 0; i <  functionInvoc->arguments.size; i++){
-          String arg = function->variables[i];
-
-          SymbolicExpression* var = PushVariable(temp,functionInvoc->arguments[i]);
-          argToVar->Insert(arg,var);
-        }
-      
-        for(ConfigAssignment assign : function->assignments){
-          // TODO: We are building the struct access expression in here but I got a feeling that we probably want to preserve data as much as possible in order to tackle merge later on.
-          String lhs = PushString(perm,"%.*s.%.*s",UN(name),UN(assign.lhs));
+        Array<AddressGenForDef> loops = PushArrayFromList(temp,forLoops);
         
-          SymbolicExpression* rhs = assign.rhs;
-          SymbolicExpression* newExpr = ReplaceVariables(rhs,argToVar,perm);
-        
-          ConfigAssignment* newAssign = list->PushElem();
-          newAssign->lhs = lhs;
-          newAssign->rhs = newExpr;
+        Assert(simple->type == ConfigStatementType_STATEMENT);
+        Assert(simple->rhsType == ConfigRHSType_IDENTIFIER);
+        Assert(simple->rhsId.expr);
+
+        Array<String> accessExpr = PushArray<String>(temp,1);
+        accessExpr[0] = simple->lhs.name;
+
+        Opt<Entity> entityOpt = GetEntityFromHierAccess(&declaration->info,accessExpr);
+        if(!entityOpt){
+          printf("Did not find entity 123\n");
+          exit(-1);
         }
+
+        Entity ent = entityOpt.value();
+        Assert(ent.type == EntityType_NODE);
+
+        name = simple->lhs.name;
+        wireName = simple->lhs.wire;
+
+        // Pointers are stronger than integers since there might exist cases where we want to store a pointer inside the config of an unit.
+        AddOrSetVariable(&env,simple->rhsId.name,VariableType_VOID_PTR);
+
+        AddressAccess* access = CompileAddressGen({},variableNames,loops,simple->rhsId.expr,content);
+        AddressGenInst supported = ent.inst->decl->supportedAddressGen;
+
+        ConfigStuff* newAssign = list->PushElem();
+        newAssign->type = ConfigStuffType_ADDRESS_GEN;
+        newAssign->access.access = access;
+        newAssign->access.inst = supported;
+        newAssign->accessVariableName = PushString(out,simple->rhsId.name);
+        newAssign->lhs = PushString(out,name);
       } break;
-      case ConfigRHSType_SYMBOLIC_EXPR:{
-        ConfigAssignment* assign = list->PushElem();
-        assign->lhs = PushString(perm,"%.*s.%.*s",UN(name),UN(wireName));
-        assign->rhs = SymbolicDeepCopy(stmt->expr,perm);
+      case ConfigStatementType_STATEMENT:{
+        FULL_SWITCH(stmt->rhsType){
+        case ConfigRHSType_FUNCTION_CALL:{
+          FunctionInvocation* functionInvoc = stmt->func;
+
+          ConfigFunction* function = nameToFunction->Get(functionInvoc->functionName);
+          if(!function){
+            // TODO: Error
+            printf("Error 2, function does not exist, make sure the name is correct\n");
+            exit(-1);
+            return nullptr;
+          }
+
+          if(functionInvoc->arguments.size != function->variables.size){
+            printf("Error 2.1, number of arguments does not match\n");
+            exit(-1);
+            return nullptr;
+          }
+      
+          // Invocation var to function argument
+          Hashmap<String,SymbolicExpression*>* argToVar = PushHashmap<String,SymbolicExpression*>(temp,functionInvoc->arguments.size);
+          for(int i = 0; i <  functionInvoc->arguments.size; i++){
+            ConfigVariable arg = function->variables[i];
+
+            SymbolicExpression* var = PushVariable(temp,functionInvoc->arguments[i]);
+            argToVar->Insert(arg.name,var);
+          }
+      
+          for(ConfigStuff assign : function->stuff){
+            // TODO: We are building the struct access expression in here but I got a feeling that we probably want to preserve data as much as possible in order to tackle merge later on.
+            String lhs = PushString(out,"%.*s.%.*s",UN(name),UN(assign.assign.lhs));
+        
+            SymbolicExpression* rhs = assign.assign.rhs;
+            SymbolicExpression* newExpr = ReplaceVariables(rhs,argToVar,out);
+        
+            ConfigStuff* newAssign = list->PushElem();
+            newAssign->type = ConfigStuffType_ASSIGNMENT;
+            newAssign->assign.lhs = lhs;
+            newAssign->assign.rhs = newExpr;
+          }
+        } break;
+        case ConfigRHSType_SYMBOLIC_EXPR:{
+          ConfigStuff* assign = list->PushElem();
+          assign->type = ConfigStuffType_ASSIGNMENT;
+          assign->assign.lhs = PushString(out,"%.*s.%.*s",UN(name),UN(wireName));
+          assign->assign.rhs = SymbolicDeepCopy(stmt->expr,out);
+        } break;
+        case ConfigRHSType_IDENTIFIER: {
+          // TODO: Proper error reporting
+          Assert(false);
+        } break;
+      }
       } break;
-      case ConfigRHSType_IDENTIFIER: {
-        // TODO: Proper error reporting
-        Assert(false);
-      } break;
-    }
+      }
     }
   }
 
   auto newStructs = PushArenaList<String>(temp);
 
   if(def->type == UserConfigurationType_STATE){
+    type = ConfigFunctionType_STATE;
+
     CEmitter* c = StartCCode(temp);
     
-    String structName = PushString(perm,"%.*s_%.*s_Struct",UN(declaration->name),UN(def->name));
+    String structName = PushString(out,"%.*s_%.*s_Struct",UN(declaration->name),UN(def->name));
     structToReturnName = structName;
 
     c->Struct(structName);
@@ -500,14 +681,14 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
     }
     c->EndStruct();
 
-    *newStructs->PushElem() = PushASTRepr(c,perm,false);
+    *newStructs->PushElem() = PushASTRepr(c,out,false);
 
     for(ConfigStatement* stmt : def->statements){
       ConfigIdentifier id = stmt->lhs;
       Token name = id.name;
       Token wireName = id.wire;
 
-      FULL_SWITCH(stmt->type){
+      FULL_SWITCH(stmt->rhsType){
       case ConfigRHSType_FUNCTION_CALL:{
         // TODO: Proper error reporting
         Assert(false);
@@ -517,7 +698,6 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
         Assert(false);
       } break;
       case ConfigRHSType_IDENTIFIER:{
-
         Array<String> accessExpr = PushArray<String>(temp,2);
         accessExpr[0] = stmt->rhsId.name;
         accessExpr[1] = stmt->rhsId.wire;
@@ -535,16 +715,18 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
           InstanceInfo* info = entity.inst;
           ConfigFunction* func = entity.func;
 
-          for(ConfigAssignment stmt : func->assignments){
-            ConfigAssignment* assign = list->PushElem();
-            assign->lhs = name;
-            assign->rhsId = PushString(perm,"%.*s.%.*s",UN(info->name),UN(stmt.rhsId));
+          for(ConfigStuff stmt : func->stuff){
+            ConfigStuff* assign = list->PushElem();
+            assign->type = ConfigStuffType_ASSIGNMENT;
+            assign->assign.lhs = name;
+            assign->assign.rhsId = PushString(out,"%.*s.%.*s",UN(info->name),UN(stmt.assign.rhsId));
           }
         } else if(entity.type == EntityType_STATE_WIRE){
-          ConfigAssignment* assign = list->PushElem();
+          ConfigStuff* assign = list->PushElem();
           
-          assign->lhs = name;
-          assign->rhsId = PushString(perm,"%.*s.%.*s",UN(stmt->rhsId.name),UN(stmt->rhsId.wire));
+          assign->type = ConfigStuffType_ASSIGNMENT;
+          assign->assign.lhs = name;
+          assign->assign.rhsId = PushString(out,"%.*s.%.*s",UN(stmt->rhsId.name),UN(stmt->rhsId.wire));
         } else {
           // TODO: Proper error reporting.
           printf("The entity is not a function or a state wire\n");
@@ -554,14 +736,105 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
       }
     }
   }
+  
+  if(def->type == UserConfigurationType_MEM){
+    type = ConfigFunctionType_MEM;
+
+    for(Array<ConfigStatement*> stmts : individualStatements){
+      ConfigStatement* stmt = stmts[0];
+      ConfigStatement* simple = stmts[stmts.size - 1];
+
+      ConfigIdentifier id = stmt->lhs;
+      Token name = id.name;
+      Token wireName = id.wire;
+
+      FULL_SWITCH(stmt->type){
+      case ConfigStatementType_STATEMENT:{
+        FULL_SWITCH(stmt->rhsType){
+        case ConfigRHSType_FUNCTION_CALL:{
+          // TODO: Proper error reporting
+          Assert(false);
+        } break;
+        case ConfigRHSType_SYMBOLIC_EXPR:{
+          // TODO: Proper error reporting
+          Assert(false);
+        } break;
+        case ConfigRHSType_IDENTIFIER:{
+          // Only tackling simple forms, for now.
+          Assert(stmt->lhs.expr);
+          Assert(stmt->rhsId.expr);
+        
+          // Check that left entity supports memory access
+          Array<String> accessExpr = PushArray<String>(temp,1);
+          accessExpr[0] = stmt->lhs.name;
+
+          // MARK
+          Opt<Entity> entityOpt = GetEntityFromHierAccessWithEnvironment(&declaration->info,&env,accessExpr);
+
+          if(!entityOpt){
+            // TODO: Proper error reporting.
+            printf("Error, entity does not exist\n");
+            exit(-1);
+          }
+          Entity entity = entityOpt.value();
+          Assert(entity.type == EntityType_NODE);
+          Assert(entity.inst->decl->memoryMapBits.has_value());
+          
+          AddOrSetVariable(&env,simple->rhsId.name,VariableType_VOID_PTR);
+
+          ConfigStuff* assign = list->PushElem();
+          assign->type = ConfigStuffType_MEMORY_TRANSFER;
+          assign->transfer.dir = TransferDirection_READ;
+          assign->transfer.identity = "TOP_m_addr";
+          assign->transfer.sizeExpr = "1";
+          assign->transfer.variable = PushString(out,simple->rhsId.name);
+        } break;
+      }
+      } break;
+      case ConfigStatementType_FOR_LOOP:{
+        //AddressGenForDef def = stmt->def;
+
+        ConfigStatement* ptr = stmt;
+        auto forLoops = PushArenaList<AddressGenForDef>(temp);
+
+        for(int i = 0; i < stmts.size - 1; i++){
+          *forLoops->PushElem() = stmts[i]->def;
+        }
+        
+        Assert(simple->type == ConfigStatementType_STATEMENT);
+        Assert(simple->rhsType == ConfigRHSType_IDENTIFIER);
+        
+        // Need to build an address gen in here or something that we can then use to extract the info that we need.
+
+      } break;
+    }
+    }
+  }
+
+  auto varStuff = PushArenaList<ConfigVariable>(out);
+  
+  for(ConfigVarDeclaration decl : variables){
+    ConfigVariable* var = varStuff->PushElem();
+    
+    VariableType* type = env.variableTypes->Get(decl.name);
+    String typeName = "int";
+
+    if(type && *type == VariableType_VOID_PTR){
+      typeName = "void*";
+    }
+    
+    var->name = PushString(out,decl.name);
+    var->type = typeName;
+  }
 
   ConfigFunction func = {};
+  func.type = type;
   func.decl = declaration;
-  func.assignments = PushArrayFromList(perm,list);
-  func.variables = variableStrings;
-  func.individualName = PushString(perm,def->name);
-  func.fullName = GlobalConfigFunctionName(func.individualName,declaration,perm);
-  func.newStructs = PushArrayFromList(perm,newStructs);
+  func.stuff = PushArrayFromList(out,list);
+  func.variables = PushArrayFromList(out,varStuff);
+  func.individualName = PushString(out,def->name);
+  func.fullName = GlobalConfigFunctionName(func.individualName,declaration,out);
+  func.newStructs = PushArrayFromList(out,newStructs);
   func.structToReturnName = structToReturnName;
 
   ConfigFunction* res = nameToFunction->Insert(func.fullName,func);

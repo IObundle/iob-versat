@@ -2,6 +2,7 @@
 
 #include "declaration.hpp"
 #include "embeddedData.hpp"
+#include "globals.hpp"
 #include "parser.hpp"
 #include "symbolic.hpp"
 #include "templateEngine.hpp"
@@ -1527,7 +1528,7 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   {
     auto list = PushArenaList<ConfigFunction*>(temp);
     for(auto funcDecl : def.configs){
-      *list->PushElem() = InstantiateConfigFunction(&funcDecl,res);
+      *list->PushElem() = InstantiateConfigFunction(&funcDecl,res,content,globalPermanent);
     };
     
     res->info.infos[0].userFunctions = PushArrayFromList(perm,list);

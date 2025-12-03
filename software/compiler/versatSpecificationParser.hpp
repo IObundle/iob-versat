@@ -120,14 +120,11 @@ struct MergeDef : public DefBase{
   Array<Token> mergeModifiers;
 };
 
-struct AddressGenForDef{
-  Token loopVariable;
-  Array<Token> startSym;
-  Array<Token> endSym;
-};
+struct AddressGenForDef;
 
 struct AddressGenDef : public DefBase{
   AddressGenType type;
+
   Array<Token> inputs;
   Array<AddressGenForDef> loops;
   Array<Token> symbolicTokens;

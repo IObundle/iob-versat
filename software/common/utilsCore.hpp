@@ -673,7 +673,7 @@ static inline bool Contains(String str,char ch){
 }
 
 template<typename T>
-inline void Reverse(Array<T>& arr){
+inline void ReverseInPlace(Array<T>& arr){
   for(int i = 0; i < arr.size / 2; i++){
     SWAP(arr[i],arr[arr.size - 1 - i]);
   }
