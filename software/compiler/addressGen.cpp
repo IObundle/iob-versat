@@ -469,7 +469,7 @@ Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExte
   if(!IsZero(freeTerm)){
     String repr = PushRepr(temp,freeTerm);
 
-    ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UN(repr));
+    ext_addr = PushString(out,"(((float*) %.*s) + (%.*s))",UN(extVarName),UN(repr));
   }
   
   // TODO: No need for a list, we already know all the memory that we are gonna need
