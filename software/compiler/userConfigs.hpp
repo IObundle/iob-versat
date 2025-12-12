@@ -77,10 +77,18 @@ struct ConfigStatement{
   Array<ConfigStatement*> childs; // Only for loops contains these right now.
 };
 
+enum ConfigVarType{
+  ConfigVarType_SIMPLE,
+  ConfigVarType_ADDRESS,
+  ConfigVarType_FIXED,
+  ConfigVarType_DYN
+};
+
 struct ConfigVarDeclaration{
   Token name;
 
   // TODO: Not implemented, just parsed currently.
+  ConfigVarType type;
   int arraySize;
   bool isArray;
 };
@@ -140,6 +148,7 @@ struct ConfigStuff{
   // TODO: This lhs is only for access. Need to join stuff with assign and access if we eventually cleanup the code.
   String lhs;
   String accessVariableName;
+  InstanceInfo* info;
 
   union{
     ConfigAssignment assign;
@@ -149,7 +158,7 @@ struct ConfigStuff{
 };
 
 struct ConfigVariable{
-  String type;
+  ConfigVarType type;
   String name;
 };
 
@@ -171,3 +180,4 @@ struct ConfigFunction{
 // Can fail (parsed data is validated in here)
 // TODO: Instead of passing the content, it would be easier if the function was capable of reporting the errors without having to accesss the text, just by storing the relevant tokens and the upper parts of the code is responsible for reporting it. The language is not that complicated meaning that we are free to just define all the possible errors in a large enum and having a simple structure that stores all the relevant data. 
 ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration,String content,Arena* out);
+

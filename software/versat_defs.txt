@@ -93,6 +93,18 @@ table AddressGenWireNames(AddressGenType type,String[] names){
    AddressGenType_READ : @Members(AddressVParameters),
 };
 
+enum ParamFlags{
+   ParamFlags_Unique = 0x1,
+   ParamFlags_Order  = 0x2,
+   ParamFlags_ReverseOrder = 0x4
+};
+
+map ParamToFlag(ParamFlags flag,String name){
+   ParamFlags_Unique       : unique  ,
+   ParamFlags_Order        : order   ,
+   ParamFlags_ReverseOrder : reverse 
+};
+
 enum MergeModifier{
    MergeModifier_NONE           = 0x0,
    MergeModifier_NO_UNIT_MERGED = 0x1

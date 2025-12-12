@@ -22,12 +22,19 @@
 
 struct Arena;
 extern Arena* contextArenas[2];
+
+extern Arena singleUseCasesArenas[8];
+extern u8 singleUseArenaBeingUsed;
+
 // Pass nullptr to get one arena, pass an arena to get a guaranteed different arena to the one passed
 // Calling code must pass any arena that it contains to this function to make sure that the arena returned is different. We only receive one currently because we only expect to support out/temp flows (only 2 arenas required).
 // Check the TEMP_REGION macros and their usage to better understand how to use this approach for memory management.
 // Credit to Ryan Fleury for this technique.
 Arena* GetArena(Arena* diff);
 Arena* GetArena2(Arena* diff,Arena* diff2);
+
+Arena* GetSingleUseArena();
+void FreeSingleUseArena(Arena* arena);
 
 inline size_t Kilobyte(int val){return val * 1024;};
 inline size_t Megabyte(int val){return Kilobyte(val) * 1024;};
@@ -42,14 +49,20 @@ void* AllocatePages(int pages);
 void DeallocatePages(void* ptr,int pages);
 long PagesAvailable();
 
+enum ArenaFlags : u8{
+  ArenaFlags_NO_POP = (1 << 1) // Mark an arena such that 
+};
+
 struct Arena{
   Byte* mem;
   size_t used;
   size_t totalAllocated;
   size_t maximum;
-
+  
   const char* fileCreationPlace;
-  int lineCreationPlace;
+  u16 lineCreationPlace;
+
+  ArenaFlags flags;
 }; 
 
 #define InitArena(SIZE) InitArena_(SIZE,__FILE__,__LINE__);
@@ -111,6 +124,44 @@ struct ArenaMarker{
 #define BLOCK_REGION(ARENA) ArenaMarker _marker(__LINE__)(ARENA,__FILE__,__FUNCTION__,__LINE__)
 
 #define region(ARENA) if(ArenaMarker _marker(__LINE__){ARENA,__FILE__,__FUNCTION__,__LINE__})
+
+struct ArenaFlagsMarker{
+  Arena* arena;
+  ArenaFlags previousValue;
+  
+  ArenaFlagsMarker(Arena* arena,ArenaFlags newFlags){
+    this->arena = arena;
+    this->previousValue = arena->flags;
+    arena->flags = newFlags;
+  };
+  ~ArenaFlagsMarker(){
+    this->arena->flags = this->previousValue;
+  };
+};
+
+#define __marker2(LINE) marker2_ ## LINE
+#define _marker2(LINE) __marker2( LINE )
+#define ARENA_FLAGS_REGION(ARENA,NEWFLAGS) ArenaFlagsMarker _marker2(__LINE__)(ARENA,NEWFLAGS)
+
+struct FreeArenaMark{
+  Arena* arena;
+  
+  FreeArenaMark(Arena* arena){
+    this->arena = arena;
+  };
+  ~FreeArenaMark(){
+    FreeSingleUseArena(this->arena);
+  };
+};
+
+#define __marker3(LINE) marker3_ ## LINE
+#define _marker3(LINE) __marker3( LINE )
+
+#define FREE_ARENA(NAME) Arena* NAME = GetSingleUseArena(); \
+  FreeArenaMark _marker3(__LINE__)(NAME)
+
+// NOTE: Use these helpers to interact with the arena flags stuff. Do not do it manually.
+#define ARENA_NO_POP(ARENA) ARENA_FLAGS_REGION(ARENA,(ArenaFlags) (((u8) (ARENA)->flags) | (u8) ArenaFlags_NO_POP))
 
 #define TEMP_REGION(NAME,OUT_ARENA) \
   Arena* NAME = GetArena(OUT_ARENA); \

@@ -145,7 +145,8 @@ enum NodeType{
 };
 
 struct ParameterValue{
-  String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
+  SymbolicExpression* val;
+  //String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
 };
 
 struct FUInstance{
@@ -357,7 +358,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
 FUInstance* GetUnit(Accelerator* accel,String name);
 
-bool SetParameter(FUInstance* inst,String parameterName,String parameterValue); // False if param does not exist
 bool IsUnitCombinatorial(FUInstance* inst);
 
 Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
@@ -399,6 +399,12 @@ void SetStatic(FUInstance* instance);
 // Graph inputs and outputs
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
+
+// ======================================
+// Params
+
+bool SetParameter(FUInstance* inst,String parameterName,SymbolicExpression* val); // False if param does not exist
+SymbolicExpression* GetParameterValue(FUInstance* inst,String name);
 
 //
 // Graph fixes and operations
@@ -482,19 +488,28 @@ enum VariableType{
   VariableType_INTEGER
 };
 
+struct EnvScope{
+  TrieMap<String,VariableType>* variableTypes; // Variable not existing in here means that type is not know, not that it does not exist.
+};
+
+struct Error{
+  
+};
+
 // Env is more of a parser related thing than it is an accelerator related thing.
 // Need to copy this to a better place and start using it in other parts of the code that should use it.
 struct Env{
   Arena* arena; // Preferably a free arena since environment needs freedom to push and pop data whenever it pleases.
 
-  // TODO: Push scope and related stuff. The usual. Then need to integrate this approach with the rest of the code.
-  
-  TrieMap<String,VariableType>* variableTypes; // Variable not existing in here means that type is not know, not that it does not exist.
-  
-  Array<String> inputVariables;
+  // Store errors in here.
+  ArenaList<Error> errors;
 
-  // Maybe change this to an hashmap so that we can make the mapping directly.
-  Array<String> specialKeywords;
+  TrieSet<String> specialKeywords;
+
+  ArenaDoubleList<EnvScope>* scopes;
+  DoubleLink<EnvScope>* current;
+
+  //void AddInput(VarDeclaration var);
 };
 
 Env* StartEnvironment(Arena* use);

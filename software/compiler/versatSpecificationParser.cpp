@@ -3,6 +3,7 @@
 #include "declaration.hpp"
 #include "embeddedData.hpp"
 #include "globals.hpp"
+#include "memory.hpp"
 #include "parser.hpp"
 #include "symbolic.hpp"
 #include "templateEngine.hpp"
@@ -666,7 +667,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   CHECK_IDENTIFIER(res.typeName);
 
   Token possibleParameters = tok->PeekToken();
-  auto list = PushArenaList<Pair<String,String>>(temp);
+  auto list = PushArenaList<Pair<String,SymbolicExpression*>>(temp);
   if(CompareString(possibleParameters,"#")){
     tok->AdvancePeek();
     EXPECT(tok,"(");
@@ -677,17 +678,20 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
 
       EXPECT(tok,"(");
 
+      SymbolicExpression* expr = ParseSymbolicExpression(tok,out);
+
+#if 0
       String content = {};
 
       Opt<Token> remaining = tok->NextFindUntil(")");
       PROPAGATE(remaining);
       content = remaining.value();
-      
+#endif      
+
       EXPECT(tok,")");
       
       String savedParameter = PushString(out,parameterName);
-      String savedString = PushString(out,content);
-      *list->PushElem() = {savedParameter,savedString}; 
+      *list->PushElem() = {savedParameter,expr}; 
 
       if(tok->IfNextToken(",")){
         continue;
@@ -785,7 +789,12 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
     while(!tok->Done()){
       if(IsNextTokenConfigFunctionStart(tok)){
         ConfigFunctionDef* func = ParseConfigFunction(tok,out);
-        *configFunctions->PushElem() = *func;
+
+        if(func){
+          *configFunctions->PushElem() = *func;
+        } else {
+          printf("Error parsing user function\n");
+        }
       } else {
         break;
       }
@@ -1280,13 +1289,35 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   Arena* perm = globalPermanent;
   Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
 
+  FREE_ARENA(temp3);
+  ARENA_NO_POP(temp3);
+  Env* env = StartEnvironment(temp3);
+
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   InstanceName* names = PushSet<String>(temp,1000);
   bool error = false;
 
   ArenaList<Pair<String,int>>* allArrayDefinitons = PushArenaList<Pair<String,int>>(temp);
+
+#if 0
+  for(VarDeclaration& decl : def.inputs){
+    env->AddInputs(decl);
+  }
+
+  for(InstanceDeclaration& decl : def.declarations){
+    env->AddInstance(decl);
+  }
+
+  for(ConnectionDef& decl : def.connections){
+    if(decl.type == ConnectionDef::EQUALITY){
+      
+    }
+  }
+#endif
+
   // TODO: Need to detect when multiple instances with same name
   int insertedInputs = 0;
+
   for(VarDeclaration& decl : def.inputs){
     if(CompareString(decl.name,"out")){
       ReportError(content,decl.name,"Cannot use special out unit as module input");
@@ -1453,8 +1484,6 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
       GroupIterator in  = IterateGroup(decl.input);
 
       while(HasNext(out) && HasNext(in)){
-        BLOCK_REGION(temp);
-
         Var outVar = Next(out);
         Var inVar = Next(in);
         

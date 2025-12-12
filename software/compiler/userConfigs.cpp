@@ -252,6 +252,24 @@ static Opt<ConfigVarDeclaration> ParseConfigVarDeclaration(Tokenizer* tok){
     res.arraySize = arraySize;
     res.isArray = true;
   }
+
+  ConfigVarType type = ConfigVarType_SIMPLE;
+  if(tok->IfNextToken(":")){
+    Token possibleType = tok->NextToken();
+
+    if(CompareString(possibleType,"Address")){
+      type = ConfigVarType_ADDRESS;
+    } else if(CompareString(possibleType,"Fixed")){
+      type = ConfigVarType_FIXED;
+    } else if(CompareString(possibleType,"Dyn")){
+      type = ConfigVarType_DYN;
+    } else {
+      printf("Error, unknown variable type\n");
+      return {};
+    }
+  }
+
+  res.type = type;
   
   return res;
 }
@@ -498,9 +516,17 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
 
   Array<String> variableStr = CopyArray<String,Token>(variableNames,temp);
   
-  Env env = {};
-  env.variableTypes = PushTrieMap<String,VariableType>(out);
-  env.inputVariables = variableStr;
+  FREE_ARENA(temp3);
+  ARENA_NO_POP(temp3);
+  Env* env = StartEnvironment(temp3);
+
+  for(ConfigVarDeclaration var : variables){
+    if(var.type == ConfigVarType_ADDRESS){
+      AddOrSetVariable(env,var.name,VariableType_VOID_PTR);
+    } else {
+      AddOrSetVariable(env,var.name,VariableType_INTEGER);
+    }
+  }
 
   // TODO: This flow is not good. With a bit more work we probably can join state and config into the same flow or at least avoid duplicating work. For now we are mostly prototyping so gonna keep pushing what we have.
 
@@ -545,6 +571,7 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
   }
 
   // From this point on use this. Every N sized array is composed of N-1 FOR_LOOP types and 1 STATEMENT type.
+  // TODO: Remember, after pushing every statement into an individual loop, we need to do error checking and check if the variable still exists. We cannot do variable checking globally since some statements might not be inside one of the loops.
   Array<Array<ConfigStatement*>> individualStatements = PushArrayFromList(temp,stmtList);
 
   if(def->type == UserConfigurationType_CONFIG){
@@ -589,12 +616,13 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
         wireName = simple->lhs.wire;
 
         // Pointers are stronger than integers since there might exist cases where we want to store a pointer inside the config of an unit.
-        AddOrSetVariable(&env,simple->rhsId.name,VariableType_VOID_PTR);
+        //AddOrSetVariable(env,simple->rhsId.name,VariableType_VOID_PTR);
 
         AddressAccess* access = CompileAddressGen({},variableNames,loops,simple->rhsId.expr,content);
         AddressGenInst supported = ent.inst->decl->supportedAddressGen;
 
         ConfigStuff* newAssign = list->PushElem();
+        newAssign->info = ent.inst;
         newAssign->type = ConfigStuffType_ADDRESS_GEN;
         newAssign->access.access = access;
         newAssign->access.inst = supported;
@@ -769,7 +797,7 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
           accessExpr[0] = stmt->lhs.name;
 
           // MARK
-          Opt<Entity> entityOpt = GetEntityFromHierAccessWithEnvironment(&declaration->info,&env,accessExpr);
+          Opt<Entity> entityOpt = GetEntityFromHierAccessWithEnvironment(&declaration->info,env,accessExpr);
 
           if(!entityOpt){
             // TODO: Proper error reporting.
@@ -780,7 +808,7 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
           Assert(entity.type == EntityType_NODE);
           Assert(entity.inst->decl->memoryMapBits.has_value());
           
-          AddOrSetVariable(&env,simple->rhsId.name,VariableType_VOID_PTR);
+          //AddOrSetVariable(env,simple->rhsId.name,VariableType_VOID_PTR);
 
           ConfigStuff* assign = list->PushElem();
           assign->type = ConfigStuffType_MEMORY_TRANSFER;
@@ -792,8 +820,6 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
       }
       } break;
       case ConfigStatementType_FOR_LOOP:{
-        //AddressGenForDef def = stmt->def;
-
         ConfigStatement* ptr = stmt;
         auto forLoops = PushArenaList<AddressGenForDef>(temp);
 
@@ -805,7 +831,6 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
         Assert(simple->rhsType == ConfigRHSType_IDENTIFIER);
         
         // Need to build an address gen in here or something that we can then use to extract the info that we need.
-
       } break;
     }
     }
@@ -816,15 +841,8 @@ ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* 
   for(ConfigVarDeclaration decl : variables){
     ConfigVariable* var = varStuff->PushElem();
     
-    VariableType* type = env.variableTypes->Get(decl.name);
-    String typeName = "int";
-
-    if(type && *type == VariableType_VOID_PTR){
-      typeName = "void*";
-    }
-    
+    var->type = decl.type;
     var->name = PushString(out,decl.name);
-    var->type = typeName;
   }
 
   ConfigFunction func = {};

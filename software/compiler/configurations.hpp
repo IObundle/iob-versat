@@ -245,6 +245,5 @@ Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
-
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
 

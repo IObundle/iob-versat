@@ -258,9 +258,14 @@ int main(int argc,char* argv[]){
   globalPermanent = &globalPermanentInst;
   Arena tempInst = InitArena(Megabyte(128));
   Arena temp2Inst = InitArena(Megabyte(128));
+  Arena temp3Inst = InitArena(Megabyte(32));
 
   contextArenas[0] = &tempInst;
   contextArenas[1] = &temp2Inst;
+
+  for(int i = 0; i < 8; i++){
+    singleUseCasesArenas[i] = InitArena(Megabyte(1));
+  }
   
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -268,9 +273,10 @@ int main(int argc,char* argv[]){
   Arena* perm = globalPermanent;
   
   InitializeDefaultData(perm);
-  InitializeTemplateEngine(perm);
+  TE_Init();
   InitializeSimpleDeclarations();
   InitializeUserConfigs();
+  InitParser(perm);
 
 #if 0
   TestSymbolic();

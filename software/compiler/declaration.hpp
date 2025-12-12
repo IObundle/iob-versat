@@ -37,6 +37,7 @@ enum FUDeclarationType{
 struct Parameter{
   String name;
   SymbolicExpression* valueExpr;
+  ParamFlags flags;
 };
 
 // TODO: A lot of duplicated data exists since the change to merge.

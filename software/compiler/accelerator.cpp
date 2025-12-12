@@ -458,8 +458,8 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
 
       buffer = CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
-      String bufferAmountString = PushString(globalPermanent,"%d",buffer->bufferAmount);
-      SetParameter(buffer,"AMOUNT",bufferAmountString);
+
+      SetParameter(buffer,"AMOUNT",PushLiteral(globalPermanent,buffer->bufferAmount));
     } else {
       String bufferName = PushString(globalPermanent,"buffer%d",buffersInserted);
 
@@ -496,6 +496,24 @@ FUInstance* GetOutputInstance(Pool<FUInstance>* nodes){
   }
 
   return nullptr;
+}
+
+SymbolicExpression* GetParameterValue(FUInstance* inst,String name){
+  SymbolicExpression* val = {};
+  for(int i = 0; i < inst->declaration->parameters.size; i++){
+    Parameter param = inst->declaration->parameters[i];
+    SymbolicExpression* paramVal = inst->parameterValues[i].val;
+
+    if(CompareString(param.name,name)){
+      if(paramVal){
+        val = paramVal;
+      } else {
+        val = param.valueExpr;
+      }
+    }
+  }
+
+  return val;
 }
 
 PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex){
@@ -775,13 +793,13 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   return res;
 }
 
-bool SetParameter(FUInstance* inst,String parameterName,String parameterValue){
+bool SetParameter(FUInstance* inst,String parameterName,SymbolicExpression* val){
   FUDeclaration* decl = inst->declaration;
   int paramSize = decl->parameters.size;
   
   for(int i = 0; i < paramSize; i++){
     if(CompareString(decl->parameters[i].name,parameterName)){
-      inst->parameterValues[i].val = parameterValue;
+      inst->parameterValues[i].val = val;
       return true;
     }
   }
@@ -2200,35 +2218,36 @@ Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr){
 Env* StartEnvironment(Arena* use){
   Env* env = PushStruct<Env>(use);
   env->arena = use;
-  env->variableTypes = PushTrieMap<String,VariableType>(use);
+  env->scopes = PushArenaDoubleList<EnvScope>(use);
+  env->current = env->scopes->PushNode();
+  env->current->elem.variableTypes = PushTrieMap<String,VariableType>(use);
+
   return env;
 }
 
 Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr){
+
   if(accessExpr.size == 1){
     String name = accessExpr[0];
-    for(String str : env->inputVariables){
-      if(str == name){
-        Entity res = {};
-        res.varName = name;
-        res.type = EntityType_VARIABLE_INPUT;
-        return res;
-      }
-    }
-    
-    for(String str : env->specialKeywords){
-      if(str == name){
-        Entity res = {};
-        res.varName = name;
-        res.type = EntityType_VARIABLE_SPECIAL;
-        return res;
+    DoubleLink<EnvScope>* ptr = env->current;
+
+    // Up the scope chain.
+    for(; ptr != nullptr; ptr = ptr->prev){
+      for(Pair<String,VariableType> p : ptr->elem.variableTypes){
+        String str = p.first;
+        if(str == name){
+          Entity res = {};
+          res.varName = name;
+          res.type = EntityType_VARIABLE_INPUT;
+          return res;
+        }
       }
     }
   }
-  
+
   return GetEntityFromHierAccess(info,accessExpr);
 }
 
 void AddOrSetVariable(Env* env,String name,VariableType type){
-  env->variableTypes->Insert(name,type);
+  env->current->elem.variableTypes->Insert(name,type);
 }

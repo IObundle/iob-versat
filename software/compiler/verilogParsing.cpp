@@ -153,6 +153,8 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
   Tokenizer tokenizer = Tokenizer(fileContent, "():;[]{}`,+-/*\\\"",{});
   Tokenizer* tok = &tokenizer;
 
+  tok->keepComments = true;
+
   while(!tok->Done()){
     builder->PushString(tok->PeekWhitespace());
     Token peek = tok->PeekToken();
@@ -473,6 +475,8 @@ static Value Eval(Expression* expr,TrieMap<String,Value>* map){
   return MakeValue();
 }
 
+static ExpressionRange ParseRange(Tokenizer* tok,Arena* out);
+
 static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,Value>* map,Arena* out){
   //TODO: Add type and range to parsing
   /*
@@ -482,27 +486,60 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
 
   auto params = StartArray<ParameterExpression>(out);
 
+  // TODO: Not used but must parse it anyway.
+  bool sign = false;
+  ExpressionRange range = {};
+  ParamFlags flags = {};
   while(1){
     Token peek = tok->PeekToken();
 
     if(CompareString(peek,"parameter")){
-      tok->AdvancePeek();
-      // Parse optional type info and range
-      continue;
-    } else if(CompareString(peek,")")){
-      break;
-    } else if(CompareString(peek,";")){ // To parse inside module parameters, technically wrong but harmless
-         tok->AdvancePeek();
-         break;
-    } else if(CompareString(peek,",")){
-      tok->AdvancePeek();
-      continue;
-    } else { // Must be a parameter assignment
+      tok->FlushStoredTokens();
+      
+      // MARK
+      bool prev = tok->keepComments;
+      tok->keepComments = true;
+
+      tok->NextToken();
+      tok->FlushStoredTokens();
+
+      String commentExpression = ParseComment(tok,out);
+      
+      if(!Empty(commentExpression)){
+        Tokenizer comTok(commentExpression,":,",{});
+        
+        comTok.AssertNextToken("versat");
+        comTok.AssertNextToken(":");
+        
+        while(!comTok.Done()){
+          comTok.IfNextToken(",");
+          
+          Token paramFlag = comTok.NextToken();
+          Opt<ParamFlags> flagOpt = META_ParamToFlag_ReverseMap(paramFlag);
+
+          if(flagOpt.has_value()){
+            // Better support for flag concatenation when using enums.
+            flags = (ParamFlags) ((u32) flags | (u32) flagOpt.value());
+          } else {
+            // TODO: Better error reporting
+            printf("%.*s is not a valid param flag",UN(paramFlag));
+          }
+        }
+      }
+      tok->keepComments = prev;
+      
+      if(tok->IfPeekToken("signed")){
+        sign = true;
+      }
+      
+      range = ParseRange(tok,out);
+
       Token paramName = tok->NextToken();
 
       tok->AssertNextToken("=");
 
       Token peek = tok->PeekToken();
+      // TODO: Kinda hacky way of parsing strings, we do not care about them but must parse them anyway.
       if(CompareString(peek,"\"")){
         tok->AdvancePeek();
         while(!tok->Done()){
@@ -523,10 +560,21 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
       Value val = Eval(expr,map);
 
       map->Insert(paramName,val);
-
+      
       ParameterExpression* p = params.PushElem();
       p->name = paramName;
       p->expr = expr;
+      p->flags = flags;
+
+      sign = false;
+    } else if(CompareString(peek,")")){
+      break;
+    } else if(CompareString(peek,";")){ // To parse inside module parameters, technically wrong but harmless
+      tok->AdvancePeek();
+      break;
+    } else if(CompareString(peek,",")){
+      tok->AdvancePeek();
+      continue;
     }
   }
 

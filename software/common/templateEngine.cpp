@@ -4,7 +4,8 @@
 #include "parser.hpp"
 
 struct Frame{
-  Hashmap<String,Value>* table;
+  ArenaMark mark;
+  TrieMap<String,Value>* table;
   Frame* previousFrame;
 };
 
@@ -45,23 +46,29 @@ static void SetValue(Frame* frame,String id,Value val){
 }
 
 static Frame* CreateFrame(Frame* previous,Arena* out){
+  ArenaMark mark = MarkArena(out);
+
   Frame* frame = PushStruct<Frame>(out);
-  frame->table = PushHashmap<String,Value>(out,16); // Testing a fixed hashmap for now.
+  frame->table = PushTrieMap<String,Value>(out); // Testing a fixed hashmap for now.
+  frame->mark = mark;
   frame->previousFrame = previous;
   return frame;
 }
 
 static Frame* globalFrame;
-void InitializeTemplateEngine(Arena* perm){
-  globalFrame = CreateFrame(nullptr,perm);
-  globalFrame->table = PushHashmap<String,Value>(perm,99);
-  globalFrame->previousFrame = nullptr;
+static Frame* currentFrame;
+static Arena TE_ArenaInst;
+static Arena* TE_Arena = &TE_ArenaInst;
+
+void TE_Init(){
+  TE_ArenaInst = InitArena(Megabyte(1));
+  
+  globalFrame = CreateFrame(nullptr,TE_Arena);
+  currentFrame = globalFrame;
 }
 
-void ProcessTemplateSimple(FILE* outputFile,String tmpl){
+void TE_ProcessTemplate(StringBuilder* b,String tmpl){
   TEMP_REGION(temp,nullptr);
-  
-  auto b = StartString(temp);
 
   int size = tmpl.size;
   for(int i = 0; i < size; i++){
@@ -76,7 +83,7 @@ void ProcessTemplateSimple(FILE* outputFile,String tmpl){
       }
       String subName = String{&tmpl[start],i - start};
 
-      Opt<Value> optVal = GetValue(globalFrame,subName);
+      Opt<Value> optVal = GetValue(currentFrame,subName);
 
       if(!optVal.has_value()){
         printf("[Error] Template did not find the member: '%.*s'\n",UN(subName));
@@ -103,15 +110,29 @@ void ProcessTemplateSimple(FILE* outputFile,String tmpl){
     }
   }
 
-  String content = EndString(temp,b);
+  TE_Clear();
+}
+
+String TE_ProcessTemplate(Arena* out,String tmpl){
+  TEMP_REGION(temp,out);
+  auto b = StartString(temp);
+  TE_ProcessTemplate(b,tmpl);
+
+  String content = EndString(out,b);
+  
+  return content;
+}
+
+void TE_ProcessTemplate(FILE* outputFile,String tmpl){
+  TEMP_REGION(temp,nullptr);
+  
+  String content = TE_ProcessTemplate(temp,tmpl);
   
   fprintf(outputFile,"%.*s",UN(content));
   fflush(outputFile);
-
-  ClearTemplateEngine();
 }
 
-void TemplateSimpleSubstitute(StringBuilder* b,String tmpl,Hashmap<String,String>* subs){
+void TE_SimpleSubstitute(StringBuilder* b,String tmpl,Hashmap<String,String>* subs){
   int size = tmpl.size;
   for(int i = 0; i < size; i++){
     if(i + 2 < size && tmpl[i] == '@' && tmpl[i+1] == '{'){
@@ -133,7 +154,7 @@ void TemplateSimpleSubstitute(StringBuilder* b,String tmpl,Hashmap<String,String
   }
 }
 
-String TemplateSubstitute(String tmpl,String* valuesToReplace,Arena* out){
+String TE_Substitute(String tmpl,String* valuesToReplace,Arena* out){
   TEMP_REGION(temp,out);
   auto b = StartString(temp);
   
@@ -160,8 +181,24 @@ String TemplateSubstitute(String tmpl,String* valuesToReplace,Arena* out){
   return EndString(out,b);
 }
 
-void ClearTemplateEngine(){
-  globalFrame->table->Clear();
+void TE_PushScope(){
+  currentFrame = CreateFrame(currentFrame,TE_Arena);
+}
+
+void TE_PopScope(){
+  Frame* previousFrame = currentFrame->previousFrame;
+  
+  if(!previousFrame){
+    TE_Clear();
+    return;
+  }
+  
+  PopMark(currentFrame->mark);
+  currentFrame = previousFrame;
+}
+
+void TE_Clear(){
+  currentFrame->table->Clear();
 }
 
 Value MakeValue(){
@@ -198,33 +235,33 @@ Value MakeValue(bool b){
   return val;
 }
 
-void TemplateSetNumber(String id,int number){
-  SetValue(globalFrame,id,MakeValue(number));
+void TE_SetNumber(String id,int number){
+  SetValue(currentFrame,id,MakeValue(number));
 }
 
-void TemplateSetString(String id,String str){
+void TE_SetString(String id,String str){
   Value val = {};
   val.type = ValueType_STRING;
   val.str = TrimWhitespaces(str);
 
-  SetValue(globalFrame,id,val);
+  SetValue(currentFrame,id,val);
 }
 
-void TemplateSetHex(String id,int number){
+void TE_SetHex(String id,int number){
   // TODO: Need to indicate that this is a hexadecimal number
   Value val = {};
   val.type = ValueType_NUMBER;
   val.number = number;
   
-  SetValue(globalFrame,id,val);
+  SetValue(currentFrame,id,val);
 }
 
-void TemplateSetBool(String id,bool boolean){
+void TE_SetBool(String id,bool boolean){
   Value val = {};
   val.type = ValueType_BOOLEAN;
   val.boolean = boolean;
   
-  SetValue(globalFrame,id,val);
+  SetValue(currentFrame,id,val);
 }
 
 // This shouldn't be here, but cannot be on parser.cpp because otherwise struct parser would fail

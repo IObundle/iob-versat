@@ -76,7 +76,7 @@ struct InstanceDeclaration{
   InstanceDeclarationType modifier;
   Token typeName;
   Array<VarDeclaration> declarations; // share(config) groups can have multiple different declarations. TODO: It is kinda weird that inside the syntax, the share allows groups of instances to be declared while this does not happen elsewhere. Not enought to warrant a look for now, but keep in mind for later.
-  Array<Pair<String,String>> parameters;
+  Array<Pair<String,SymbolicExpression*>> parameters;
   Array<Token> addressGenUsed; // NOTE: We do not check if address gen exists at parse time, we check it later.
   Array<Token> shareNames;
   bool negateShareNames;

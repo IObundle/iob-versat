@@ -1665,6 +1665,13 @@ MultPartition PartitionMultExpressionOnVariable(SymbolicExpression* expr,String 
 // Performs no form of normalization or canonicalization whatsoever.
 // A simple equality for use by other functions
 bool ExpressionEqual(SymbolicExpression* left,SymbolicExpression* right){
+  if(left == right){
+    return true;
+  }
+  if(!left || !right){
+    return false;
+  }
+  
   if(left->type != right->type){
     return false;
   }

@@ -32,6 +32,7 @@ struct PortDeclaration{
 struct ParameterExpression{
   String name;
   Expression* expr;
+  ParamFlags flags;
 };
 
 struct Module{
