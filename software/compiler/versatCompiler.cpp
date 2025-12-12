@@ -935,6 +935,15 @@ int main(int argc,char* argv[]){
 
 /*
 
+Stuff to do:
+
+Figure out why the debug folder is being created inside the iob-soc-versat folder (should always be created outside).
+- I think it is because of the differences between the makefile run and the test.py running but not sure.
+
+*/
+
+/*
+
 Code style changes:
 
 After studing the other code base, is there a reason why each graph has its own arena? Why not have a single arena that contains all the nodes and edges and be done with it?
