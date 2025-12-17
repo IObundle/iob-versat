@@ -189,6 +189,7 @@ if(_){ \
 
 #define DEBUG_BREAK() DEBUG_BREAK_IF(true)
 
+// TODO: Better name for this, or better ergonomics somewhat.
 #define DEBUG_BREAK_OR_EXIT() \
   if(currentlyDebugging) { \
     DEBUG_BREAK(); \
@@ -672,7 +673,7 @@ static inline bool Contains(String str,char ch){
 }
 
 template<typename T>
-inline void Reverse(Array<T>& arr){
+inline void ReverseInPlace(Array<T>& arr){
   for(int i = 0; i < arr.size / 2; i++){
     SWAP(arr[i],arr[arr.size - 1 - i]);
   }

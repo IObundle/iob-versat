@@ -2,6 +2,7 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
+#include "parser.hpp"
 
 #include "embeddedData.hpp"
 
@@ -15,6 +16,12 @@ struct AddressGenDef;
 // NOTE: The code and the usage of symbolic expressions is really bad performance/memory usage wise. We are also blind to the amount of "extra" work we are doing, meaning that we are probably using megabytes for situations where we could just use a few kilobytes. It's mostly temp memory so not important right now but eventually need to start at least visualizing how "bad" the situation is.
 
 // NOTE: Majority of the approach taken in relation to memory allocations and how much we mutate data is not final, we do not care about things like that currently. More important is to start making the code correct and producing the correct data and later we can rewrite the code to be better in this aspect if needed.
+
+struct AddressGenForDef{
+  Token loopVariable;
+  Array<Token> startSym;
+  Array<Token> endSym;
+};
 
 struct AddressAccess{
   String name;
@@ -91,6 +98,11 @@ static bool operator==(const AccessAndType& l,const AccessAndType& r){
 }
 
 // ======================================
+// Misc (Probably gonna move these around eventually)
+
+Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,int maxLoops,String extVarName,Arena* out);
+
+// ======================================
 // Representation
 
 void   Repr(StringBuilder* builder,AddressAccess* access);
@@ -100,7 +112,7 @@ void   Print(AddressAccess* access);
 // ======================================
 // Compilation 
 
-AddressAccess* CompileAddressGen(AddressGenDef* def,String content);
+AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGenForDef> loops,SymbolicExpression* addr,String content);
 
 // ======================================
 // Global getter for compiled address gens

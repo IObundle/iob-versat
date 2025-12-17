@@ -5,6 +5,7 @@
 #include "debug.hpp"
 #include "debugVersat.hpp"
 #include "declaration.hpp"
+#include "embeddedData.hpp"
 #include "filesystem.hpp"
 #include "textualRepresentation.hpp"
 #include "symbolic.hpp"
@@ -27,6 +28,32 @@ bool NodeConflict(FUInstance* inst){
   return false;
 }
 
+bool NodeConflict(FUInstance* first,FUInstance* second){
+  // Only call this function if instances are the same decl.
+  if(first->declaration != second->declaration){
+    return true;
+  }
+
+  FUDeclaration* decl = first->declaration;
+
+  for(int i = 0; i <  decl->parameters.size; i++){
+    Parameter param = decl->parameters[i];
+
+    ParameterValue val1 = first->parameterValues[i];
+    ParameterValue val2 = second->parameterValues[i];
+
+    if((param.flags & ParamFlags_Unique) && !ExpressionEqual(val1.val,val2.val)){
+      DEBUG_BREAK();
+      return true;
+    }
+
+    // TODO: To handle order and reverse order, we need to store in the mapping the node that is supposed to be used.
+    //       Basically, if we have a node that has ADDR_W = 10 and another that has ADDR_W = 12, then all else being equal we want to use the ADDR_W = 12 values instead of keeping the ADDR_W = 10.
+  }
+
+  return false;
+}
+
 bool NodeMappingConflict(Edge edge1,Edge edge2){
   PortInstance p00 = edge1.units[0];
   PortInstance p01 = edge1.units[1];
@@ -37,6 +64,12 @@ bool NodeMappingConflict(Edge edge1,Edge edge2){
      NodeConflict(p10.inst) || NodeConflict(p11.inst)){
     return true;
   }
+
+#if 0
+  if(NodeConflict(p00.inst,p10.inst) || NodeConflict(p01.inst,p11.inst)){
+     return true;
+  }
+#endif
      
   if(p00.inst == p10.inst && p01.inst != p11.inst){
     return true;
@@ -65,6 +98,12 @@ bool MappingConflict(MappingNode map1,MappingNode map2){
        NodeConflict(p10) || NodeConflict(p11)){
       return true;
     }
+
+#if 0
+    if(NodeConflict(p00,p01) || NodeConflict(p10,p11)){
+      return true;
+    }
+#endif
     
     if(p00 == p10 && p01 != p11){
       return true;
@@ -192,6 +231,10 @@ bool EqualPortMapping(PortInstance p1,PortInstance p2){
 
   bool res = (d1 == d2);
 
+  if(NodeConflict(p1.inst,p2.inst)){
+    return false;
+  }
+
   return res;
 }
 
@@ -204,6 +247,7 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
   Pool<MappingNode> specificsAdded = {};
   
   for(SpecificMergeNodes specific : options.specifics){
+    // TODO: Currently there is no logic that checks if these mappings are correct or not. Need to eventually tackle this.
     MergeEdge node = {};
     node.instances[0] = specific.instA;
     node.instances[1] = specific.instB;
@@ -263,8 +307,6 @@ ConsolidationResult GenerateConsolidationGraph(Accelerator* accel0,Accelerator* 
     }
   }
 #endif
-
-  //auto nodes = StartGrowableArray<MappingNode>(out);
   
   // Insert specific mappings first (the first mapping nodes are the specifics)
 #if 0
@@ -2972,8 +3014,14 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   
   for(int i = 0; i < size; i++){
     decl->info.infos[i].baseType = types[i];
-    decl->info.infos[i].userFunctions = types[i]->userFunctions;
     
+    auto list = PushArenaList<ConfigFunction*>(temp);
+    for(ConfigFunction* func : types[i]->info.infos[0].userFunctions){
+      *list->PushElem() = func;
+    }
+
+    decl->info.infos[i].userFunctions = PushArrayFromList(globalPermanent,list);
+
     AccelInfoIterator iter = StartIteration(&decl->info);
     iter.SetMergeIndex(i);
     

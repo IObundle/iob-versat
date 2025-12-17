@@ -37,54 +37,7 @@ enum FUDeclarationType{
 struct Parameter{
   String name;
   SymbolicExpression* valueExpr;
-};
-
-enum UserConfigType{
-  UserConfigurationType_CONFIG,
-  UserConfigurationType_MEM,
-  UserConfigurationType_STATE
-};
-
-enum UserConfigStatementType{
-  UserConfigStatementType_SIMPLE,
-  UserConfigStatementType_COMPLEX
-};
-
-struct UserConfigStatement{
-  UserConfigStatementType type;
-
-  union {
-    struct {
-      String inst;
-      String wire;
-      SymbolicExpression* expr;
-    } simple;
-    
-    struct {
-      String inst;
-      Array<String> accesses;
-    } function;
-  };
-};
-
-enum ConfigVariableType{
-  ConfigVariableType_INTEGER,
-  ConfigVariableType_POINTER
-};
-
-struct ConfigVariable{
-  ConfigVariableType type;
-  String name;
-};
-
-struct UserConfigFunction{
-  UserConfigType type;
-  
-  String name;
-  Array<ConfigVariable> variables;
-  // For now, only tackling config.
-  // TODO: Union
-  Array<UserConfigStatement> configs;
+  ParamFlags flags;
 };
 
 // TODO: A lot of duplicated data exists since the change to merge.
@@ -120,6 +73,9 @@ struct FUDeclaration{
   Array<ExternalMemorySymbolic> externalMemorySymbol;
   
   // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.
+  // TODO: I think one problem that I keep encountering is the fact that we do not want to access the original graphs anymore after registering the declaration (unless for merge purposes).
+  // TODO: Basically, because of stuff like merge and such, we need to access the AccelInfo and only the AccelInfo.
+
   Accelerator* baseCircuit; // For merge, baseCircuit contains muxes but not buffers.
   Accelerator* fixedDelayCircuit;
   Accelerator* flattenedBaseCircuit;
@@ -129,9 +85,6 @@ struct FUDeclaration{
   SubMap* flattenMapping;
 
   AddressGenInst supportedAddressGen;
-  
-  // TODO: Compile config function into a easier to use form.
-  Array<UserConfigFunction> userFunctions;
   
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
@@ -178,6 +131,11 @@ struct FUDeclaration{
   }
   bool IsSequentialOperation(){
     bool res = (isOperation && info.infos[0].outputLatencies[0] != 0);
+    return res;
+  }
+
+  bool IsModularLike(){
+    bool res = (type == FUDeclarationType_COMPOSITE || type == FUDeclarationType_MERGED);
     return res;
   }
   

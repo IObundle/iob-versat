@@ -121,6 +121,9 @@ void DebugEndRegion(Arena* arena,const char* file,const char* function,int line)
 }
 
 Arena* contextArenas[2];
+Arena singleUseCasesArenas[8];
+
+u8 singleUseArenaBeingUsed = 0;
 
 Arena* GetArena(Arena* diff){
   if(contextArenas[0] != diff){
@@ -147,8 +150,38 @@ Arena* GetArena2(Arena* diff,Arena* diff2){
     return contextArenas[0];
   }
 
-  Assert(contextArenas[1] != diff && contextArenas[1] != diff2);
-  return contextArenas[1];
+  if(contextArenas[1] != diff && contextArenas[1] != diff2){
+    return contextArenas[1];
+  }
+
+  printf("Ran out of temporary arenas\n");
+  DEBUG_BREAK();
+  return nullptr;
+}
+
+Arena* GetSingleUseArena(){
+  for(int i = 0; i < 8; i += 1){
+    int index = (1 << i);
+    if(singleUseArenaBeingUsed & index){
+      continue;
+    }
+    
+    singleUseArenaBeingUsed |= index;
+    return &singleUseCasesArenas[i];
+  }
+
+  printf("Ran out of single use arenas\n");
+  DEBUG_BREAK();
+  return nullptr;
+}
+
+void FreeSingleUseArena(Arena* arena){
+  arena->used = 0;
+
+  int index = (arena - singleUseCasesArenas);
+
+  Assert(index >= 0 && index <= 8);
+  singleUseArenaBeingUsed &= ~(1 << index);
 }
 
 int GetPageSize(){
@@ -257,6 +290,9 @@ ArenaMark MarkArena(Arena* arena){
 
 void PopMark(ArenaMark mark){
   Arena* arena = mark.arena;
+
+  Assert(!(arena->flags & (u8) ArenaFlags_NO_POP));
+
   int biggerUsed = arena->used;
   arena->used = mark.mark - arena->mem;
   

@@ -10,6 +10,8 @@ struct FUDeclaration;
 struct Accelerator;
 struct Edge;
 struct AccelInfo;
+struct ConfigFunction;
+struct InstanceInfo;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -143,7 +145,8 @@ enum NodeType{
 };
 
 struct ParameterValue{
-  String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
+  SymbolicExpression* val;
+  //String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
 };
 
 struct FUInstance{
@@ -355,7 +358,6 @@ FUInstance* CreateFUInstance(Accelerator* accel,FUDeclaration* type,String entit
 FUInstance* CopyInstance(Accelerator* newAccel,FUInstance* oldInstance,bool preserveIds,String newName);
 FUInstance* GetUnit(Accelerator* accel,String name);
 
-bool SetParameter(FUInstance* inst,String parameterName,String parameterValue); // False if param does not exist
 bool IsUnitCombinatorial(FUInstance* inst);
 
 Array<int> GetNumberOfInputConnections(FUInstance* node,Arena* out);
@@ -397,6 +399,12 @@ void SetStatic(FUInstance* instance);
 // Graph inputs and outputs
 FUInstance* GetInputInstance(Pool<FUInstance>* nodes,int inputIndex);
 FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
+
+// ======================================
+// Params
+
+bool SetParameter(FUInstance* inst,String parameterName,SymbolicExpression* val); // False if param does not exist
+SymbolicExpression* GetParameterValue(FUInstance* inst,String name);
 
 //
 // Graph fixes and operations
@@ -449,3 +457,64 @@ struct FlattenWithMergeResult{
 
 bool CanBeFlattened(Accelerator* accel);
 FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex);
+
+// ======================================
+// Hierarchical access (WIP)
+
+// Map from name in hierarchical access (ex: a.b.c[0].d) to an entity. The VARIABLE part is that this mapping is also used inside the parser to map stuff to things like variables or to special names that are specific to a given part of the code.
+
+enum EntityType{
+  EntityType_NODE,
+  EntityType_CONFIG_WIRE,
+  EntityType_STATE_WIRE,
+  EntityType_CONFIG_FUNCTION,
+  EntityType_VARIABLE_INPUT,
+  EntityType_VARIABLE_SPECIAL // For variables that exist "by default"
+};
+
+struct Entity{
+  EntityType type;
+  InstanceInfo* inst;
+
+  union {
+    Wire* wire;
+    ConfigFunction* func;
+    String varName;
+  };
+};
+
+enum VariableType{
+  VariableType_VOID_PTR,
+  VariableType_INTEGER
+};
+
+struct EnvScope{
+  TrieMap<String,VariableType>* variableTypes; // Variable not existing in here means that type is not know, not that it does not exist.
+};
+
+struct Error{
+  
+};
+
+// Env is more of a parser related thing than it is an accelerator related thing.
+// Need to copy this to a better place and start using it in other parts of the code that should use it.
+struct Env{
+  Arena* arena; // Preferably a free arena since environment needs freedom to push and pop data whenever it pleases.
+
+  // Store errors in here.
+  ArenaList<Error> errors;
+
+  TrieSet<String> specialKeywords;
+
+  ArenaDoubleList<EnvScope>* scopes;
+  DoubleLink<EnvScope>* current;
+
+  //void AddInput(VarDeclaration var);
+};
+
+Env* StartEnvironment(Arena* use);
+
+Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr);
+Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr);
+
+void AddOrSetVariable(Env* env,String name,VariableType type);

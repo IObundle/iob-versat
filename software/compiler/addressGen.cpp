@@ -448,7 +448,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,int maxLo
   return PushArrayFromList(out,list);
 }
 
-static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,int maxLoops,Arena* out){
+Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,int maxLoops,String extVarName,Arena* out){
   TEMP_REGION(temp,out);
 
   ExternalMemoryAccess external = CompileExternalMemoryAccess(access->external,access->dutyDivExpr,temp);
@@ -465,11 +465,11 @@ static Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int high
   }
   
   // NOTE: We push the start term to the ext pointer in order to save memory inside the unit. This is being done in a  kinda hacky way, but nothing major.
-  String ext_addr = "ext"; // TODO: Should be a parameter or something, not randomly hardcoded here
+  String ext_addr = extVarName;
   if(!IsZero(freeTerm)){
     String repr = PushRepr(temp,freeTerm);
 
-    ext_addr = PushString(out,"(((float*) ext) + (%.*s))",UN(repr));
+    ext_addr = PushString(out,"(((float*) %.*s) + (%.*s))",UN(extVarName),UN(repr));
   }
   
   // TODO: No need for a list, we already know all the memory that we are gonna need
@@ -621,18 +621,18 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
   return PushArrayFromList(out,list);
 }
 
-AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
+AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGenForDef> loops,SymbolicExpression* addr,String content){
   Arena* out = globalPermanent;
   
   TEMP_REGION(temp,out);
 
-  Array<Token> symbolicTokens = def->symbolicTokens;
+  //Array<Token> symbolicTokens = def->symbolicTokens;
 
   // TODO: Issue a warning if a variable is declared but not used.
   // TODO: Better error reporting by allowing code to call the ReportError from the spec parser 
   bool anyError = false;
-  for(AddressGenForDef loop : def->loops){
-    Opt<Token> sameNameAsInput = Find(def->inputs,loop.loopVariable);
+  for(AddressGenForDef loop : loops){
+    Opt<Token> sameNameAsInput = Find(inputs,loop.loopVariable);
 
     if(sameNameAsInput.has_value()){
       ReportError2(content,loop.loopVariable,sameNameAsInput.value(),"Loop variable","Overshadows input variable");
@@ -640,15 +640,15 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
     }
     
     for(Token tok : loop.startSym){
-      if(IsIdentifier(tok) && !Contains(def->inputs,tok)){
-        printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
+      if(IsIdentifier(tok) && !Contains(inputs,tok)){
+        printf("On address gen: %.*s:%d\n",UN(name),name.loc.start.line);
         printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
         anyError = true;
       }
     }
     for(Token tok : loop.endSym){
-      if(IsIdentifier(tok) && !Contains(def->inputs,tok)){
-        printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
+      if(IsIdentifier(tok) && !Contains(inputs,tok)){
+        printf("On address gen: %.*s:%d\n",UN(name),name.loc.start.line);
         printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
         anyError = true;
       }
@@ -656,26 +656,18 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
   }
 
   auto list = PushArenaList<Token>(temp);
-  for(AddressGenForDef loop : def->loops){
+  for(AddressGenForDef loop : loops){
     *list->PushElem() = loop.loopVariable;
   }
   auto allVariables = PushArrayFromList(temp,list);
-
-  for(Token tok : symbolicTokens){
-    if(IsIdentifier(tok) && !Contains(def->inputs,tok) && !Contains(allVariables,tok)){
-      printf("On address gen: %.*s:%d\n",UN(def->name),def->name.loc.start.line);
-      printf("\t[Error] Symbol '%.*s' inside address expression does not exist (check if name is correct, symbols inside expressions can only be inputs or loop variables)\n",UN(tok));
-      anyError = true;
-    }
-  }
   
   if(anyError){
     return nullptr;
   }
   
   auto loopVarBuilder = StartArray<String>(temp);
-  for(int i = 0; i <  def->loops.size; i++){
-    AddressGenForDef loop  =  def->loops[i];
+  for(int i = 0; i < loops.size; i++){
+    AddressGenForDef loop = loops[i];
 
     *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
   }
@@ -683,7 +675,7 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
       
   // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
   SymbolicExpression* loopExpression = PushLiteral(temp,1);
-  for(AddressGenForDef loop : def->loops){
+  for(AddressGenForDef loop : loops){
     // TODO: Handle parsing errors
     // TODO: Performance, we are parsing this twice, there is another below. Maybe we can join the loops into a single one
 
@@ -698,7 +690,8 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
 
   // Building expression for the external address
   // TODO: Handle parsing errors
-  SymbolicExpression* symbolicExpr = ParseSymbolicExpression(symbolicTokens,globalPermanent);
+  SymbolicExpression* symbolicExpr = addr;
+  //SymbolicExpression* symbolicExpr = ParseSymbolicExpression(symbolicTokens,globalPermanent);
   Assert(symbolicExpr);
   SymbolicExpression* normalized = Normalize(symbolicExpr,temp);
 
@@ -728,7 +721,7 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
       term = PushLiteral(temp,0);
     }
 
-    AddressGenForDef loop = def->loops[i];
+    AddressGenForDef loop = loops[i];
     
     // TODO: Performance, we are parsing the start and end stuff twice. This is the second, the first is above.
     SymbolicExpression* start = ParseSymbolicExpression(loop.startSym,temp);
@@ -751,8 +744,8 @@ AddressAccess* CompileAddressGen(AddressGenDef* def,String content){
   LoopLinearSum* freeTerm = PushLoopLinearSumFreeTerm(toCalcConst,temp);
       
   AddressAccess* result = globalAddressGen.Alloc();
-  result->name = PushString(out,def->name);
-  result->inputVariableNames = CopyArray<String>(def->inputs,out);
+  result->name = PushString(out,name);
+  result->inputVariableNames = CopyArray<String>(inputs,out);
   result->internal = PushLoopLinearSumSimpleVar("x",PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
   result->dutyDivExpr = SymbolicDeepCopy(dutyDiv,out);
@@ -828,7 +821,7 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
       EmitDebugAddressGenInfo(doubleLoop,c);
       Repr(b,doubleLoop);
 
-      Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,maxLoops,temp);
+      Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,maxLoops,"ext",temp);
       EmitStoreAddressGenIntoConfig(c,params);
     }
 
@@ -839,7 +832,7 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
       EmitDebugAddressGenInfo(singleLoop,c);
       Repr(b,singleLoop);
 
-      Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,maxLoops,temp);
+      Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,maxLoops,"ext",temp);
       EmitStoreAddressGenIntoConfig(c,params);
     }
 

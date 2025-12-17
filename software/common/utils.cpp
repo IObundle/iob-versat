@@ -257,10 +257,23 @@ String ReprMemorySize(size_t val,Arena* out){
 
 String JoinStrings(Array<String> strings,String separator,Arena* out){
   TEMP_REGION(temp,out);
-  if(strings.size == 1){
-    return PushString(out,strings[0]);
+  bool first = true;
+  auto builder = StartString(temp);
+  for(String str : strings){
+    if(first){
+      first = false;
+    } else {
+      builder->PushString(separator);
+    }
+
+    builder->PushString(str);
   }
 
+  return EndString(out,builder);
+}
+
+String JoinStrings(ArenaList<String>* strings,String separator,Arena* out){
+  TEMP_REGION(temp,out);
   bool first = true;
   auto builder = StartString(temp);
   for(String str : strings){

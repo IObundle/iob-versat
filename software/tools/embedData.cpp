@@ -14,6 +14,7 @@
 
 // TODO: Support numbers inside tables. Support more levels of data hierarchies.
 //       More importantly, implement stuff as they are needed. No point in trying to push for anything complex right now.
+
 // TODO: Implement special code for bit flags (needed currently by the AddressGen code).
 //       Do not know yet if I want them to be enum, need to test how easy C++ lets enum bit flags work.
 //       If C++ is giving trouble, generate the code needed to support easy bit operations.

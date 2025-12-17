@@ -244,6 +244,9 @@ void ReportFileCreation(bool allFiles = false){
   }
 }
 
+// TODO: Remove this
+void InitializeUserConfigs();
+
 int main(int argc,char* argv[]){
 #ifdef VERSAT_DEBUG
   printf("Running in debug mode\n");
@@ -255,9 +258,14 @@ int main(int argc,char* argv[]){
   globalPermanent = &globalPermanentInst;
   Arena tempInst = InitArena(Megabyte(128));
   Arena temp2Inst = InitArena(Megabyte(128));
+  Arena temp3Inst = InitArena(Megabyte(32));
 
   contextArenas[0] = &tempInst;
   contextArenas[1] = &temp2Inst;
+
+  for(int i = 0; i < 8; i++){
+    singleUseCasesArenas[i] = InitArena(Megabyte(1));
+  }
   
   TEMP_REGION(temp,nullptr);
   TEMP_REGION(temp2,temp);
@@ -265,8 +273,10 @@ int main(int argc,char* argv[]){
   Arena* perm = globalPermanent;
   
   InitializeDefaultData(perm);
-  InitializeTemplateEngine(perm);
+  TE_Init();
   InitializeSimpleDeclarations();
+  InitializeUserConfigs();
+  InitParser(perm);
 
 #if 0
   TestSymbolic();
@@ -597,11 +607,29 @@ int main(int argc,char* argv[]){
       allAddressGens->Insert(t);
     }
 
-    // For now we compile every single address gen that is used but eventually we want to only compile what we need, otherwise the address gen tests will always fail.
     for(String name : allAddressGens){
       ConstructDef def = GetConstructOrFail(name);
 
-      AddressAccess* access = CompileAddressGen(&def.addressGen,content);
+      AddressGenDef a = def.addressGen;
+      
+      SymbolicExpression* expr = ParseSymbolicExpression(a.symbolicTokens,perm);
+
+      auto list = PushArenaList<Token>(temp);
+      for(AddressGenForDef loop : a.loops){
+        *list->PushElem() = loop.loopVariable;
+      }
+      auto allVariables = PushArrayFromList(temp,list);
+
+      // TODO: BAD
+      for(Token tok : a.symbolicTokens){
+        if(IsIdentifier(tok) && !Contains(a.inputs,tok) && !Contains(allVariables,tok)){
+          printf("On address gen: %.*s:%d\n",UN(a.name),a.name.loc.start.line);
+          printf("\t[Error] Symbol '%.*s' inside address expression does not exist (check if name is correct, symbols inside expressions can only be inputs or loop variables)\n",UN(tok));
+          anyError = true;
+        }
+      }
+
+      AddressAccess* access = CompileAddressGen(a.name,a.inputs,a.loops,expr,content);
       
       if(!access){
         anyError = true;
@@ -904,6 +932,15 @@ int main(int argc,char* argv[]){
 
   return 0;
 }
+
+/*
+
+Stuff to do:
+
+Figure out why the debug folder is being created inside the iob-soc-versat folder (should always be created outside).
+- I think it is because of the differences between the makefile run and the test.py running but not sure.
+
+*/
 
 /*
 

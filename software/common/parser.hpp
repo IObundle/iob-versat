@@ -54,29 +54,6 @@ struct Token : public String{
   }
 };
 
-#if 0
-inline bool operator==(const Token& lhs,const Token& rhs){
-  bool first = CompareString(lhs,rhs);
-  if(!first){
-    return false;
-  }
-  if(lhs.loc.start.column != rhs.loc.start.column ||
-     lhs.loc.start.line != rhs.loc.start.line ||
-     lhs.loc.end.column != rhs.loc.end.column ||
-     lhs.loc.end.line != rhs.loc.end.line){
-    return false;
-  }
-  
-  return true;
-}
-
-inline bool operator!=(const Token& lhs,const Token& rhs){
-  bool res = !(lhs == rhs);
-
-  return res;
-}
-#endif
-
 template<> class std::hash<Token>{
 public:
   std::size_t operator()(Token const& s) const noexcept{
@@ -104,6 +81,13 @@ struct TokenizerMark{
 
 #define MAX_STORED_TOKENS 4
 
+/*
+  TODO: The parser code is breaking in multiple places and currently only works because some hacks are being made.
+        The biggest problem is the way templates are "defined". Having to tell the tokenizer all the combinations of symbols that we care about is kinda stupid, because if the parser looks at a symbol and does not recognize it then we probably want to return from wathever we are trying to parse and let the upper code try to make sense of it. Instead, the only thing that the template stuff does is tell us whether we want to treat something as a symbol (and return it immediatly) or if we want to treat it as an identifier (and consume as many non whitespace characters as possible).
+        Ex: It is stupid that the parser looks at "3{" and treats this as a token, unless we tell it that '{' is a symbol so that the parser actually outputs a "3" and a "{" seperatly. It is also stupid how we are approaching this anyway. We know full well that the languages we are trying to parse follow basically the same set of rules. The only major difference is which set of multicharacter symbols the language supports ( "<<" might mean something in one language while in the other we want to parse each "<" individually).
+        The second stupid thing that we are trying to do is not handling comments properly. Because Verilog does not support attributes in the places that we want it to, we have no choice than to use comments to pass Versat specific info. There is no other choice, comments are the only thing that allow us to put wathever information we want in wathever place we want. Because the tokenizer was not built with this in mind, there are a lot of places where the code is kinda uglier than it needs to be.
+*/
+
 struct Tokenizer{
   const char* start;
   const char* ptr;
@@ -111,6 +95,7 @@ struct Tokenizer{
   TokenizerTemplate* tmpl;
   Arena leaky;
   
+  // Currently a FIFO implemented by copying from i+1 to i to remove it.
   Token storedTokens[MAX_STORED_TOKENS];
 
   // Line and column start at one. Subtract one to get zero based indexes
@@ -121,16 +106,13 @@ struct Tokenizer{
   // TODO: This should technically be part of the Tokenizer template
   bool keepWhitespaces;
   bool keepComments;
-  
-private:
 
+  // Mostly implementation stuff, generally use the functions below unless you know what you are doing.
   void ConsumeWhitespace();
   Token ParseToken();
   void AdvanceOneToken();
   Token PopOneToken();
   const char* GetCurrentPtr();
-  
-public:
   
   // TODO: Need to make a function that returns a location for a given token, so that I can return a good error message for the token not being the expected on. The function accepts a token and either returns a string or returns some structure that contains all the info needed to output such text.
   
@@ -146,6 +128,10 @@ public:
 
   String PeekCurrentLine(); // Get full line (goes backwards until start of line and peeks until newline).
   Token PeekRemainingLine(); // Does not go back. 
+
+  void AdvanceComments();
+
+  void FlushStoredTokens();
   
   bool IfPeekToken(String str);
   bool IfNextToken(String str); // Only does "next" if token matches str
@@ -179,10 +165,14 @@ public:
   TokenizerTemplate* SetTemplate(TokenizerTemplate* tmpl); // Returns old template
 };
 
+void InitParser(Arena* perm);
+
 bool IsIdentifier(String str); // Default identifier rules (starts with alpha or '_' and can contain numbers after)
 bool IsOnlyWhitespace(String tok);
 bool Contains(String str,String toCheck);
 bool StartsWith(String toSearch,String starter);
+
+Token ParseComment(Tokenizer* tok,Arena* out);
 
 bool CheckFormat(const char* format,String tok);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);

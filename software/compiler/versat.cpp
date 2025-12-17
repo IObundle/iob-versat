@@ -52,6 +52,7 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   for(int i = 0; i < instantiated.size; i++){
     decl.parameters[i].name = info->defaultParameters[i].name;
     decl.parameters[i].valueExpr = SymbolicExpressionFromVerilog(info->defaultParameters[i].expr,perm);
+    decl.parameters[i].flags = info->defaultParameters[i].flags;
   }
 
   decl.inputSize = PushArray<SymbolicExpression*>(out,info->inputs.size);
@@ -726,15 +727,15 @@ Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena*
   
   for(int i = 0; i < decl->parameters.size; i++){
     Parameter param = decl->parameters[i];
-    String val = inst->parameterValues[i].val;
+    SymbolicExpression* val = inst->parameterValues[i].val;
 
     if(IsGlobalParameter(param.name)){
       map->Insert(param.name,PushVariable(out,param.name));
     } else {
-      if(Empty(val)){
-        map->Insert(param.name,param.valueExpr);
+      if(val){
+        map->Insert(param.name,val);
       } else {
-        map->Insert(param.name,ParseSymbolicExpression(val,out));
+        map->Insert(param.name,param.valueExpr);
       }
     }
   }

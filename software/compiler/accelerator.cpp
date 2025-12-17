@@ -7,6 +7,7 @@
 #include "versat.hpp"
 
 #include "symbolic.hpp"
+#include "userConfigs.hpp"
 
 #define TAG_TEMPORARY 1
 #define TAG_PERMANENT 2
@@ -457,8 +458,8 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
 
       buffer = CreateFUInstance(accel,BasicDeclaration::fixedBuffer,bufferName);
       buffer->bufferAmount = delay - BasicDeclaration::fixedBuffer->info.infos[0].outputLatencies[0];
-      String bufferAmountString = PushString(globalPermanent,"%d",buffer->bufferAmount);
-      SetParameter(buffer,"AMOUNT",bufferAmountString);
+
+      SetParameter(buffer,"AMOUNT",PushLiteral(globalPermanent,buffer->bufferAmount));
     } else {
       String bufferName = PushString(globalPermanent,"buffer%d",buffersInserted);
 
@@ -495,6 +496,24 @@ FUInstance* GetOutputInstance(Pool<FUInstance>* nodes){
   }
 
   return nullptr;
+}
+
+SymbolicExpression* GetParameterValue(FUInstance* inst,String name){
+  SymbolicExpression* val = {};
+  for(int i = 0; i < inst->declaration->parameters.size; i++){
+    Parameter param = inst->declaration->parameters[i];
+    SymbolicExpression* paramVal = inst->parameterValues[i].val;
+
+    if(CompareString(param.name,name)){
+      if(paramVal){
+        val = paramVal;
+      } else {
+        val = param.valueExpr;
+      }
+    }
+  }
+
+  return val;
 }
 
 PortInstance GetAssociatedOutputPortInstance(FUInstance* unit,int portIndex){
@@ -774,13 +793,13 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   return res;
 }
 
-bool SetParameter(FUInstance* inst,String parameterName,String parameterValue){
+bool SetParameter(FUInstance* inst,String parameterName,SymbolicExpression* val){
   FUDeclaration* decl = inst->declaration;
   int paramSize = decl->parameters.size;
   
   for(int i = 0; i < paramSize; i++){
     if(CompareString(decl->parameters[i].name,parameterName)){
-      inst->parameterValues[i].val = parameterValue;
+      inst->parameterValues[i].val = val;
       return true;
     }
   }
@@ -2083,4 +2102,152 @@ FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex){
   res.accel = newAccel;
 
   return res;
+}
+
+// ======================================
+// Hierarchical access
+
+Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr){
+  // TODO: This function can be simplified.
+  FUInstance* currentInstance = nullptr;
+
+  AccelInfoIterator iter = StartIteration(info);
+
+  // NOTE: Logic below assumes that we start with an iterator already pointing to the first unit
+  for(; iter.IsValid();){
+    InstanceInfo* info = iter.CurrentUnit();
+    if(info->name == accessExpr[0]){
+      break;
+    } else {
+      iter = iter.Next();
+    }
+  }
+  
+  if(!iter.IsValid()){
+    return {};
+  }
+
+  for(int i = 1; i < accessExpr.size; i++){
+    String access = accessExpr[i];
+    
+    if(i == accessExpr.size - 1){
+      InstanceInfo* outerInfo = iter.CurrentUnit();
+
+      for(; iter.IsValid();){
+        InstanceInfo* info = iter.CurrentUnit();
+        if(info->name == access){
+          iter = iter.StepInsideOnly();
+
+          if(!iter.IsValid()){
+            break;
+          }
+          
+          Entity res = {};
+          res.inst = iter.CurrentUnit();
+          res.type = EntityType_NODE;
+
+          return res;
+        } else {
+          iter = iter.Next();
+        }
+      }
+      
+      // Did not find node inside which means it must be a wire or a function.
+      for(Wire& config : outerInfo->decl->configs){
+        if(config.name == access){
+          Entity res = {};
+          res.wire = &config;
+          res.type = EntityType_CONFIG_WIRE;
+          res.inst = outerInfo;
+          
+          return res;
+        }
+      }
+
+      for(Wire& state : outerInfo->decl->states){
+        if(state.name == access){
+          Entity res = {};
+          res.wire = &state;
+          res.type = EntityType_STATE_WIRE;
+          res.inst = outerInfo;
+          
+          return res;
+        }
+      }
+
+      for(MergePartition part : outerInfo->decl->info.infos){
+        for(ConfigFunction* func : part.userFunctions){
+          if(func->individualName == access){
+            Entity res = {};
+            res.func = func;
+            res.type = EntityType_CONFIG_FUNCTION;
+            res.inst = outerInfo;
+          
+            return res;
+          }
+        }
+      }
+    } else {
+      for(; iter.IsValid();){
+        InstanceInfo* info = iter.CurrentUnit();
+        if(info->name == access){
+          iter = iter.StepInsideOnly();
+          break;
+        } else {
+          iter = iter.Next();
+        }
+      }
+
+      if(!iter.IsValid()){
+        return {};
+      }
+    }
+  }
+
+  if(iter.IsValid()){
+    Entity res = {};
+    res.inst = iter.CurrentUnit();
+    res.type = EntityType_NODE;
+    
+    return res;
+  }
+
+  return {};
+}
+
+Env* StartEnvironment(Arena* use){
+  Env* env = PushStruct<Env>(use);
+  env->arena = use;
+  env->scopes = PushArenaDoubleList<EnvScope>(use);
+  env->current = env->scopes->PushNode();
+  env->current->elem.variableTypes = PushTrieMap<String,VariableType>(use);
+
+  return env;
+}
+
+Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr){
+
+  if(accessExpr.size == 1){
+    String name = accessExpr[0];
+    DoubleLink<EnvScope>* ptr = env->current;
+
+    // Up the scope chain.
+    for(; ptr != nullptr; ptr = ptr->prev){
+      for(Pair<String,VariableType> p : ptr->elem.variableTypes){
+        String str = p.first;
+        if(str == name){
+          Entity res = {};
+          res.varName = name;
+          res.type = EntityType_VARIABLE_INPUT;
+          return res;
+        }
+      }
+    }
+  }
+
+  return GetEntityFromHierAccess(info,accessExpr);
+}
+
+void AddOrSetVariable(Env* env,String name,VariableType type){
+  env->current->elem.variableTypes->Insert(name,type);
 }

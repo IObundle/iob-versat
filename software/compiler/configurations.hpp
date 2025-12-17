@@ -96,7 +96,7 @@ struct InstanceInfo{
   StructInfo* structInfo;
 };
 
-struct UserConfigFunction;
+struct ConfigFunction;
 
 /*
 
@@ -141,7 +141,7 @@ struct MergePartition{
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
   
-  Array<UserConfigFunction> userFunctions;
+  Array<ConfigFunction*> userFunctions;
 
   Accelerator* recon;
   
@@ -244,7 +244,6 @@ Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 // TODO: This should be built on top of AccelInfo (taking an iterator), instead of just taking the array of instance infos.
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
-
 
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
 

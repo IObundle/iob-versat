@@ -2,6 +2,8 @@
 
 #include "declaration.hpp"
 #include "embeddedData.hpp"
+#include "globals.hpp"
+#include "memory.hpp"
 #include "parser.hpp"
 #include "symbolic.hpp"
 #include "templateEngine.hpp"
@@ -665,7 +667,7 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
   CHECK_IDENTIFIER(res.typeName);
 
   Token possibleParameters = tok->PeekToken();
-  auto list = PushArenaList<Pair<String,String>>(temp);
+  auto list = PushArenaList<Pair<String,SymbolicExpression*>>(temp);
   if(CompareString(possibleParameters,"#")){
     tok->AdvancePeek();
     EXPECT(tok,"(");
@@ -676,17 +678,20 @@ Opt<InstanceDeclaration> ParseInstanceDeclaration(Tokenizer* tok,Arena* out){
 
       EXPECT(tok,"(");
 
+      SymbolicExpression* expr = ParseSymbolicExpression(tok,out);
+
+#if 0
       String content = {};
 
       Opt<Token> remaining = tok->NextFindUntil(")");
       PROPAGATE(remaining);
       content = remaining.value();
-      
+#endif      
+
       EXPECT(tok,")");
       
       String savedParameter = PushString(out,parameterName);
-      String savedString = PushString(out,content);
-      *list->PushElem() = {savedParameter,savedString}; 
+      *list->PushElem() = {savedParameter,expr}; 
 
       if(tok->IfNextToken(",")){
         continue;
@@ -784,7 +789,12 @@ Opt<ModuleDef> ParseModuleDef(Tokenizer* tok,Arena* out){
     while(!tok->Done()){
       if(IsNextTokenConfigFunctionStart(tok)){
         ConfigFunctionDef* func = ParseConfigFunction(tok,out);
-        *configFunctions->PushElem() = *func;
+
+        if(func){
+          *configFunctions->PushElem() = *func;
+        } else {
+          printf("Error parsing user function\n");
+        }
       } else {
         break;
       }
@@ -1279,13 +1289,35 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   Arena* perm = globalPermanent;
   Accelerator* circuit = CreateAccelerator(def.name,AcceleratorPurpose_MODULE);
 
+  FREE_ARENA(temp3);
+  ARENA_NO_POP(temp3);
+  Env* env = StartEnvironment(temp3);
+
   InstanceTable* table = PushHashmap<String,FUInstance*>(temp,1000);
   InstanceName* names = PushSet<String>(temp,1000);
   bool error = false;
 
   ArenaList<Pair<String,int>>* allArrayDefinitons = PushArenaList<Pair<String,int>>(temp);
+
+#if 0
+  for(VarDeclaration& decl : def.inputs){
+    env->AddInputs(decl);
+  }
+
+  for(InstanceDeclaration& decl : def.declarations){
+    env->AddInstance(decl);
+  }
+
+  for(ConnectionDef& decl : def.connections){
+    if(decl.type == ConnectionDef::EQUALITY){
+      
+    }
+  }
+#endif
+
   // TODO: Need to detect when multiple instances with same name
   int insertedInputs = 0;
+
   for(VarDeclaration& decl : def.inputs){
     if(CompareString(decl.name,"out")){
       ReportError(content,decl.name,"Cannot use special out unit as module input");
@@ -1452,8 +1484,6 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
       GroupIterator in  = IterateGroup(decl.input);
 
       while(HasNext(out) && HasNext(in)){
-        BLOCK_REGION(temp);
-
         Var outVar = Next(out);
         Var inVar = Next(in);
         
@@ -1524,144 +1554,14 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   FUDeclaration* res = RegisterSubUnit(circuit,SubUnitOptions_BAREBONES);
   res->definitionArrays = PushArrayFromList(perm,allArrayDefinitons);
   
-  auto userConfigs = PushArenaList<UserConfigFunction>(temp);
-  for(auto funcDecl : def.configs){
-    // Need to transform this into a simple format that the code generation does not need to verify for correctness. 
-
-    Array<ConfigVarDeclaration> variables = funcDecl.variables;
-    Array<Token> variableNames = Extract(variables,temp,&ConfigVarDeclaration::name);
+  {
+    auto list = PushArenaList<ConfigFunction*>(temp);
+    for(auto funcDecl : def.configs){
+      *list->PushElem() = InstantiateConfigFunction(&funcDecl,res,content,globalPermanent);
+    };
     
-    Array<ConfigStatement*> statements = funcDecl.statements;
-
-    auto configStmts = PushArenaList<UserConfigStatement>(temp);
-    
-    for(ConfigStatement* stmt : statements){
-      ConfigIdentifier id = stmt->lhs;
-      Token name = id.name;
-      Token wireName = id.wire;
-      
-      if(Empty(wireName)){
-        // Function invocation
-
-        struct FunctionInvocation{
-          Token functionName;
-          Array<Token> arguments;
-          bool error;
-        };
-
-        auto ParseFunctionInvocation = [](Array<Token> functionInvocation,Arena* out) -> FunctionInvocation{
-          TEMP_REGION(temp,out);
-          FunctionInvocation res = {};
-
-          Token functionName = functionInvocation[0];
-          if(!IsIdentifier(functionName)){
-            res.error = true;
-            printf("Error, expected a valid function identifier instead of %.*s\n",UN(functionInvocation[0]));
-            return res;
-          }
-
-          if(functionInvocation[1] != "("){
-            res.error = true;
-            printf("Error, expected '('\n");
-            return res;
-          }
-
-          auto list = PushArenaList<Token>(temp);
-
-          for(int i = 2; i < functionInvocation.size;){
-            if(functionInvocation[i] == ")"){
-              break;
-            }
-            
-            Token arg = functionInvocation[i];
-            if(!IsIdentifier(arg)){
-              res.error = true;
-              printf("Error, expected a valid function identifier instead of %.*s\n",UN(arg));
-              return res;
-            }
-
-            *list->PushElem() = arg;
-            i += 1;
-
-            if(functionInvocation[i] == ","){
-              i += 1;
-            }
-          }
-          
-          res.arguments = PushArrayFromList(out,list);
-          res.functionName = functionName;
-          return res;
-        };
-
-        Array<Token> functionInvocation = stmt->rhs;
-        FunctionInvocation func = ParseFunctionInvocation(functionInvocation,globalPermanent);
-
-        for(Token arg : func.arguments){
-          if(!Contains(variableNames,arg)){
-            printf("\t[Error] Symbol '%.*s' does not exist\n",UN(arg));
-            exit(-1);
-          }
-        }
-        
-      } else {
-        Array<Token> symbolicTokens = stmt->rhs;
-        
-        FUInstance* inst = GetUnit(res->baseCircuit,name);
-        if(!inst){
-          // TODO: Better error handling.
-          printf("Instance %.*s does not exist. Make sure you spelled it correct.\n",UN(name));
-          exit(-1);
-        }
-
-        Wire* wire = GetConfigWireByName(inst->declaration,wireName);
-        if(!wire){
-          // TODO: Better error handling.
-          printf("Instance %.*s does not contain the following wire: %.*s. Make sure you spelled it correctly.\n",UN(name),UN(wireName));
-
-          // TODO: We probably want to move all this error reporting code into a single place. The important part is the fact that everytime that we can report to the user the possible values that something can take, we should do it and we should make it a function because we probably do this (or should do this) in multiple places.
-          printf("Entity of type %.*s contains:\n",UN(inst->declaration->name));
-          for(Wire w : inst->declaration->configs){
-            printf("  %.*s\n",UN(w.name));
-          }
-          exit(-1);
-        }
-        
-        for(Token tok : symbolicTokens){
-          if(IsIdentifier(tok) && !Contains(variableNames,tok)){
-            printf("\t[Error] Symbol '%.*s' does not exist\n",UN(tok));
-            exit(-1);
-          }
-        }
-        
-        SymbolicExpression* expr = ParseSymbolicExpression(symbolicTokens,globalPermanent);
-        Assert(expr); // TODO: Better error handling
-
-        UserConfigStatement* userStmt = configStmts->PushElem();
-        userStmt->type = UserConfigStatementType_SIMPLE;
-        
-        userStmt->simple.inst = id.name;
-        userStmt->simple.wire = id.wire;
-        userStmt->simple.expr = expr;
-      }
-    }
-
-    auto vars = PushArenaList<ConfigVariable>(temp);
-    
-    for(ConfigVarDeclaration var : variables){
-      ConfigVariable* configVar = vars->PushElem();
-
-      configVar->name = PushString(globalPermanent,var.name);
-      configVar->type = ConfigVariableType_INTEGER;
-    }
-
-    UserConfigFunction* func = userConfigs->PushElem();
-    func->name = PushString(globalPermanent,funcDecl.name);
-    func->type = UserConfigurationType_CONFIG;
-    func->variables = PushArrayFromList(perm,vars);
-    func->configs = PushArrayFromList(perm,configStmts);
+    res->info.infos[0].userFunctions = PushArrayFromList(perm,list);
   }
-  
-  res->userFunctions = PushArrayFromList(perm,userConfigs);
   
   return res;
 }

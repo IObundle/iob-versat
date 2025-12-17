@@ -10,6 +10,9 @@
 #include "stdint.h"
 #endif
 
+#define VERSAT_MAX(A,B) ((A) > (B) ? (A) : (B))
+#define VERSAT_ARRAY_SIZE(ARR) (sizeof(ARR) / sizeof(ARR[0]))
+
 typedef intptr_t iptr;
 
 // Config
@@ -199,6 +202,9 @@ static bool forceSingleLoop = false;
 // User configuration functions, user defined inside the specification file
 
 @{userConfigFunctions}
+
+#undef VERSAT_MAX
+#undef VERSAT_ARRAY_SIZE
 
 #endif // INCLUDED_VERSAT_ACCELERATOR_HEADER
 

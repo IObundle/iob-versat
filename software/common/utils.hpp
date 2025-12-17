@@ -117,6 +117,8 @@ ArenaListIterator<T> begin(ArenaList<T>* list){if(!list){return end(list);};retu
 template<typename T>
 ArenaListIterator<T> end(ArenaList<T>* list){return ArenaListIterator<T>{nullptr};};
 
+String JoinStrings(ArenaList<String>* strings,String separator,Arena* out);
+
 template<typename T>
 struct ArenaDoubleList{
   DoubleLink<T>* head;
@@ -124,7 +126,9 @@ struct ArenaDoubleList{
   Arena* arena; // For now store arena inside structure. 
 
   T* PushElem();
-  T* PushNode(DoubleLink<T>* node); // Does not allocate anything in the arena. Need more testing to see if this is a good approach.
+  DoubleLink<T>* PushNode();
+
+  T* AppendNode(DoubleLink<T>* node); // Does not allocate anything in the arena. Need more testing to see if this is a good approach.
 };
 
 struct GenericArenaListIterator{
@@ -340,7 +344,7 @@ T* ArenaDoubleList<T>::PushElem(){
 }
 
 template<typename T>
-T* ArenaDoubleList<T>::PushNode(DoubleLink<T>* node){
+T* ArenaDoubleList<T>::AppendNode(DoubleLink<T>* node){
   if(!this->head){
     this->head = node;
     this->tail = node;
@@ -351,6 +355,23 @@ T* ArenaDoubleList<T>::PushNode(DoubleLink<T>* node){
   }
 
   return &node->elem;
+}
+
+template<typename T>
+DoubleLink<T>* ArenaDoubleList<T>::PushNode(){
+  DoubleLink<T>* s = PushStruct<DoubleLink<T>>(this->arena);
+  *s = {};
+  
+  if(!this->head){
+    this->head = s;
+    this->tail = s;
+  } else {
+    this->tail->next = s;
+    s->prev = this->tail;
+    this->tail = s;
+  }
+
+  return s;
 }
 
 // Returns the next node (so it is possible to continue iteration)

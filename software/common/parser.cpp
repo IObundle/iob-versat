@@ -11,6 +11,15 @@
 #define TOKEN_GOOD (u16) 0xffff
 #define TOKEN_NONE (u16) 0x0
 
+// ======================================
+// Parser global templates. 
+
+static TokenizerTemplate* multiLineCommentsTmpl;
+
+void InitParser(Arena* perm){
+  multiLineCommentsTmpl = CreateTokenizerTemplate(perm,"",{"/*","*/"});
+}
+
 void Tokenizer::ConsumeWhitespace(){
   if(keepWhitespaces){
     return;
@@ -378,6 +387,28 @@ Token Tokenizer::PeekRemainingLine(){
   //tok.loc.end.column = this->column + fullLine.size;
   
   return tok;
+}
+
+void Tokenizer::AdvanceComments(){
+  bool prev = this->keepComments;
+  this->keepComments = false;
+
+  this->ConsumeWhitespace();
+
+  this->keepComments = prev;
+}
+
+void Tokenizer::FlushStoredTokens(){
+  if(amountStoredTokens == 0){
+    return;
+  }
+  
+  Token tok = storedTokens[0];
+
+  this->ptr = tok.data;
+  this->line = tok.loc.start.line;
+  this->column = tok.loc.start.column;
+  this->amountStoredTokens = 0;
 }
 
 Token Tokenizer::AssertNextToken(String format){
@@ -897,6 +928,33 @@ bool StartsWith(String toSearch,String starter){
     }
   }
   return true;
+}
+
+Token ParseComment(Tokenizer* tok,Arena* out){
+  bool prev = tok->keepComments;
+  tok->keepComments = true;
+
+  auto mark = tok->Mark();
+  
+  TOKENIZER_REGION(tok,multiLineCommentsTmpl);
+  
+  Token res = {};
+  if(tok->IfNextToken("/*")){
+    auto mark = tok->Mark();
+    while(!tok->Done()){
+      if(tok->IfNextToken("*/")){
+        break;
+      }
+      tok->NextToken();
+    }
+
+    res = tok->Point(mark);
+  } else {
+    tok->Rollback(mark);
+  }
+  
+  tok->keepComments = prev;
+  return res;
 }
 
 String PushPointingString(Arena* out,int startPos,int size){
