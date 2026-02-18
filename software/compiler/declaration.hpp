@@ -1,14 +1,12 @@
 #pragma once
 
-#include "configurations.hpp"
-#include "addressGen.hpp"
+#include "utils.hpp"
 #include "verilogParsing.hpp"
-#include "versatSpecificationParser.hpp"
+#include "configurations.hpp"
 
 struct FUInstance;
-struct FUDeclaration;
 struct Edge;
-struct InstanceInfo;
+struct SymbolicExpression;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -63,10 +61,6 @@ struct FUDeclaration{
   int numberDelays;
   Array<Parameter> parameters;
 
-  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression at this point.
-  Opt<int> memoryMapBits; // 0 is a valid memory map size, so optional indicates that no memory map exists
-  int nIOs;
-
   // TODO: Eventually remove external expression and external memory and only keep externalMemorySymbol
   Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
   Array<ExternalMemoryInterface> externalMemory;
@@ -89,8 +83,9 @@ struct FUDeclaration{
   int lat; // TODO: For now this is only for iterative units. Would also useful to have a standardized way of computing this from the graph and then compute it when needed. 
   
   Hashmap<StaticId,StaticData>* staticUnits;
-
-  Array<Pair<String,int>> definitionArrays;
+  
+  // TODO: We mostly do not use this. Furthermore we could just store this info inside the FUInstances, where we store a arrayBaseName or something similar.
+  //Array<Pair<String,int>> definitionArrays;
   
   FUDeclarationType type;
   DelayType delayType;
@@ -158,7 +153,7 @@ struct FUDeclaration{
 
 // Simple operations should also be stored here.
 namespace BasicDeclaration{
-  extern FUDeclaration* buffer;
+  extern FUDeclaration* variableBuffer;
   extern FUDeclaration* fixedBuffer;
   extern FUDeclaration* input;
   extern FUDeclaration* output;
@@ -175,7 +170,6 @@ FUDeclaration* GetTypeByNameOrFail(String name);
 void InitializeSimpleDeclarations();
 bool HasMultipleConfigs(FUDeclaration* decl);
 // Because of merge, we need units that can delay the datapath for different values depending on the datapath that is being configured.
-bool HasVariableDelay(FUDeclaration* decl);
 
 // ======================================
 // Declaration inspection

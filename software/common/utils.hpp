@@ -1,17 +1,27 @@
 #pragma once
 
-// Utilities that depend on memory or on other utilities
+// Utilities that depend on memory stuff
+// Dependency order is utilsCore <- memory <- utils
 
 #include "utilsCore.hpp"
 #include "filesystem.hpp"
 #include "memory.hpp"
 
+// TODO: There exists a bunch of enums that do not really have a good place to be and that are used throught the entier code base.
+//       Misc Enums that we probably want to stuff into a Defs.hpp file
+enum Direction{
+  Direction_NONE,
+  Direction_OUTPUT = 1,
+  Direction_INPUT = 2,
+
+  Direction_WRITE = 1,
+  Direction_READ = 2
+};
+
 FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose);
 
 Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
 
-String TrimLeftWhitespaces(String in);
-String TrimRightWhitespaces(String in);
 String TrimWhitespaces(String in);
 
 String GetCommonPath(String path1,String path2,Arena* out);
@@ -24,11 +34,20 @@ void   PrintEscapedString(String toEscape,char spaceSubstitute);
 
 String GetAbsolutePath(String path,Arena* out);
 
-Array<int> GetNonZeroIndexes(Array<int> array,Arena* out);
-
 String ReprMemorySize(size_t val,Arena* out);
 
 String JoinStrings(Array<String> strings,String separator,Arena* out);
+
+static inline bool Contains(String bigger,String smaller){
+  TEMP_REGION(temp,nullptr);
+  
+  String withNull = PushString(temp,bigger);
+  
+  void* ptr = (void*) strstr(withNull.data,StaticFormat("%.*s",UN(smaller)));
+  bool res = (ptr != nullptr);
+  
+  return res;
+}
 
 template<typename Value,typename Error>
 struct Result{
@@ -187,6 +206,17 @@ T* ListRemoveAll(T* start,Func compareFunction){
 }
 
 template<typename T>
+Array<T> Reverse(Array<T> arr,Arena* out){
+  Array<T> res = PushArray<T>(out,arr.size);
+  
+  for(u32 i = 0; i < arr.size; i++){
+    res[arr.size - i - 1] = arr[i];
+  }
+
+  return res;
+}
+
+template<typename T>
 T* ReverseList(T* head){
    if(head == nullptr){
       return head;
@@ -275,7 +305,7 @@ Array<T> CopyArray(Array<D> arr,Arena* out){
 }
 
 template<typename T>
-ArenaList<T>* PushArenaList(Arena* out){
+ArenaList<T>* PushList(Arena* out){
   ArenaList<T>* res = PushStruct<ArenaList<T>>(out);
   *res = {};
   res->arena = out;
@@ -442,7 +472,7 @@ bool OnlyOneElement(ArenaList<T>* list){
 }
   
 template<typename T>
-Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
+Array<T> PushArray(Arena* out,ArenaList<T>* list){
   if(Empty(list)){
     return {};
   }
@@ -459,7 +489,7 @@ Array<T> PushArrayFromList(Arena* out,ArenaList<T>* list){
 }
 
 template<typename T,typename P>
-Array<Pair<T,P>> PushArrayFromList(Arena* out,ArenaList<Pair<T,P>>* list){
+Array<Pair<T,P>> PushArray(Arena* out,ArenaList<Pair<T,P>>* list){
   int size = Size(list);
   
   Array<Pair<T,P>> arr = PushArray<Pair<T,P>>(out,size);
@@ -473,7 +503,7 @@ Array<Pair<T,P>> PushArrayFromList(Arena* out,ArenaList<Pair<T,P>>* list){
 }
 
 template<typename T,typename P>
-Array<T> PushArrayFromHashmapKeys(Arena* out,Hashmap<T,P>* map){
+Array<T> PushArrayFromKeys(Arena* out,Hashmap<T,P>* map){
   int size = map->nodesUsed;
   
   Array<T> arr = PushArray<T>(out,size);
@@ -487,7 +517,7 @@ Array<T> PushArrayFromHashmapKeys(Arena* out,Hashmap<T,P>* map){
 }
 
 template<typename T,typename P>
-Array<P> PushArrayFromHashmapData(Arena* out,Hashmap<T,P>* map){
+Array<P> PushArrayFromData(Arena* out,Hashmap<T,P>* map){
   int size = map->nodesUsed;
   
   Array<P> arr = PushArray<P>(out,size);
@@ -501,7 +531,7 @@ Array<P> PushArrayFromHashmapData(Arena* out,Hashmap<T,P>* map){
 }
 
 template<typename T,typename P>
-Array<T> PushArrayFromTrieMapKeys(Arena* out,TrieMap<T,P>* map){
+Array<T> PushArrayFromKeys(Arena* out,TrieMap<T,P>* map){
   int size = map->nodesUsed;
   
   Array<T> arr = PushArray<T>(out,size);
@@ -515,7 +545,7 @@ Array<T> PushArrayFromTrieMapKeys(Arena* out,TrieMap<T,P>* map){
 }
 
 template<typename T,typename P>
-Array<P> PushArrayFromTrieMapData(Arena* out,TrieMap<T,P>* map){
+Array<P> PushArrayFromData(Arena* out,TrieMap<T,P>* map){
   int size = map->inserted;
   
   Array<P> arr = PushArray<P>(out,size);
@@ -529,7 +559,7 @@ Array<P> PushArrayFromTrieMapData(Arena* out,TrieMap<T,P>* map){
 }
 
 template<typename T>
-Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
+Array<T> PushArray(Arena* out,Set<T>* set){
   auto arr = PushArray<T>(out,set->map->nodesUsed);
 
   int index = 0;
@@ -541,7 +571,7 @@ Array<T> PushArrayFromSet(Arena* out,Set<T>* set){
 }
 
 template<typename T>
-Array<T> PushArrayFromSet(Arena* out,TrieSet<T>* set){
+Array<T> PushArray(Arena* out,TrieSet<T>* set){
   auto arr = PushArray<T>(out,set->map->inserted);
 
   int index = 0;
@@ -553,7 +583,7 @@ Array<T> PushArrayFromSet(Arena* out,TrieSet<T>* set){
 }
 
 template<typename T>
-Set<T>* PushSetFromList(Arena* out,ArenaList<T>* list){
+Set<T>* PushSet(Arena* out,ArenaList<T>* list){
   int size = Size(list);
 
   Set<T>* set = PushSet<T>(out,size);
@@ -613,7 +643,7 @@ Array<T> Unique(Array<T> arr,Arena* out){
   for(T t : arr){
     set->Insert(t);
   }
-  return PushArrayFromSet(out,set);
+  return PushArray(out,set);
 }
 
 // Compares arrays directly, no "set" semantics or nothing. Mostly for simple tests where we need to check if different functions return the exact same values to confirm correctness.

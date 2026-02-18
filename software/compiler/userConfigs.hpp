@@ -9,6 +9,7 @@
 struct FUDeclaration;
 struct SymbolicExpression;
 struct AddressAccess;
+struct Parser;
 
 // Move user configuration functions here.
 
@@ -33,15 +34,10 @@ struct ConfigExpression{
 
 // TODO: While this exists, we do not want to have different flow if possible. I think that it should be possible to describe the data in such a way that we do not have to make this distinction.
 enum UserConfigType{
-  UserConfigurationType_CONFIG,
-  UserConfigurationType_MEM,
-  UserConfigurationType_STATE
-};
-
-struct ConfigIdentifier{
-  Token name;
-  Token wire;
-  SymbolicExpression* expr;
+  UserConfigType_NONE,
+  UserConfigType_CONFIG,
+  UserConfigType_MEM,
+  UserConfigType_STATE
 };
 
 enum ConfigRHSType{
@@ -64,16 +60,21 @@ struct ConfigStatement{
   ConfigStatementType type;
 
   // TODO: Union
-  ConfigIdentifier lhs; // We currently only support <name>.<wire> assignments. NOTE: But I think that we eventually need to support N names and one wire.
+  ConfigIdentifier* lhs; // We currently only support <name>.<wire> assignments. NOTE: But I think that we eventually need to support N names and one wire.
   Array<Token> rhs;
 
   // TODO: Union
+#if 0
   ConfigRHSType rhsType;
   SymbolicExpression* expr;
-  ConfigIdentifier rhsId;
+  ConfigIdentifier* rhsId;
   FunctionInvocation* func;
+#endif
 
-  AddressGenForDef def;
+  SpecExpression* trueRhs;
+
+  //AddressGenForDef def;
+  AddressGenForDef2 def2;
   Array<ConfigStatement*> childs; // Only for loops contains these right now.
 };
 
@@ -88,7 +89,9 @@ struct ConfigVarDeclaration{
   Token name;
 
   // TODO: Not implemented, just parsed currently.
-  ConfigVarType type;
+  
+  //ConfigVarType type;
+  Token type;
   int arraySize;
   bool isArray;
 };
@@ -99,15 +102,16 @@ struct ConfigFunctionDef{
   Token name;
   Array<ConfigVarDeclaration> variables;
   Array<ConfigStatement*> statements;
+  bool debug;
 };
 
-ConfigFunctionDef* ParseConfigFunction(Tokenizer* tok,Arena* out);
+bool IsNextTokenConfigFunctionStart(Parser* parser);
 bool IsNextTokenConfigFunctionStart(Tokenizer* tok);
 
 // ============================================================================
 // Instantiation and manipulation
 
-// TODO: We might not need this but for now we use it while prototyping stuff.
+// TODO: We want to remove this. Stupid to force the user to have to provide a switch when we can just figure out on our side. Still need to take care about the differences between config/mem and state.
 enum ConfigFunctionType{
   ConfigFunctionType_CONFIG,
   ConfigFunctionType_STATE,
@@ -115,8 +119,9 @@ enum ConfigFunctionType{
 };
 
 enum TransferDirection{
-  TransferDirection_READ,
-  TransferDirection_WRITE
+  TransferDirection_NONE = 0,
+  TransferDirection_READ = 1,
+  TransferDirection_WRITE = 2
 };
 
 struct FunctionMemoryTransfer{
@@ -124,7 +129,7 @@ struct FunctionMemoryTransfer{
 
   String sizeExpr;
   String variable;
-  String identity;
+  String entityName;
 };
 
 enum ConfigStuffType{
@@ -148,7 +153,8 @@ struct ConfigStuff{
   // TODO: This lhs is only for access. Need to join stuff with assign and access if we eventually cleanup the code.
   String lhs;
   String accessVariableName;
-  InstanceInfo* info;
+
+  String nameOfLeftEntity;
 
   union{
     ConfigAssignment assign;
@@ -160,6 +166,7 @@ struct ConfigStuff{
 struct ConfigVariable{
   ConfigVarType type;
   String name;
+  bool usedOnLoopExpressions;
 };
 
 struct ConfigFunction{
@@ -175,9 +182,15 @@ struct ConfigFunction{
   Array<ConfigVariable> variables;
   Array<String> newStructs;
   String structToReturnName;
-};
 
+  bool supportsSizeCalc;
+
+  // TODO: This is only worth it if we can generate extra stuff that might help figure out the problems. Otherwise just use gdb.
+  // NOTE: Some stuff that we might want is to profile (gather statistics data) and stuff like that that we can then report at the end of a run.
+  bool debug;
+};
+ 
 // Can fail (parsed data is validated in here)
 // TODO: Instead of passing the content, it would be easier if the function was capable of reporting the errors without having to accesss the text, just by storing the relevant tokens and the upper parts of the code is responsible for reporting it. The language is not that complicated meaning that we are free to just define all the possible errors in a large enum and having a simple structure that stores all the relevant data. 
-ConfigFunction* InstantiateConfigFunction(ConfigFunctionDef* def,FUDeclaration* declaration,String content,Arena* out);
+ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDeclaration* declaration,String content,Arena* out);
 

@@ -2,9 +2,6 @@
 
 #include "utils.hpp"
 
-#include <immintrin.h>
-#include <mmintrin.h>
-
 inline int PopCount(u32 val){return __builtin_popcount(val);};
 inline int LeadingZerosCount(u32 val){return __builtin_clz(val);};
 inline int TrailingZerosCount(u32 val){return __builtin_ctz(val);};

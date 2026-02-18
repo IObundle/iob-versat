@@ -59,7 +59,7 @@ module Buffer #(
       .R_DATA_W(DATA_W),
       .ADDR_W  (DELAY_W)
    ) fifo (
-      .rst_i (rst),
+      .rst_i (rst || !running), // Always clear fifo in between runs
       .clk_i (clk),
       .cke_i (1'b1),
       .arst_i(1'b0),

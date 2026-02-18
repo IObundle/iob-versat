@@ -9,6 +9,8 @@
 
 #include "symbolic.hpp"
 
+#include <string>
+
 typedef Value (*MathFunction)(Value f,Value g);
 
 struct MathFunctionDescription{
@@ -176,6 +178,7 @@ void PreprocessVerilogFile_(String fileContent,TrieMap<String,MacroDefinition>* 
       tok->AssertNextToken("\"");
 
       // Open include file
+      // TODO: Clean this up with our code and remove std::string
       std::string filename(UN_REVERSE(fileName));
       FILE* file = nullptr;
       for(String str : includeFilepaths){
@@ -487,7 +490,6 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
   auto params = StartArray<ParameterExpression>(out);
 
   // TODO: Not used but must parse it anyway.
-  bool sign = false;
   ExpressionRange range = {};
   ParamFlags flags = {};
   while(1){
@@ -496,7 +498,6 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
     if(CompareString(peek,"parameter")){
       tok->FlushStoredTokens();
       
-      // MARK
       bool prev = tok->keepComments;
       tok->keepComments = true;
 
@@ -527,11 +528,8 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
         }
       }
       tok->keepComments = prev;
-      
-      if(tok->IfPeekToken("signed")){
-        sign = true;
-      }
-      
+      tok->IfNextToken("signed");
+
       range = ParseRange(tok,out);
 
       Token paramName = tok->NextToken();
@@ -565,8 +563,6 @@ static Array<ParameterExpression> ParseParameters(Tokenizer* tok,TrieMap<String,
       p->name = paramName;
       p->expr = expr;
       p->flags = flags;
-
-      sign = false;
     } else if(CompareString(peek,")")){
       break;
     } else if(CompareString(peek,";")){ // To parse inside module parameters, technically wrong but harmless
@@ -638,13 +634,13 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
   tok->AssertNextToken("(");
   if(!tok->IfPeekToken(")")){
   
-    ArenaList<PortDeclaration>* portList = PushArenaList<PortDeclaration>(temp);
+    ArenaList<PortDeclaration>* portList = PushList<PortDeclaration>(temp);
     // Parse ports
     while(!tok->Done()){
       peek = tok->PeekToken();
 
       PortDeclaration port;
-      ArenaList<Pair<String,Value>>* attributeList = PushArenaList<Pair<String,Value>>(temp);
+      ArenaList<Pair<String,Value>>* attributeList = PushList<Pair<String,Value>>(temp);
     
       if(CompareString(peek,"(*")){
         tok->AdvancePeek();
@@ -720,7 +716,7 @@ static Module ParseModule(Tokenizer* tok,Arena* out){
 
       tok->AssertNextToken(",");
     }
-    module.ports = PushArrayFromList(out,portList);
+    module.ports = PushArray(out,portList);
   }
   
   // Any inside module parameters
@@ -751,7 +747,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
   Tokenizer tokenizer = Tokenizer(fileContent,"\n:',()[]{}\"+-/*=",{"#(","+:","-:","(*","*)"});
   Tokenizer* tok = &tokenizer;
 
-  ArenaList<Module>* modules = PushArenaList<Module>(temp);
+  ArenaList<Module>* modules = PushList<Module>(temp);
 
   bool isSource = false;
   while(!tok->Done()){
@@ -785,7 +781,7 @@ Array<Module> ParseVerilogFile(String fileContent,Array<String> includeFilepaths
     tok->AdvancePeek();
   }
 
-  return PushArrayFromList(out,modules);
+  return PushArray(out,modules);
 }
 
 SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out){
@@ -868,7 +864,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
 
       ExternalMemoryID id = {};
       id.interface = values[1].number;
-      id.type = ExternalMemoryType::ExternalMemoryType_DP;
+      id.type = ExternalMemoryType_DP;
 
       String wire = values[0].str;
       int port = values[2].number;
@@ -889,7 +885,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
       }
     } else if(CheckFormat("ext_2p_%s",decl.name)){
       ExternalMemoryID id = {};
-      id.type = ExternalMemoryType::ExternalMemoryType_2P;
+      id.type = ExternalMemoryType_2P;
 
       String wire = {};
 	  bool out = false;
@@ -960,7 +956,7 @@ ModuleInfo ExtractModuleInfo(Module& module,Arena* out){
       port.AssertNextToken("delay");
       int delay = ParseInt(port.NextToken());
 
-      info.nDelays = std::max(info.nDelays,delay + 1);
+      info.nDelays = MAX(info.nDelays,delay + 1);
     } else if(  CheckFormat("databus_ready_%d",decl.name)
 				|| CheckFormat("databus_valid_%d",decl.name)
 				|| CheckFormat("databus_addr_%d",decl.name)

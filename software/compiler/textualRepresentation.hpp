@@ -1,10 +1,10 @@
 #pragma once
 
-#include "merge.hpp"
+#include "versat.hpp"
 
-// TODO: Maybe it would be best if all these functions received function pointers and forward declared everything. Otherwise any small change requires a full recompilation
-
-String UniqueRepr(FUInstance* inst,Arena* out); // Returns a representation that uniquely identifies the instance. Not necessarily useful for outputing
+struct MergeEdge;
+struct Edge;
+struct MappingNode;
 
 String Repr(FUInstance* inst,GraphDotFormat format,Arena* out);
 String Repr(PortInstance* inPort,PortInstance* outPort,GraphDotFormat format,Arena* out);

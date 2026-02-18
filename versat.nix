@@ -25,6 +25,7 @@ pkgs.stdenv.mkDerivation rec {
 
   buildInputs = [
     pkgs.gnumake
+    pkgs.libbfd
   ];
 
   enableParallelBuilding = true;

@@ -1,5 +1,6 @@
 #include "delayCalculation.hpp"
 
+#include "configurations.hpp"
 #include "declaration.hpp"
 #include "versat.hpp"
 
@@ -60,9 +61,9 @@ SimpleEdge Get(AccelEdgeIterator iter){
   int inputIndex = iter.iter.GetIndex();
   
   SimpleEdge res = {};
-  res.outPort = conn.outPort;
-  res.outIndex = conn.outInst;
-  res.inPort = conn.inPort;
+  res.outPort = conn.otherPort;
+  res.outIndex = conn.otherInst;
+  res.inPort = conn.port;
   res.inIndex = inputIndex;
 
   return res;
@@ -93,8 +94,6 @@ static ConnectionNode* GetConnectionNode(SimpleEdge edge,AccelInfoIterator top){
 // 
 
 SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
-  DEBUG_PATH("delays");
-  
   TEMP_REGION(temp,out);
   Assert(!Empty(top.accelName));
 
@@ -154,7 +153,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       int a = info->outputLatencies[edge.outPort];
 
       int d = 0;
-      if(info->decl == BasicDeclaration::fixedBuffer){
+      if(info->specialType == SpecialUnitType_FIXED_BUFFER){
         d = info->special;
       }
       
@@ -170,7 +169,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
 
       // If the node is a buffer, delays are now variable.
       // We want to preserve this information as much as possible. Even if not needed because the merge is simple, we might be able to unlock some optimizations down the line
-      if(HasVariableDelay(info->decl)){
+      if(info->specialType == SpecialUnitType_VARIABLE_BUFFER){
         edgesGlobalLatency[edgeIndex].isAny = true;
       }
       
@@ -196,7 +195,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       }
 
       int edgeLatency = edgesGlobalLatency[edgeIndex].value;
-      maxInputEdgeLatency = std::max(maxInputEdgeLatency,edgeLatency);
+      maxInputEdgeLatency = MAX(maxInputEdgeLatency,edgeLatency);
       allAny &= edgesGlobalLatency[edgeIndex].isAny;
     }
     
@@ -211,7 +210,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
 
   Array<DelayInfo> edgesExtraDelay = CopyArray(edgesGlobalLatency,out);
 
-  DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"globalLatency");
+  //DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"globalLatency");
 
   // This is still the global latency per port.
   Array<Array<DelayInfo>> inputPortBaseLatencyByOrder = PushArray<Array<DelayInfo>>(out,orderToIndex.size);
@@ -231,7 +230,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
         continue;
       }
 
-      maxPortIndex = std::max(maxPortIndex,edge.inPort);
+      maxPortIndex = MAX(maxPortIndex,edge.inPort);
     }
 
     if(maxPortIndex == -1){
@@ -277,7 +276,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       }
 
       int edgeDelay = edgesExtraDelay[edgeIndex].value;
-      minEdgeDelay = std::min(minEdgeDelay,edgeDelay);
+      minEdgeDelay = MIN(minEdgeDelay,edgeDelay);
     }
 
     // Is this even possible?
@@ -310,7 +309,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       edgesExtraDelay[edgeIndex].value = nodeDelay - edgesExtraDelay[edgeIndex].value;
       
       int edgeDelay = edgesExtraDelay[edgeIndex].value;
-      minEdgeDelay = std::min(minEdgeDelay,edgeDelay);
+      minEdgeDelay = MIN(minEdgeDelay,edgeDelay);
     }
 
     if(minEdgeDelay == 9999){
@@ -331,8 +330,6 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       edgesExtraDelay[edgeIndex].value -= minEdgeDelay;
     }
   }
-
-  DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"edgeDelay");
 
   // Store delays on data producing units
   for(int i = 0; i < orderToIndex.size; i++){
@@ -356,7 +353,7 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       }
 
       int edgeDelay = edgesExtraDelay[edgeIndex].value;
-      minEdgeDelay = std::min(minEdgeDelay,edgeDelay);
+      minEdgeDelay = MIN(minEdgeDelay,edgeDelay);
     }
 
     // Is this even possible?
@@ -378,8 +375,6 @@ SimpleCalculateDelayResult CalculateDelay(AccelInfoIterator top,Arena* out){
       edgesExtraDelay[edgeIndex].value -= minEdgeDelay;
     }
   }
-
-  DebugRegionLatencyGraph(top,orderToIndex,nodeBaseLatencyByOrder,edgesExtraDelay,"finalDelays");
   
   SimpleCalculateDelayResult res = {};
   res.nodeBaseLatencyByOrder = nodeBaseLatencyByOrder;
@@ -401,11 +396,13 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
 
   AccelInfoIterator top = StartIteration(&info);
   top.accelName = accel->name;
+
   SimpleCalculateDelayResult delays = CalculateDelay(top,out);
 
   EdgeDelay* edgeToDelay = PushHashmap<Edge,DelayInfo>(out,delays.edgesExtraDelay.size);
   NodeDelay* nodeDelay = PushHashmap<FUInstance*,DelayInfo>(out,delays.nodeBaseLatencyByOrder.size);
   PortDelay* portDelay = PushHashmap<PortInstance,DelayInfo>(out,delays.edgesExtraDelay.size);
+  TrieMap<FUInstance*,int>* variableBuffer = PushTrieMap<FUInstance*,int>(out);
 
   int index = 0;
   for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),index += 1){
@@ -417,6 +414,10 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
     Edge edge = MakeEdge(out,simple.outPort,in,simple.inPort);
 
     edgeToDelay->Insert(edge,delays.edgesExtraDelay[index]);
+
+    if(out->declaration == BasicDeclaration::variableBuffer){
+      variableBuffer->Insert(out,delays.edgesExtraDelay[index].value);
+    }
   }
     
   for(AccelInfoIterator iter = top; iter.IsValid(); iter = iter.Next()){
@@ -436,58 +437,17 @@ CalculateDelayResult CalculateDelay(Accelerator* accel,Arena* out){
   res.edgesDelay = edgeToDelay;
   res.nodeDelay = nodeDelay;
   res.portDelay = portDelay;
+  res.variableBuffer = variableBuffer;
+
+  DebugRegionOutputLatencyGraph(accel,nodeDelay,portDelay,edgeToDelay,"DelayGraph");
 
   return res;
-}
-
-GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeDelay,Arena* out){
-  TEMP_REGION(temp,out);
-
-  int size = orderToIndex.size;
-  Array<GraphPrintingNodeInfo> nodeArray = PushArray<GraphPrintingNodeInfo>(out,size);
-  for(int i = 0; i < size; i++){
-    InstanceInfo* info = top.GetUnit(orderToIndex[i]);
-    FUInstance* node = info->inst;
-    
-    nodeArray[i].name = PushString(out,node->name);
-    nodeArray[i].content = PushString(out,"%.*s:%d:%d",UN(node->name),nodeLatencyByOrder[i].value,info->special);
-    nodeArray[i].color = Color_BLACK;
-  }
-
-  int totalEdges = 0;
-  for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter)){
-    totalEdges += 1;
-  }
-
-  Array<GraphPrintingEdgeInfo> edgeArray = PushArray<GraphPrintingEdgeInfo>(out,totalEdges);
-  int edgeIndex = 0;
-  for(AccelEdgeIterator iter = IterateEdges(top); IsValid(iter); Advance(iter),edgeIndex += 1){
-    DelayInfo edgeLatency = edgeDelay[edgeIndex];
-
-    SimpleEdge edge = Get(iter);
-
-    if(edgeLatency.isAny){
-      edgeArray[edgeIndex].color = Color_BLUE;
-    } else {
-      edgeArray[edgeIndex].color = Color_BLACK;
-    }
-    edgeArray[edgeIndex].content = PushString(out,"%d",edgeLatency.value);
-    edgeArray[edgeIndex].firstNode = nodeArray[top.GetUnit(edge.outIndex)->localOrder].name;
-    edgeArray[edgeIndex].secondNode = nodeArray[top.GetUnit(edge.inIndex)->localOrder].name;
-  }
-    
-  GraphPrintingContent result = {};
-  result.edges = edgeArray;
-  result.nodes = nodeArray;
-  result.graphLabel = "Nodes and edges contain their global latency (nodes also contain special)";
-  
-  return result;
 }
 
 Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Arena* out){
   TEMP_REGION(temp,out);
 
-  ArenaList<DelayToAdd>* list = PushArenaList<DelayToAdd>(temp);
+  ArenaList<DelayToAdd>* list = PushList<DelayToAdd>(temp);
   
   int buffersInserted = 0;
   for(auto edgePair : edgeDelays){
@@ -509,5 +469,5 @@ Array<DelayToAdd> GenerateFixDelays(Accelerator* accel,EdgeDelay* edgeDelays,Are
     *list->PushElem() = var;
   }
 
-  return PushArrayFromList(out,list);
+  return PushArray(out,list);
 }

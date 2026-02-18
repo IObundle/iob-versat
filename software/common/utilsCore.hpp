@@ -1,14 +1,14 @@
 #pragma once
 
-// Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library)
+// Utilities that do not depend on anything else from versat (like memory.hpp, it's fine to depend on standard library stuff if needed)
 
+#include <cstdlib>
 #include <cstdio>
 #include <string.h>
 #include <stdint.h>
 
-// Mostly for std::move and std::hash
-#include <utility>
-#include <string>
+#include <initializer_list>
+#include <errno.h>
 
 #include "assert.h"
 #include "debug.hpp"
@@ -222,6 +222,24 @@ if(_){ \
    B = TEMP; \
    } while(0)
 
+#define HASH(TYPENAME,COND) \
+template<> struct std::hash<TYPENAME>{ \
+  std::size_t operator()(TYPENAME const& x) const noexcept{ \
+    std::size_t hash = (COND); \
+    return hash; \
+  } \
+};
+
+#define EQUALITY(TYPENAME,COND) \
+inline bool operator==(const TYPENAME& lhs,const TYPENAME& rhs){ \
+  bool res = (COND); \
+  return res; \
+} \
+inline bool operator!=(const TYPENAME& lhs,const TYPENAME& rhs){ \
+  bool res = !(COND); \
+  return res; \
+}
+
 typedef uint8_t Byte;
 typedef uint8_t u8;
 typedef int8_t i8;
@@ -234,6 +252,18 @@ typedef int64_t i64;
 typedef intptr_t iptr;
 typedef uintptr_t uptr;
 typedef unsigned int uint;
+
+inline u64 Hash(void* ptr){
+  return (u64) ptr;
+}
+
+inline u64 Hash(int in){
+  return (u64) in;
+}
+
+inline u64 Hash(bool b){
+  return (b ? 1 : 0);
+}
 
 // Nullopt similar to the one in std but we skip having to include a heavy templated file for this.
 struct nullopt_t {
@@ -270,7 +300,7 @@ public:
   // Match the std interface to make it easier to replace if needed
   bool has_value(){return hasVal;};
   T& value() & {assert(hasVal);return val;};
-  T&& value() && {assert(hasVal);return std::move(val);};
+  T&& value() && {assert(hasVal);return static_cast<T&&>(val);};
   T value_or(T other){return hasVal ? val : other;};
 }; 
 
@@ -301,7 +331,7 @@ public:
   // Match the std interface to make it easier to replace if needed
   bool has_value(){return (val != nullptr);};
   T*& value() & {assert(val);return val;};
-  T*&& value() && {assert(val);return std::move(val);};
+  T*&& value() && {assert(val);return static_cast<T&&>(val);};
   T* value_or(T* other){return this->has_value() ? val : other;};
 };
 
@@ -371,6 +401,8 @@ struct Array{
   T* data;
   int size;
 
+  Array() = default;
+
   inline T& operator[](int index) const {Assert(index >= 0);Assert(index < size); return data[index];}
   ArrayIterator<T> begin() const{return ArrayIterator<T>{data};};
   ArrayIterator<T> end() const{return ArrayIterator<T>{data + size};};
@@ -415,21 +447,18 @@ struct String{
 
 String Offset(String base,int amount);
 
-template<> class std::hash<String>{
-public:
-   std::size_t operator()(String const& s) const noexcept{
-   std::size_t res = 0;
+inline u64 Hash(String str){
+  u64 res = 0;
 
-   std::size_t prime = 5;
-   for(int i = 0; i < s.size; i++){
-      res += (std::size_t) s[i] * prime;
-      res <<= 4;
-      prime += 6; // Some not prime, but will find most of them
-   }
+  u64 prime = 5;
+  for(int i = 0; i < str.size; i++){
+    res += (std::size_t) str[i] * prime;
+    res <<= 4;
+    prime += 6; // Some not prime, but will find most of them
+  }
 
-   return res;
-   }
-};
+  return res;
+}
 
 inline bool operator==(String first,String second){
    if(first.size != second.size){
@@ -494,7 +523,14 @@ struct Pair{
       Second data;
       Second second;
    };
-} /* __attribute__((packed)) */; // TODO: Check if type info works correctly without this. It technically should after we added align info to the type system
+};
+
+template<typename First,typename Second>
+inline u64 Hash(Pair<First,Second> p){
+  u64 first = Hash(p.first);
+  u64 second = Hash(p.second);
+  return first + second;
+}
 
 template<typename F,typename S>
 static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){

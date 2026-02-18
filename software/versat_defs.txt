@@ -94,8 +94,8 @@ table AddressGenWireNames(AddressGenType type,String[] names){
 };
 
 enum ParamFlags{
-   ParamFlags_Unique = 0x1,
-   ParamFlags_Order  = 0x2,
+   ParamFlags_Unique       = 0x1,
+   ParamFlags_Order        = 0x2,
    ParamFlags_ReverseOrder = 0x4
 };
 
@@ -117,8 +117,7 @@ map mergeModifiers(MergeModifier m,String name){
 enum ConstructType{
   ConstructType_MODULE,
   ConstructType_MERGE,
-  ConstructType_ITERATIVE,
-  ConstructType_ADDRESSGEN
+  ConstructType_ITERATIVE
 };
 
 define_map possibleAttributes{

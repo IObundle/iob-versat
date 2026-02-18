@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils.hpp"
-#include "parser.hpp"
 
 // TODO: The logic in relation to negative is becoming a bit tiring. If we need to keep expanding this code, might need to find some pattern to simplify things. The main problem is when the structure is changed by any of the functions, in these cases the logic for how negativity is preserved is more complicated than simply copying what we already have.
 
@@ -138,9 +137,7 @@ SymbolicExpression* SymbolicFunc(String functionName,Array<SymbolicExpression*> 
 // ======================================
 // Parsing
 
-Array<Token> TokenizeSymbolicExpression(Tokenizer* tok,Arena* out);
-
-SymbolicExpression* ParseSymbolicExpression(Array<Token> tokens,Arena* out);
+// nocheckin: Either remove it or move it to new parser.
 SymbolicExpression* ParseSymbolicExpression(Tokenizer* tok,Arena* out);
 SymbolicExpression* ParseSymbolicExpression(String content,Arena* out);
 
@@ -213,3 +210,4 @@ SymbolicExpression* GetLoopLinearSumTotalSize(LoopLinearSum* in,Arena* out);
 
 void Print(LoopLinearSum* sum,bool printNewLine = false);
 void Repr(StringBuilder* builder,LoopLinearSum* sum);
+String PushRepr(LoopLinearSum* sum,Arena* out);

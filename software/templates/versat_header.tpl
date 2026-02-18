@@ -56,6 +56,7 @@ void versat_init(int base);
 // Versat runtime does not provide any output unless provided with a printf like function by the user.
 typedef int (*VersatPrintf)(const char* format,...);
 void SetVersatDebugPrintfFunction(VersatPrintf function);
+extern VersatPrintf versat_printf;
 
 // In pc-emul provides a low bound on performance.
 // In sim-run refines the lower bound but still likely to be smaller than reality due to memory delays that are only present in real circuits.
@@ -154,7 +155,6 @@ bool IsValid(VersatAddressSimState* state);
 
 // Needed by PC-EMUL to correctly simulate the design, embedded compiler should remove these symbols from firmware because not used by them 
 static const char* acceleratorTypeName = "@{typeName}";
-static bool isSimpleAccelerator = @{isSimple};
 static bool acceleratorSupportsDMA = @{useDMA};
 
 static const int memMappedStart = @{memMappedStart};
@@ -189,14 +189,10 @@ extern volatile AcceleratorStatic* accelStatic;
 
 @{allStaticDefines}
 
-@{simpleStuff}
-
 @{mergeStuff}
 
 static bool forceDoubleLoop = false;
 static bool forceSingleLoop = false;
-
-@{allAddrGen}
 
 // ============================================================================
 // User configuration functions, user defined inside the specification file

@@ -1,20 +1,6 @@
 #include "debugVersat.hpp"
-
-#include <cstdio>
-#include <cstdarg>
-#include <set>
-
-#include <algorithm>
-
 #include "declaration.hpp"
-#include "filesystem.hpp"
 #include "globals.hpp"
-#include "memory.hpp"
-#include "utilsCore.hpp"
-
-#include "textualRepresentation.hpp"
-#include "versat.hpp"
-#include "accelerator.hpp"
 
 // Make sure that it matches the value of the corresponding enum
 static String graphPrintingColorTable[] = {
@@ -34,14 +20,6 @@ Color DefaultNodeColor(FUInstance* inst){
   if(inst->declaration == BasicDeclaration::output){
     color = Color_BLACK;
   }
-  
-#if 0
-  if(inst->type == NodeType_SOURCE || inst->type == NodeType_SOURCE_AND_SINK){
-    color = Color_GREEN;
-  } else if(inst->type == NodeType_SINK){
-    color = Color_BLACK;
-  }
-#endif
   
   return color;
 }
@@ -74,16 +52,16 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
 
   Array<Edge> edges = GetAllEdges(accel,temp);
 
-  ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushArenaList<GraphPrintingNodeInfo>(temp);
+  ArenaList<GraphPrintingNodeInfo>* nodeInfo = PushList<GraphPrintingNodeInfo>(temp);
   for(FUInstance* inst : accel->allocated){
     GraphInfo content = nodeFunction(inst,out);
     String name = UniqueInstanceName(inst,out);
 
     *nodeInfo->PushElem() = {.name = name,.content = content.content,.color = content.color};
   }
-  Array<GraphPrintingNodeInfo> nodes = PushArrayFromList(out,nodeInfo);
+  Array<GraphPrintingNodeInfo> nodes = PushArray(out,nodeInfo);
 
-  ArenaList<GraphPrintingEdgeInfo>* edgeInfo = PushArenaList<GraphPrintingEdgeInfo>(temp);
+  ArenaList<GraphPrintingEdgeInfo>* edgeInfo = PushList<GraphPrintingEdgeInfo>(temp);
   for(Edge edge : edges){
     GraphInfo content = edgeFunction(&edge,out);
     String first = UniqueInstanceName(edge.out.inst,out);
@@ -96,7 +74,7 @@ GraphPrintingContent GeneratePrintingContent(Accelerator* accel,NodeContent node
       .secondNode = second
     };
   }
-  Array<GraphPrintingEdgeInfo> edgeResult = PushArrayFromList(out,edgeInfo);
+  Array<GraphPrintingEdgeInfo> edgeResult = PushArray(out,edgeInfo);
   
   GraphPrintingContent content = {};
   content.nodes = nodes;
@@ -145,74 +123,6 @@ String GenerateDotGraph(GraphPrintingContent content,Arena* out){
   return EndString(out,result);
 }
 
-void OutputDebugDotGraph(Accelerator* accel,String fileName){
-  TEMP_REGION(temp,nullptr);
-
-  if(!globalOptions.debug){
-    return;
-  }
-
-  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
-  
-  String filePath = PushDebugPath(temp,accel->name,trueFileName);
-      
-  GraphPrintingContent content = GenerateDefaultPrintingContent(accel,temp);
-  String result = GenerateDotGraph(content,temp);
-  OutputContentToFile(filePath,result);
-}
-
-void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight){
-  TEMP_REGION(temp,nullptr);
-
-  if(!globalOptions.debug){
-    return;
-  }
-
-  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
-  
-  String filePath = PushDebugPath(temp,accel->name,trueFileName);
-
-  auto nodeFunction = [highlight](FUInstance* inst,Arena* out) -> GraphInfo {
-    GraphInfo def = DefaultNodeContent(inst,out);
-    if(inst == highlight){
-      Assert(def.color != Color_GREEN);
-      return {def.content,Color_GREEN};
-    } else {
-      return def;
-    }
-  };
-  
-  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp);
-  String result = GenerateDotGraph(content,temp);
-  OutputContentToFile(filePath,result);
-}
-
-void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight){
-  TEMP_REGION(temp,nullptr);
-
-  if(!globalOptions.debug){
-    return;
-  }
-
-  String trueFileName = PushString(temp,fileName); // Make it safe to use StaticFormat outside this function
-  
-  String filePath = PushDebugPath(temp,accel->name,trueFileName);
-
-  auto nodeFunction = [highlight](FUInstance* inst,Arena* out) -> GraphInfo {
-    GraphInfo def = DefaultNodeContent(inst,out);
-    if(highlight->Exists(inst)){
-      Assert(def.color != Color_RED);
-      return {def.content,Color_RED};
-    } else {
-      return def;
-    }
-  };
-  
-  GraphPrintingContent content = GeneratePrintingContent(accel,nodeFunction,defaultEdgeContent,temp);
-  String result = GenerateDotGraph(content,temp);
-  OutputContentToFile(filePath,result);
-}
-
 void OutputContentToFile(String filepath,String content){
   FILE* file = OpenFileAndCreateDirectories(filepath,"w",FilePurpose_DEBUG_INFO);
   DEFER_CLOSE_FILE(file);
@@ -244,21 +154,6 @@ String PushDebugPath(Arena* out,String folderName,String fileName){
   return path;
 }
 
-String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName){
-  Assert(globalOptions.debug);
-  Assert(!Contains(fileName,"/"));
-  Assert(folderName.size != 0);
-  Assert(subFolder.size != 0);
-  Assert(fileName.size != 0);
-
-  const char* fullFolderPath = StaticFormat("%.*s/%.*s/%.*s",UN(globalOptions.debugPath),UN(folderName),UN(subFolder));
-
-  CreateDirectories(fullFolderPath);
-  String path = PushString(out,"%s/%.*s",fullFolderPath,UN(fileName));
-  
-  return path;
-}
-
 // ============================================================================
 // Debug path regions
 
@@ -276,7 +171,9 @@ DebugPathMarker::DebugPathMarker(String name){
     
     debugRegionInit = true;
   }
-
+  
+  // TODO: This will eventually exhaust the arena since we do not free anything.
+  //       Easy to fix by just storing the arena mark.
   debugRegionStack[debugRegionIndex] = PushString(debugRegionArena,name);
 
   debugRegionIndex += 1;
@@ -323,16 +220,54 @@ void DebugRegionOutputDotGraph(Accelerator* accel,String fileName){
   OutputContentToFile(filePath,result);
 }
 
-void DebugRegionLatencyGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,String filename){
-  TEMP_REGION(temp,nullptr);
-
+void DebugRegionOutputLatencyGraph(Accelerator* accel,NodeDelay* nodeDelay,PortDelay* portDelay,EdgeDelay* edgeToDelay,String fileName){
   if(!globalOptions.debug){
     return;
   }
 
-  GraphPrintingContent content = GenerateLatencyDotGraph(top,orderToIndex,nodeLatencyByOrder,edgeLatency,temp);
-  String result = GenerateDotGraph(content,temp);
+  TEMP_REGION(temp,nullptr);
 
-  String filePath = GetDebugRegionFilepath(filename,temp);
+  int size = nodeDelay->size;
+  Array<GraphPrintingNodeInfo> nodeArray = PushArray<GraphPrintingNodeInfo>(temp,size);
+  int index = 0;
+  for(Pair<FUInstance*,DelayInfo*> p : nodeDelay){
+    FUInstance* node = p.first;
+    DelayInfo delay = *p.second;
+    
+    nodeArray[index].name = PushString(temp,node->name);
+    nodeArray[index].content = PushString(temp,"%.*s:%d:%d",UN(node->name),delay.value,node->literal);
+    nodeArray[index].color = Color_BLACK;
+
+    index += 1;
+  }
+
+  int totalEdges = edgeToDelay->size;
+
+  Array<GraphPrintingEdgeInfo> edgeArray = PushArray<GraphPrintingEdgeInfo>(temp,totalEdges);
+  int edgeIndex = 0;
+  for(Pair<Edge,DelayInfo*> p : edgeToDelay){
+    Edge edge = p.first;
+    DelayInfo edgeLatency = *p.second;
+
+    if(edgeLatency.isAny){
+      edgeArray[edgeIndex].color = Color_BLUE;
+    } else {
+      edgeArray[edgeIndex].color = Color_BLACK;
+    }
+    edgeArray[edgeIndex].content = PushString(temp,"%d",edgeLatency.value);
+    edgeArray[edgeIndex].firstNode = edge.units[0].inst->name;
+    edgeArray[edgeIndex].secondNode = edge.units[1].inst->name;
+
+    edgeIndex += 1;
+  }
+    
+  GraphPrintingContent printContent = {};
+  printContent.edges = edgeArray;
+  printContent.nodes = nodeArray;
+  printContent.graphLabel = "Nodes and edges contain their global latency (nodes also contain special)";
+
+  String result = GenerateDotGraph(printContent,temp);
+
+  String filePath = GetDebugRegionFilepath(fileName,temp);
   OutputContentToFile(filePath,result);
 }

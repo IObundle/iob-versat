@@ -118,11 +118,9 @@ Accelerator* CopyAccelerator(Accelerator* accel,AcceleratorPurpose purpose,bool 
     map->Insert(inst,newInst);
   }
 
-  EdgeIterator iter = IterateEdges(accel);
-
   // Flat copy of edges
-  while(iter.HasNext()){
-    Edge edge = iter.Next();
+  for(EdgeIterator iter = IterateEdges(accel); iter.IsValid(); iter.Next()){
+    Edge edge = iter.Value();
     FUInstance* out = map->GetOrFail(edge.units[0].inst);
     int outPort = edge.units[0].port;
     FUInstance* in = map->GetOrFail(edge.units[1].inst);
@@ -146,11 +144,9 @@ Pair<Accelerator*,AcceleratorMapping*> CopyAcceleratorWithMapping(Accelerator* a
     MappingInsertEqualNode(map,inst,newInst);
   }
 
-  EdgeIterator iter = IterateEdges(accel);
-
   // Flat copy of edges
-  while(iter.HasNext()){
-    Edge edge = iter.Next();
+  for(EdgeIterator iter = IterateEdges(accel); iter.IsValid(); iter.Next()){
+    Edge edge = iter.Value();
 
     PortInstance out = MappingMapOutput(map,edge.out);
     PortInstance in = MappingMapInput(map,edge.in);
@@ -212,13 +208,13 @@ Array<int> ExtractInputDelays(Accelerator* accel,CalculateDelayResult delays,int
   int maxInput = 0;
   for(FUInstance* ptr : accel->allocated){
     if(ptr->declaration == BasicDeclaration::input){
-      maxInput = std::max(maxInput,ptr->portIndex);
+      maxInput = MAX(maxInput,ptr->portIndex);
       inputNodes[ptr->portIndex] = ptr;
       seenOneInput = true;
     }
   }
   if(seenOneInput) maxInput += 1;
-  inputNodes.size = std::max(maxInput,mimimumAmount);
+  inputNodes.size = MAX(maxInput,mimimumAmount);
   
   Array<int> inputDelay = PushArray<int>(out,inputNodes.size);
 
@@ -248,7 +244,7 @@ Array<int> ExtractOutputLatencies(Accelerator* accel,CalculateDelayResult delays
 
   if(outputNode){
     FOREACH_LIST(ConnectionNode*,ptr,outputNode->allInputs){
-      maxOutput = std::max(maxOutput,ptr->port);
+      maxOutput = MAX(maxOutput,ptr->port);
     }
     maxOutput += 1;
   } else {
@@ -400,12 +396,12 @@ DAGOrderNodes CalculateDAGOrder(Accelerator* accel,Arena* out){
 
       int index = orderIndex->GetOrFail(other);
 
-      order = std::max(order,res.order[index]);
+      order = MAX(order,res.order[index]);
     }
 
     orderIndex->Insert(node,i); // Only insert after to detect any potential error.
     res.order[i] = order;
-    res.maxOrder = std::max(res.maxOrder,order);
+    res.maxOrder = MAX(res.maxOrder,order);
   }
 
   return res;
@@ -445,8 +441,8 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
     }
     
     FUInstance* output = edge.units[0].inst;
-
-    if(HasVariableDelay(output->declaration)){
+    
+    if(output->declaration == BasicDeclaration::variableBuffer){
       edgePair.second = 0;
       continue;
     }
@@ -463,15 +459,15 @@ void FixDelays(Accelerator* accel,Hashmap<Edge,DelayInfo>* edgeDelays){
     } else {
       String bufferName = PushString(globalPermanent,"buffer%d",buffersInserted);
 
-      buffer = CreateFUInstance(accel,BasicDeclaration::buffer,bufferName);
-      buffer->bufferAmount = delay - BasicDeclaration::buffer->info.infos[0].outputLatencies[0];
+      buffer = CreateFUInstance(accel,BasicDeclaration::variableBuffer,bufferName);
+      buffer->bufferAmount = delay - BasicDeclaration::variableBuffer->info.infos[0].outputLatencies[0];
       Assert(buffer->bufferAmount >= 0);
       SetStatic(buffer);
     }
 
     InsertUnit(accel,edge.units[0],edge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
 
-    OutputDebugDotGraph(accel,SF("fixDelay_%d.dot",buffersInserted),buffer);
+    //OutputDebugDotGraph(accel,SF("fixDelay_%d.dot",buffersInserted),buffer);
 
     buffersInserted += 1;
   }
@@ -552,11 +548,11 @@ Array<FUDeclaration*> MemSubTypes(AccelInfo* info,Arena* out){
   Array<InstanceInfo> test = info->infos[0].info;
   for(InstanceInfo& info : test){
     if(info.memMappedSize.has_value()){
-      maps->Insert(info.decl);
+      maps->Insert(GetTypeByName(info.typeName));
     }
   }
   
-  Array<FUDeclaration*> subTypes = PushArrayFromSet(out,maps);
+  Array<FUDeclaration*> subTypes = PushArray(out,maps);
   return subTypes;
 }
 
@@ -568,11 +564,11 @@ Hashmap<StaticId,StaticData>* CollectStaticUnits(AccelInfo* info,Arena* out){
     if(info->isStatic){
       StaticId id = {};
       id.name = info->name;
-      id.parent = info->parent;
+      id.parent = GetTypeByName(info->parentTypeName);
 
       StaticData data = {};
-      data.decl = info->decl;
-      data.configs = info->decl->configs;
+      data.decl = GetTypeByName(info->typeName);
+      data.configs = info->configs;
       staticUnits->InsertIfNotExist(id,data);
     }
   }
@@ -622,11 +618,11 @@ int ExternalMemoryByteSize(ExternalMemoryInterface* inter){
   switch(inter->type){
   case ExternalMemoryType::ExternalMemoryType_2P:{
     addressBitSize = inter->tp.bitSizeIn;
-    byteOffset = std::min(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
+    byteOffset = MIN(DataWidthToByteOffset(inter->tp.dataSizeIn),DataWidthToByteOffset(inter->tp.dataSizeOut));
   }break;
   case ExternalMemoryType::ExternalMemoryType_DP:{
     addressBitSize = inter->dp[0].bitSize;
-    byteOffset = std::min(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
+    byteOffset = MIN(DataWidthToByteOffset(inter->dp[0].dataSizeIn),DataWidthToByteOffset(inter->dp[1].dataSizeIn));
   }break;
   }
 
@@ -653,7 +649,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces){
   return size;
 }
 
-VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
+VersatComputedValues ComputeVersatValues(Accelerator* graph,AccelInfo* info,Arena* out){
   TEMP_REGION(temp,out);
   VersatComputedValues res = {};
 
@@ -668,41 +664,40 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   auto builder = StartArray<ExternalMemoryInterface>(temp);
 
   int defaultDelaySize = 7;
+  int externalMemoryInterfaces = 0; 
   
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
-    FUInstance* inst = unit->inst;
-    FUDeclaration* decl = inst->declaration;
     
-    if(decl->memoryMapBits.has_value()){
-      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,decl->memoryMapBits.value());
-      memoryMappedDWords += 1 << decl->memoryMapBits.value();
+    if(unit->memMapBits.has_value()){
+      memoryMappedDWords = AlignBitBoundary(memoryMappedDWords,unit->memMapBits.value());
+      memoryMappedDWords += 1 << unit->memMapBits.value();
 
       res.unitsMapped += 1;
     }
 
-    res.nConfigs += decl->configs.size;
-    for(Wire& wire : decl->configs){
+    res.nConfigs += unit->configSize;
+    for(Wire& wire : unit->configs){
       configBits += wire.bitSize;
 
       configExpr = Normalize(SymbolicAdd(configExpr,wire.sizeExpr,temp),temp);
     }
 
-    res.nStates += decl->states.size;
-    for(Wire& wire : decl->states){
+    res.nStates += unit->stateSize;
+    for(Wire& wire : unit->states){
       res.stateBits += wire.bitSize;
     }
 
-    res.nDelays += unit->delaySize;
-    delayBits += unit->delaySize * defaultDelaySize;
+    res.nDelays += unit->numberDelays;
+    delayBits += unit->numberDelays * defaultDelaySize;
 
-    res.externalMemoryInterfaces += decl->externalMemory.size;
+    externalMemoryInterfaces += unit->externalMemory.size;
 
-    if(decl->externalMemory.size){
-      builder.PushArray(decl->externalMemory);
+    if(unit->externalMemory.size){
+      builder.PushArray(unit->externalMemory);
     }
 
-    if(decl->singleInterfaces & SingleInterfaces_DONE){
+    if(unit->singleInterfaces & SingleInterfaces_DONE){
       numberDones += 1;
     }
   }
@@ -740,7 +735,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   res.configurationBitsExpr = Normalize(total,out);
 
   // Versat specific registers are treated as a special maping (all 0's) of 1 configuration and 1 state register
-  auto registerList = PushArenaList<VersatRegister>(temp);
+  auto registerList = PushList<VersatRegister>(temp);
 
   auto AddRegister = [&res,&registerList](VersatRegister reg){
     res.versatConfigs += 1;
@@ -772,7 +767,7 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
 
   res.nConfigs += res.versatConfigs;
   res.nStates += res.versatStates;
-  res.registers = PushArrayFromList(out,registerList);
+  res.registers = PushArray(out,registerList);
   
   int nConfigurations = res.nConfigs + res.nStatics + res.nDelays;
   res.configurationBits = configBits + staticBits + delayBits;
@@ -784,11 +779,31 @@ VersatComputedValues ComputeVersatValues(AccelInfo* info,Arena* out){
   res.stateAddressBits = log2i(res.nStates);
 
   int memoryMappingAddressBits = res.memoryAddressBits;
-  int stateConfigurationAddressBits = std::max(res.configurationAddressBits,res.stateAddressBits);
+  int stateConfigurationAddressBits = MAX(res.configurationAddressBits,res.stateAddressBits);
 
-  res.memoryConfigDecisionBit = std::max(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
+  res.memoryConfigDecisionBit = MAX(stateConfigurationAddressBits,memoryMappingAddressBits) + 2;
   
   res.numberConnections = info->numberConnections;
+
+  Array<ExternalMemoryInterface> external = PushArray<ExternalMemoryInterface>(out,externalMemoryInterfaces);
+  int externalIndex = 0;
+  for(InstanceInfo& in : info->infos[0].info){
+    if(!in.isComposite){
+      for(ExternalMemoryInterface& inter : in.externalMemory){
+        external[externalIndex++] = inter;
+      }
+    }
+  }
+  res.externalMemoryInterfaces = external;
+  res.info = info;
+
+  Pool<FUInstance> instances = graph->allocated;
+  Hashmap<StaticId,StaticData>* staticUnits = CollectStaticUnits(info,out);
+
+  Array<WireInformation> wireInfo = CalculateWireInformation(instances,staticUnits,res.versatConfigs,out);
+
+  res.staticUnits = staticUnits;
+  res.allWiresInfo = wireInfo;
   
   return res;
 }
@@ -877,7 +892,6 @@ static void AdvanceUntilValid(EdgeIterator* iter){
   
   while(iter->currentNode != iter->end){
     if(iter->currentPort == nullptr){
-      //iter->currentNode = iter->currentNode->next;
       ++iter->currentNode;
       
       if(iter->currentNode != iter->end){
@@ -890,11 +904,7 @@ static void AdvanceUntilValid(EdgeIterator* iter){
   }
 }
 
-bool Valid(Edge edge){
-  return (edge.in.inst != nullptr);
-}
-
-bool EdgeIterator::HasNext(){
+bool EdgeIterator::IsValid(){
   if(!(currentNode != end)){
     Assert(currentPort == nullptr);
     return false;
@@ -903,16 +913,13 @@ bool EdgeIterator::HasNext(){
   }
 }
 
-Edge EdgeIterator::Next(){
-  if(!HasNext()){
-    return {};
-  }
-
-  Edge edge = MakeEdge(*currentNode,currentPort->port,currentPort->instConnectedTo.inst,currentPort->instConnectedTo.port,currentPort->edgeDelay);
-
+void EdgeIterator::Next(){
   currentPort = currentPort->next;
   AdvanceUntilValid(this);
-  
+}
+
+Edge EdgeIterator::Value(){
+  Edge edge = MakeEdge(*currentNode,currentPort->port,currentPort->instConnectedTo.inst,currentPort->instConnectedTo.port,currentPort->edgeDelay);
   return edge;
 }
 
@@ -923,7 +930,6 @@ EdgeIterator IterateEdges(Accelerator* accel){
     return iter;
   }
 
-  //iter.currentNode = accel->allocated;
   iter.currentNode = accel->allocated.begin();
   iter.end = accel->allocated.end();
   iter.currentPort = (*iter.currentNode)->allOutputs;
@@ -942,24 +948,22 @@ bool EdgeEqualNoDelay(const Edge& e0,const Edge& e1){
 Opt<Edge> FindEdge(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
   FUDeclaration* inDecl = in->declaration;
   FUDeclaration* outDecl = out->declaration;
-
+  
   Assert(out->accel == in->accel);
   Assert(inIndex < inDecl->NumberInputs());
   Assert(outIndex < outDecl->NumberOutputs());
 
   Accelerator* accel = out->accel;
 
-  EdgeIterator iter = IterateEdges(accel);
-  while(iter.HasNext()){
-    Edge edgeInst = iter.Next();
-    Edge* edge = &edgeInst;
+  for(EdgeIterator iter = IterateEdges(accel); iter.IsValid(); iter.Next()){
+    Edge edge = iter.Value();
 
-    if(edge->units[0].inst == out &&
-       edge->units[0].port == outIndex &&
-       edge->units[1].inst == in &&
-       edge->units[1].port == inIndex &&
-       edge->delay == delay) {
-      return *edge;
+    if(edge.units[0].inst == out &&
+       edge.units[0].port == outIndex &&
+       edge.units[1].inst == in &&
+       edge.units[1].port == inIndex &&
+       edge.delay == delay) {
+      return edge;
     }
   }
 
@@ -981,14 +985,12 @@ void ConnectUnits(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int de
 void ConnectUnitsIfNotConnected(FUInstance* out,int outIndex,FUInstance* in,int inIndex,int delay){
   Accelerator* accel = out->accel;
 
-  EdgeIterator iter = IterateEdges(accel);
-  while(iter.HasNext()){
-    Edge edgeInst = iter.Next();
-    Edge* edge = &edgeInst;
+  for(EdgeIterator iter = IterateEdges(accel); iter.IsValid(); iter.Next()){
+    Edge edge = iter.Value();
 
-    if(edge->units[0].inst == out && edge->units[0].port == outIndex &&
-       edge->units[1].inst == in  && edge->units[1].port == inIndex &&
-       delay == edge->delay){
+    if(edge.units[0].inst == out && edge.units[0].port == outIndex &&
+       edge.units[1].inst == in  && edge.units[1].port == inIndex &&
+       delay == edge.delay){
       return;
     }
   }
@@ -1486,8 +1488,6 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
 
   Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
   Accelerator* newAccel = pair.first;
-
-  DebugRegionOutputDotGraph(accel,"FlattenInput");
   
   Pool<FUInstance*> compositeInstances = {};
   Pool<FUInstance*> toRemove = {};
@@ -1614,36 +1614,33 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       }
 
       // TODO: All these iterations could be converted to a single loop where inside we check if its input,output or inernal edge
-      EdgeIterator iter = IterateEdges(newAccel);
       // Add accel edges to output instances
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* edge = &edgeInst;
-        if(edge->units[0].inst == inst){
-          EdgeIterator iter2 = IterateEdges(circuit);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* circuitEdge = &edge2Inst;
+      for(EdgeIterator iter = IterateEdges(newAccel); iter.IsValid(); iter.Next()){
+        Edge edge = iter.Value();
 
-            if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
-              FUInstance* other = MappingMapOutput(map,circuitEdge->units[0]).inst;
+        if(edge.units[0].inst == inst){
+          for(EdgeIterator iter2 = IterateEdges(circuit); iter2.IsValid(); iter2.Next()){
+            Edge circuitEdge = iter2.Value();
+
+            if(circuitEdge.units[1].inst == outputInstance && circuitEdge.units[1].port == edge.units[0].port){
+              FUInstance* other = MappingMapOutput(map,circuitEdge.units[0]).inst;
 
               if(other == nullptr){
                 continue;
               }
 
               FUInstance* out = other;
-              FUInstance* in = edge->units[1].inst;
-              int outPort = circuitEdge->units[0].port;
-              int inPort = edge->units[1].port;
-              int delay = edge->delay + circuitEdge->delay;
+              FUInstance* in = edge.units[1].inst;
+              int outPort = circuitEdge.units[0].port;
+              int inPort = edge.units[1].port;
+              int delay = edge.delay + circuitEdge.delay;
 
               SubMappingInfo t = {};
 
               t.subDeclaration = inst->declaration;
               t.higherName = inst->name;
               t.isInput = false;
-              t.subPort = circuitEdge->units[1].port;
+              t.subPort = circuitEdge.units[1].port;
 
               subMappingDone->Insert(t,{in,inPort});
               
@@ -1654,37 +1651,35 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       }
 
       // Add accel edges to input instances
-      iter = IterateEdges(newAccel);
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* edge = &edgeInst;
-        if(edge->units[1].inst == inst){
-          FUInstance* circuitInst = GetInputInstance(&circuit->allocated,edge->units[1].port);
+      for(EdgeIterator iter = IterateEdges(newAccel); iter.IsValid(); iter.Next()){
+        Edge edge = iter.Value();
 
-          EdgeIterator iter2 = IterateEdges(circuit);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* circuitEdge = &edge2Inst;
-          
-            if(circuitEdge->units[0].inst == circuitInst){
-              FUInstance* other = MappingMapInput(map,circuitEdge->units[1]).inst;
+        //Edge* edge = &edgeInst;
+        if(edge.units[1].inst == inst){
+          FUInstance* circuitInst = GetInputInstance(&circuit->allocated,edge.units[1].port);
+
+          for(EdgeIterator iter2 = IterateEdges(circuit); iter2.IsValid(); iter2.Next()){
+            Edge circuitEdge = iter2.Value();
+
+            if(circuitEdge.units[0].inst == circuitInst){
+              FUInstance* other = MappingMapInput(map,circuitEdge.units[1]).inst;
 
               if(other == nullptr){
                 continue;
               }
 
-              FUInstance* out = edge->units[0].inst;
+              FUInstance* out = edge.units[0].inst;
               FUInstance* in = other;
-              int outPort = edge->units[0].port;
-              int inPort = circuitEdge->units[1].port;
-              int delay = edge->delay + circuitEdge->delay;
+              int outPort = edge.units[0].port;
+              int inPort = circuitEdge.units[1].port;
+              int delay = edge.delay + circuitEdge.delay;
 
               SubMappingInfo t = {};
 
               t.subDeclaration = inst->declaration;
               t.higherName = inst->name;
               t.isInput = true;
-              t.subPort = edge->units[1].port;
+              t.subPort = edge.units[1].port;
               
               subMappingDone->Insert(t,{out,outPort});
               
@@ -1695,13 +1690,11 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
       }
 
       // Add circuit specific edges
-      iter = IterateEdges(circuit);
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* circuitEdge = &edgeInst;
+      for(EdgeIterator iter = IterateEdges(circuit); iter.IsValid(); iter.Next()){
+        Edge edge = iter.Value();
 
-        FUInstance* otherInput = MappingMapOutput(map,circuitEdge->units[0]).inst;
-        FUInstance* otherOutput = MappingMapInput(map,circuitEdge->units[1]).inst;
+        FUInstance* otherInput = MappingMapOutput(map,edge.units[0]).inst;
+        FUInstance* otherOutput = MappingMapInput(map,edge.units[1]).inst;
 
         if(otherInput == nullptr || otherOutput == nullptr){
           continue;
@@ -1709,39 +1702,35 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
 
         FUInstance* out = otherInput;
         FUInstance* in = otherOutput;
-        int outPort = circuitEdge->units[0].port;
-        int inPort = circuitEdge->units[1].port;
-        int delay = circuitEdge->delay;
+        int outPort = edge.units[0].port;
+        int inPort = edge.units[1].port;
+        int delay = edge.delay;
 
         ConnectUnits(out,outPort,in,inPort,delay);
       }
 
       // Add input to output specific edges
-      iter = IterateEdges(newAccel);
-      while(iter.HasNext()){
-        Edge edge1Inst = iter.Next();
-        Edge* edge1 = &edge1Inst;
-        if(edge1->units[1].inst == inst){
-          PortInstance input = edge1->units[0];
-          FUInstance* circuitInput = GetInputInstance(&circuit->allocated,edge1->units[1].port);
+      for(EdgeIterator iter = IterateEdges(newAccel); iter.IsValid(); iter.Next()){
+        Edge edge1 = iter.Value();
 
-          EdgeIterator iter2 = IterateEdges(newAccel);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* edge2 = &edge2Inst;
-            if(edge2->units[0].inst == inst){
-              PortInstance output = edge2->units[1];
-              int outputPort = edge2->units[0].port;
+        if(edge1.units[1].inst == inst){
+          PortInstance input = edge1.units[0];
+          FUInstance* circuitInput = GetInputInstance(&circuit->allocated,edge1.units[1].port);
 
-              EdgeIterator iter3 = IterateEdges(circuit);
-              while(iter3.HasNext()){
-                Edge edge3Inst = iter3.Next();
-                Edge* circuitEdge = &edge3Inst;
+          for(EdgeIterator iter2 = IterateEdges(newAccel); iter2.IsValid(); iter2.Next()){
+            Edge edge2 = iter2.Value();
 
-                if(circuitEdge->units[0].inst == circuitInput
-                   && circuitEdge->units[1].inst == outputInstance
-                   && circuitEdge->units[1].port == outputPort){
-                  int delay = edge1->delay + circuitEdge->delay + edge2->delay;
+            if(edge2.units[0].inst == inst){
+              PortInstance output = edge2.units[1];
+              int outputPort = edge2.units[0].port;
+
+              for(EdgeIterator iter3 = IterateEdges(newAccel); iter3.IsValid(); iter3.Next()){
+                Edge circuitEdge = iter3.Value();
+
+                if(circuitEdge.units[0].inst == circuitInput
+                   && circuitEdge.units[1].inst == outputInstance
+                   && circuitEdge.units[1].port == outputPort){
+                  int delay = edge1.delay + circuitEdge.delay + edge2.delay;
 
                   ConnectUnits(input,output,delay);
                 }
@@ -1758,8 +1747,6 @@ Pair<Accelerator*,SubMap*> Flatten(Accelerator* accel,int times){
     compositeInstances.Clear();
   }
 
-  DebugRegionOutputDotGraph(newAccel,"Flatten");
-  
   toRemove.Clear(true);
   compositeInstances.Clear(true);
 
@@ -1777,477 +1764,4 @@ void PrintSubMappingInfo(SubMap* info){
     printf("%.*s:%d\n",UN(inst.inst->name),inst.port);
     printf("\n");
   }
-}
-
-bool CanBeFlattened(Accelerator* accel){
-  for(FUInstance* inst : accel->allocated){
-    bool containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
-    if(inst->declaration->type == FUDeclarationType_MERGED || (inst->declaration->baseCircuit && !containsStatic)){
-      return true;
-    }
-  }
-
-  return false;
-}
-
-FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex){
-  TEMP_REGION(temp,nullptr);
-  TEMP_REGION(temp2,temp);
-
-  int times = 1;
-  
-  Pair<Accelerator*,AcceleratorMapping*> pair = CopyAcceleratorWithMapping(accel,AcceleratorPurpose_FLATTEN,true,temp);
-  Accelerator* newAccel = pair.first;
-
-  DebugRegionOutputDotGraph(accel,"FlattenWithMergeInput");
-
-  FlattenWithMergeResult res = {};
-
-  Accelerator* reconUsed = nullptr;
-  auto reconToFlatten = PushArenaList<Pair<FUInstance*,FUInstance*>>(temp2);
-  
-  Pool<FUInstance*> compositeInstances = {};
-  Pool<FUInstance*> toRemove = {};
-
-  TrieMap<StaticId,int>* staticToIndex = PushTrieMap<StaticId,int>(temp);
-  SubMap* subMappingDone = PushTrieMap<SubMappingInfo,PortInstance>(globalPermanent);
-  
-  for(int i = 0; i < times; i++){
-    for(FUInstance* instPtr : newAccel->allocated){
-      FUInstance* inst = instPtr;
-
-      bool containsStatic = inst->isStatic || inst->declaration->staticUnits != nullptr;
-      // TODO: For now we do not flatten units that are static or contain statics. It messes merge configurations and still do not know how to procceed. Need to beef merge up a bit before handling more complex cases. The problem was that after flattening statics would become shared (unions) and as such would appear in places where they where not supposed to appear.
-
-      // TODO: Maybe static and shared units configurations could be stored in a separated structure.
-      if(inst->declaration->type == FUDeclarationType_MERGED || (inst->declaration->baseCircuit && !containsStatic)){
-        FUInstance** ptr = compositeInstances.Alloc();
-
-        *ptr = instPtr;
-      }
-    }
-
-    if(compositeInstances.Size() == 0){
-      break;
-    }
-
-    TrieMap<int,int>* sharedToFirstChildIndex = PushTrieMap<int,int>(temp);
-
-    int freeSharedIndex = GetFreeShareIndex(newAccel); //(maxSharedIndex != -1 ? maxSharedIndex + 1 : 0);
-    int count = 0;
-    for(FUInstance** instPtr : compositeInstances){
-      FUInstance* inst = (*instPtr);
-
-      Assert(inst->declaration->baseCircuit);
-
-      count += 1;
-      Accelerator* circuit = inst->declaration->baseCircuit;
-
-      if(inst->declaration->type == FUDeclarationType_MERGED){
-        circuit = inst->declaration->info.infos[reconIndex].recon;
-        if(!reconUsed){
-          reconUsed = circuit;
-        }
-      }
-      
-      FUInstance* outputInstance = GetOutputInstance(&circuit->allocated);
-
-      int savedSharedIndex = freeSharedIndex;
-      int instSharedIndex = freeSharedIndex;
-      if(inst->sharedEnable){
-        // Flattening a shared unit
-        int* val = sharedToFirstChildIndex->Get(inst->sharedIndex);
-
-        if(val){
-          sharedToFirstChildIndex->Insert(inst->sharedIndex,freeSharedIndex);
-        } else {
-          freeSharedIndex = *val;
-        }
-      }
-
-      TrieMap<int,int>* sharedToShared = PushTrieMap<int,int>(temp);
-      //std::unordered_map<int,int> sharedToShared;
-      // Create new instance and map then
-      AcceleratorMapping* map = MappingSimple(circuit,newAccel,temp); // TODO: Leaking
-
-      for(FUInstance* ptr : circuit->allocated){
-        FUInstance* circuitInst = ptr;
-        if(circuitInst->declaration->type == FUDeclarationType_SPECIAL){
-          continue;
-        }
-
-        String newName = PushString(globalPermanent,"%.*s_%.*s",UN(inst->name),UN(circuitInst->name));
-
-        // We are copying the instance but some differences are gonna happen in relation to static and config sharing. 
-        FUInstance* newInst = CopyInstance(newAccel,circuitInst,true,newName);
-        MappingInsertEqualNode(map,circuitInst,newInst);
-
-        if(circuit == reconUsed){
-          *reconToFlatten->PushElem() = {ptr,newInst}; 
-        }
-        
-        if(circuitInst->isStatic){
-          bool found = false;
-          int shareIndex = 0;
-          for(auto iter : staticToIndex){
-            if(iter.first.parent == inst->declaration && CompareString(iter.first.name,circuitInst->name)){
-              found = true;
-              shareIndex = iter.second;
-              break;
-            }
-          }
-
-          if(!found){
-            shareIndex = GetFreeShareIndex(newAccel);
-
-            StaticId id = {};
-            id.name = circuitInst->name;
-            id.parent = inst->declaration;
-            staticToIndex->Insert(id,shareIndex);
-          }
-
-          ShareInstanceConfig(newInst,shareIndex);
-        } else if(circuitInst->sharedEnable && inst->sharedEnable){
-          int* val = sharedToShared->Get(circuitInst->sharedIndex);
-
-          if(val){
-            ShareInstanceConfig(newInst,*val);
-          } else {
-            int newIndex = GetFreeShareIndex(newAccel);
-
-            sharedToShared->Insert(circuitInst->sharedIndex,newIndex);
-
-            ShareInstanceConfig(newInst,newIndex);
-          }
-        } else if(inst->sharedEnable){ // Currently flattening instance is shared
-          ShareInstanceConfig(newInst,instSharedIndex); // Always use the same inst index
-        } else if(circuitInst->sharedEnable){
-          int* val = sharedToShared->Get(circuitInst->sharedIndex);
-
-          if(val){
-            ShareInstanceConfig(newInst,*val);
-          } else {
-            int newIndex = freeSharedIndex;
-            
-            sharedToShared->Insert(circuitInst->sharedIndex,newIndex);
-
-            ShareInstanceConfig(newInst,newIndex);
-            freeSharedIndex = GetFreeShareIndex(newAccel);
-          }
-        }
-      }
-
-      if(inst->sharedEnable && savedSharedIndex > freeSharedIndex){
-        freeSharedIndex = savedSharedIndex;
-      }
-
-      // TODO: All these iterations could be converted to a single loop where inside we check if its input,output or inernal edge
-      EdgeIterator iter = IterateEdges(newAccel);
-      // Add accel edges to output instances
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* edge = &edgeInst;
-        if(edge->units[0].inst == inst){
-          EdgeIterator iter2 = IterateEdges(circuit);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* circuitEdge = &edge2Inst;
-
-            if(circuitEdge->units[1].inst == outputInstance && circuitEdge->units[1].port == edge->units[0].port){
-              FUInstance* other = MappingMapOutput(map,circuitEdge->units[0]).inst;
-
-              if(other == nullptr){
-                continue;
-              }
-
-              FUInstance* out = other;
-              FUInstance* in = edge->units[1].inst;
-              int outPort = circuitEdge->units[0].port;
-              int inPort = edge->units[1].port;
-              int delay = edge->delay + circuitEdge->delay;
-
-              SubMappingInfo t = {};
-
-              t.subDeclaration = inst->declaration;
-              t.higherName = inst->name;
-              t.isInput = false;
-              t.subPort = circuitEdge->units[1].port;
-
-              subMappingDone->Insert(t,{in,inPort});
-              
-              ConnectUnits(out,outPort,in,inPort,delay);
-            }
-          }
-        }
-      }
-
-      // Add accel edges to input instances
-      iter = IterateEdges(newAccel);
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* edge = &edgeInst;
-        if(edge->units[1].inst == inst){
-          FUInstance* circuitInst = GetInputInstance(&circuit->allocated,edge->units[1].port);
-
-          EdgeIterator iter2 = IterateEdges(circuit);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* circuitEdge = &edge2Inst;
-          
-            if(circuitEdge->units[0].inst == circuitInst){
-              FUInstance* other = MappingMapInput(map,circuitEdge->units[1]).inst;
-
-              if(other == nullptr){
-                continue;
-              }
-
-              FUInstance* out = edge->units[0].inst;
-              FUInstance* in = other;
-              int outPort = edge->units[0].port;
-              int inPort = circuitEdge->units[1].port;
-              int delay = edge->delay + circuitEdge->delay;
-
-              SubMappingInfo t = {};
-
-              t.subDeclaration = inst->declaration;
-              t.higherName = inst->name;
-              t.isInput = true;
-              t.subPort = edge->units[1].port;
-              
-              subMappingDone->Insert(t,{out,outPort});
-              
-              ConnectUnits(out,outPort,in,inPort,delay);
-            }
-          }
-        }
-      }
-
-      // Add circuit specific edges
-      iter = IterateEdges(circuit);
-      while(iter.HasNext()){
-        Edge edgeInst = iter.Next();
-        Edge* circuitEdge = &edgeInst;
-
-        FUInstance* otherInput = MappingMapOutput(map,circuitEdge->units[0]).inst;
-        FUInstance* otherOutput = MappingMapInput(map,circuitEdge->units[1]).inst;
-
-        if(otherInput == nullptr || otherOutput == nullptr){
-          continue;
-        }
-
-        FUInstance* out = otherInput;
-        FUInstance* in = otherOutput;
-        int outPort = circuitEdge->units[0].port;
-        int inPort = circuitEdge->units[1].port;
-        int delay = circuitEdge->delay;
-
-        ConnectUnits(out,outPort,in,inPort,delay);
-      }
-
-      // Add input to output specific edges
-      iter = IterateEdges(newAccel);
-      while(iter.HasNext()){
-        Edge edge1Inst = iter.Next();
-        Edge* edge1 = &edge1Inst;
-        if(edge1->units[1].inst == inst){
-          PortInstance input = edge1->units[0];
-          FUInstance* circuitInput = GetInputInstance(&circuit->allocated,edge1->units[1].port);
-
-          EdgeIterator iter2 = IterateEdges(newAccel);
-          while(iter2.HasNext()){
-            Edge edge2Inst = iter2.Next();
-            Edge* edge2 = &edge2Inst;
-            if(edge2->units[0].inst == inst){
-              PortInstance output = edge2->units[1];
-              int outputPort = edge2->units[0].port;
-
-              EdgeIterator iter3 = IterateEdges(circuit);
-              while(iter3.HasNext()){
-                Edge edge3Inst = iter3.Next();
-                Edge* circuitEdge = &edge3Inst;
-
-                if(circuitEdge->units[0].inst == circuitInput
-                   && circuitEdge->units[1].inst == outputInstance
-                   && circuitEdge->units[1].port == outputPort){
-                  int delay = edge1->delay + circuitEdge->delay + edge2->delay;
-
-                  ConnectUnits(input,output,delay);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      RemoveFUInstance(newAccel,*instPtr);
-    }
-
-    toRemove.Clear();
-    compositeInstances.Clear();
-  }
-
-  DebugRegionOutputDotGraph(newAccel,"FlattenWithMerge");
-
-  AcceleratorMapping* map = MappingSimple(reconUsed,newAccel,globalPermanent);
-
-  for(auto p : reconToFlatten){
-    MappingInsertEqualNode(map,p.first,p.second);
-  }
-  
-  toRemove.Clear(true);
-  compositeInstances.Clear(true);
-
-  newAccel->name = accel->name;
-  
-  res.accel = newAccel;
-
-  return res;
-}
-
-// ======================================
-// Hierarchical access
-
-Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr){
-  // TODO: This function can be simplified.
-  FUInstance* currentInstance = nullptr;
-
-  AccelInfoIterator iter = StartIteration(info);
-
-  // NOTE: Logic below assumes that we start with an iterator already pointing to the first unit
-  for(; iter.IsValid();){
-    InstanceInfo* info = iter.CurrentUnit();
-    if(info->name == accessExpr[0]){
-      break;
-    } else {
-      iter = iter.Next();
-    }
-  }
-  
-  if(!iter.IsValid()){
-    return {};
-  }
-
-  for(int i = 1; i < accessExpr.size; i++){
-    String access = accessExpr[i];
-    
-    if(i == accessExpr.size - 1){
-      InstanceInfo* outerInfo = iter.CurrentUnit();
-
-      for(; iter.IsValid();){
-        InstanceInfo* info = iter.CurrentUnit();
-        if(info->name == access){
-          iter = iter.StepInsideOnly();
-
-          if(!iter.IsValid()){
-            break;
-          }
-          
-          Entity res = {};
-          res.inst = iter.CurrentUnit();
-          res.type = EntityType_NODE;
-
-          return res;
-        } else {
-          iter = iter.Next();
-        }
-      }
-      
-      // Did not find node inside which means it must be a wire or a function.
-      for(Wire& config : outerInfo->decl->configs){
-        if(config.name == access){
-          Entity res = {};
-          res.wire = &config;
-          res.type = EntityType_CONFIG_WIRE;
-          res.inst = outerInfo;
-          
-          return res;
-        }
-      }
-
-      for(Wire& state : outerInfo->decl->states){
-        if(state.name == access){
-          Entity res = {};
-          res.wire = &state;
-          res.type = EntityType_STATE_WIRE;
-          res.inst = outerInfo;
-          
-          return res;
-        }
-      }
-
-      for(MergePartition part : outerInfo->decl->info.infos){
-        for(ConfigFunction* func : part.userFunctions){
-          if(func->individualName == access){
-            Entity res = {};
-            res.func = func;
-            res.type = EntityType_CONFIG_FUNCTION;
-            res.inst = outerInfo;
-          
-            return res;
-          }
-        }
-      }
-    } else {
-      for(; iter.IsValid();){
-        InstanceInfo* info = iter.CurrentUnit();
-        if(info->name == access){
-          iter = iter.StepInsideOnly();
-          break;
-        } else {
-          iter = iter.Next();
-        }
-      }
-
-      if(!iter.IsValid()){
-        return {};
-      }
-    }
-  }
-
-  if(iter.IsValid()){
-    Entity res = {};
-    res.inst = iter.CurrentUnit();
-    res.type = EntityType_NODE;
-    
-    return res;
-  }
-
-  return {};
-}
-
-Env* StartEnvironment(Arena* use){
-  Env* env = PushStruct<Env>(use);
-  env->arena = use;
-  env->scopes = PushArenaDoubleList<EnvScope>(use);
-  env->current = env->scopes->PushNode();
-  env->current->elem.variableTypes = PushTrieMap<String,VariableType>(use);
-
-  return env;
-}
-
-Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr){
-
-  if(accessExpr.size == 1){
-    String name = accessExpr[0];
-    DoubleLink<EnvScope>* ptr = env->current;
-
-    // Up the scope chain.
-    for(; ptr != nullptr; ptr = ptr->prev){
-      for(Pair<String,VariableType> p : ptr->elem.variableTypes){
-        String str = p.first;
-        if(str == name){
-          Entity res = {};
-          res.varName = name;
-          res.type = EntityType_VARIABLE_INPUT;
-          return res;
-        }
-      }
-    }
-  }
-
-  return GetEntityFromHierAccess(info,accessExpr);
-}
-
-void AddOrSetVariable(Env* env,String name,VariableType type){
-  env->current->elem.variableTypes->Insert(name,type);
 }

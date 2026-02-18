@@ -37,32 +37,6 @@ FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose pu
   return file;
 }
 
-String TrimLeftWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*start) && start < end) ++start;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
-}
-
-String TrimRightWhitespaces(String in){
-  const char* start = in.data;
-  const char* end = &in.data[in.size-1];
-
-  while(std::isspace(*end) && end > start) --end;
-
-  String res = {};
-  res.data = start;
-  res.size = end - start + 1;
-
-  return res;
-}
-
 String TrimWhitespaces(String in){
   if(in.data == nullptr || in.size == 0){
     return in;
@@ -226,16 +200,6 @@ String GetAbsolutePath(String path,Arena* out){
 
   String res = PushString(out,"%s",ptr);
   return res;
-}
-
-Array<int> GetNonZeroIndexes(Array<int> arr,Arena* out){
-  auto array = StartArray<int>(out);
-  for(int i = 0; i < arr.size; i++){
-    if(arr[i])
-      *array.PushElem() = i;
-  }
-
-  return EndArray(array);
 }
 
 String ReprMemorySize(size_t val,Arena* out){

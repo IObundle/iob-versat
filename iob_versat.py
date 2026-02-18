@@ -125,7 +125,6 @@ def RunVersat(versat_spec,versat_top,versat_extra,build_dir,axi_data_w,debug_pat
 
     versat_args = ["versat",os.path.realpath(versat_spec),
                     "--debug",
-                    "-s",
                     f"-b{axi_data_w}",
                     "-d", # DMA
                     "-t",versat_top,

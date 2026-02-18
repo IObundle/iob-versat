@@ -23,6 +23,8 @@ struct CalculateDelayResult{
   EdgeDelay* edgesDelay;
   PortDelay* portDelay;
   NodeDelay* nodeDelay;
+
+  TrieMap<FUInstance*,int>* variableBuffer;
 };
 
 // Nodes indexed by order, edges indexed by index returned from EdgeIterator

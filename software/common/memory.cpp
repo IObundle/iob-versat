@@ -2,18 +2,11 @@
 
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <sys/sysinfo.h>
-#include <fcntl.h>
-#include <errno.h>
 
-#include <cstdio>
 #include <cstdarg>
-#include <cstdlib>
 
-#include "filesystem.hpp"
 #include "intrinsics.hpp"
-#include "utilsCore.hpp"
 
 #if defined(__SANITIZE_ADDRESS__)
 #pragma message "Using address sanitizer"
@@ -43,9 +36,12 @@ struct FunctionAllocationInfo{
 static Arena debugMemoryArena;
 static Array<ArenaInfo> debugArenaStack;
 static int debugArenaIndex;
-static ArenaList<FunctionAllocationInfo>* debugInfo;
+
+
+//static ArenaList<FunctionAllocationInfo>* debugInfo;
 
 static void InitMemoryDebug(){
+#if 0
   static bool init = false;
   if(init){
     return;
@@ -56,11 +52,13 @@ static void InitMemoryDebug(){
   debugArenaStack = PushArray<ArenaInfo>(&debugMemoryArena,100);
   debugArenaIndex = 0;
 
-  debugInfo = PushArenaList<FunctionAllocationInfo>(&debugMemoryArena);
+  debugInfo = PushList<FunctionAllocationInfo>(&debugMemoryArena);
+#endif
 }
 
 void ReportArenaUsage(){
-  Array<FunctionAllocationInfo> asArray = PushArrayFromList(&debugMemoryArena,debugInfo);
+#if 0
+  Array<FunctionAllocationInfo> asArray = PushArray(&debugMemoryArena,debugInfo);
 
   auto CompareFunction = [](const void* f1,const void* f2) -> int{
     FunctionAllocationInfo* v1 = (FunctionAllocationInfo*) f1;
@@ -83,9 +81,11 @@ void ReportArenaUsage(){
     String prettyMemoryStr = ReprMemorySize(info.memoryUsed,&debugMemoryArena); // NOTE: Leaking
     printf("%s:%s:%d : %.*s\n",info.pos.file,info.pos.functionName,info.pos.line,UN(prettyMemoryStr));
   }
+#endif
 }
 
 void DebugInitRegion(Arena* arena,const char* file,const char* function,int line){
+#if 0
 #ifndef VERSAT_DEBUG
   return;
 #endif
@@ -96,9 +96,11 @@ void DebugInitRegion(Arena* arena,const char* file,const char* function,int line
   debugArenaStack[debugArenaIndex].used = arena->used;
 
   debugArenaIndex += 1;
+#endif
 }
 
 void DebugEndRegion(Arena* arena,const char* file,const char* function,int line){
+#if 0
 #ifndef VERSAT_DEBUG
   return;
 #endif
@@ -118,6 +120,7 @@ void DebugEndRegion(Arena* arena,const char* file,const char* function,int line)
     info->pos.line = line;
     info->memoryUsed = memoryUsed;
   }
+#endif
 }
 
 Arena* contextArenas[2];

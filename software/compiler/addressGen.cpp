@@ -10,100 +10,6 @@
 #include "versatSpecificationParser.hpp"
 #include "CEmitter.hpp"
 
-Pool<AddressAccess> globalAddressGen;
-
-struct {
-  int port;
-  bool dir;
-  String name;
-} memInfo[] = {
-  {0,false,"Output_0"},
-  {0,true,"Input_0"},
-  {1,false,"Output_1"},
-  {1,true,"Input_1"}
-};
-
-AddressAccess* GetAddressGenOrFail(String name){
-  for(AddressAccess* gen : globalAddressGen){
-    if(CompareString(gen->name,name)){
-      return gen;
-    }
-  }
-
-  Assert(false);
-  return nullptr;
-}
-
-Array<int> SimulateSingleAddressAccess(LoopLinearSum* access,Hashmap<String,int>* extraEnv,Arena* out){
-  TEMP_REGION(temp,out);
-
-  auto Recurse = [](auto Recurse,Hashmap<String,int>* env,GrowableArray<int>& values,LoopLinearSum* loops,SymbolicExpression* addr,int loopIndex) -> void{
-    if(loopIndex < 0){
-      int val = Evaluate(addr,env);
-      *values.PushElem() = val;
-    } else {
-      LoopLinearSumTerm def = loops->terms[loopIndex];
-      int loopStart = Evaluate(def.loopStart,env);
-      int loopEnd = Evaluate(def.loopEnd,env);
-
-      Assert(loopStart <= loopEnd);
-      
-      for(int i = loopStart; i < loopEnd; i++){
-        env->Insert(def.var,i);
-
-        Recurse(Recurse,env,values,loops,addr,loopIndex - 1);
-      }
-    }
-  };
-
-  Hashmap<String,int>* env = PushHashmap<String,int>(temp,access->terms.size + extraEnv->nodesUsed);
-
-  for(auto p : extraEnv){
-    env->Insert(p.first,*p.second);
-  }
-  
-  GrowableArray<int> builder = StartArray<int>(out);
-  SymbolicExpression* fullExpression = TransformIntoSymbolicExpression(access,temp);
-  
-  Recurse(Recurse,env,builder,access,fullExpression,access->terms.size - 1);
-  Array<int> values = EndArray(builder);
-
-  return values;
-}
-
-struct SimulateResult{
-  Array<int> externalValues;
-  Array<int> internalValues;
-  Array<int> values;
-};
-
-SimulateResult SimulateAddressAccess(AddressAccess* access,Arena* out){
-  TEMP_REGION(temp,out);
-
-  Hashmap<String,int>* extraEnv = PushHashmap<String,int>(temp,access->inputVariableNames.size);
-  for(String s : access->inputVariableNames){
-    extraEnv->Insert(s,5);
-  }
-  
-  Array<int> externalValues = SimulateSingleAddressAccess(access->external,extraEnv,out);
-  Array<int> internalValues = SimulateSingleAddressAccess(access->internal,extraEnv,out);
-  
-  Array<int> result = PushArray<int>(out,internalValues.size);
-  int inserted = 0;
-  for(int index : internalValues){
-    if(index < externalValues.size){
-      result[inserted++] = externalValues[index];
-    }
-  }
-
-  SimulateResult res = {};
-  res.externalValues = externalValues;
-  res.internalValues = internalValues;
-  res.values = result;
-
-  return res;
-}
-
 AddressAccess* Copy(AddressAccess* in,Arena* out){
   AddressAccess* res = PushStruct<AddressAccess>(out);
 
@@ -397,7 +303,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,int maxLo
   Array<InternalMemoryAccess> compiled = CompileAccess(access->external,access->dutyDivExpr,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
-  ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
+  ArenaList<Pair<String,String>>* list = PushList<Pair<String,String>>(temp);
   String start = PushRepr(temp,freeTerm);
 
   *list->PushElem() = {"start",start};
@@ -445,7 +351,7 @@ static Array<Pair<String,String>> InstantiateGen(AddressAccess* access,int maxLo
     exit(-1);
   }
   
-  return PushArrayFromList(out,list);
+  return PushArray(out,list);
 }
 
 Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExternalLoop,bool doubleLoop,int maxLoops,String extVarName,Arena* out){
@@ -463,6 +369,12 @@ Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExte
   } else {
     Assert(IsZero(access->internal->freeTerm)); // NOTE: I do not think it is possible for both external and internal to have free terms.
   }
+
+  // ======================================
+  // NOTE: VERY IMPORTANT: If a field is not set, then set it to
+  //       zero. Do not leave it hanging otherwise future
+  //       configuration calls do not change it and the unit gets
+  //       misconfigured.
   
   // NOTE: We push the start term to the ext pointer in order to save memory inside the unit. This is being done in a  kinda hacky way, but nothing major.
   String ext_addr = extVarName;
@@ -473,9 +385,11 @@ Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExte
   }
   
   // TODO: No need for a list, we already know all the memory that we are gonna need
-  ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
+  ArenaList<Pair<String,String>>* list = PushList<Pair<String,String>>(temp);
 
-  if(!Empty(compiled.dutyDivExpression)){
+  if(Empty(compiled.dutyDivExpression)){
+    *list->PushElem() = {"extra_delay","0"};
+  } else {
     *list->PushElem() = {"extra_delay",PushString(out,"(%.*s) - 1",UN(compiled.dutyDivExpression))};
   }
   
@@ -534,7 +448,7 @@ Array<Pair<String,String>> InstantiateRead(AddressAccess* access,int highestExte
     exit(-1);
   }
   
-  return PushArrayFromList(out,list);
+  return PushArray(out,list);
 }
 
 static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,bool input,int maxLoops,Arena* out){
@@ -542,7 +456,7 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
   Array<InternalMemoryAccess> compiled = CompileAccess(access->external,access->dutyDivExpr,temp).internalAccess;
   SymbolicExpression* freeTerm = access->external->freeTerm;
 
-  ArenaList<Pair<String,String>>* list = PushArenaList<Pair<String,String>>(temp);
+  ArenaList<Pair<String,String>>* list = PushList<Pair<String,String>>(temp);
   String start = PushRepr(temp,freeTerm);
 
   if(port == 0){
@@ -618,48 +532,45 @@ static Array<Pair<String,String>> InstantiateMem(AddressAccess* access,int port,
     exit(-1);
   }
   
-  return PushArrayFromList(out,list);
+  return PushArray(out,list);
 }
 
-AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGenForDef> loops,SymbolicExpression* addr,String content){
+AddressAccess* CompileAddressGen(Array<Token> inputs,Array<AddressGenForDef2> loops,SymbolicExpression* addr,String content){
   Arena* out = globalPermanent;
   
   TEMP_REGION(temp,out);
 
-  //Array<Token> symbolicTokens = def->symbolicTokens;
-
   // TODO: Issue a warning if a variable is declared but not used.
   // TODO: Better error reporting by allowing code to call the ReportError from the spec parser 
   bool anyError = false;
-  for(AddressGenForDef loop : loops){
+  for(AddressGenForDef2 loop : loops){
     Opt<Token> sameNameAsInput = Find(inputs,loop.loopVariable);
 
     if(sameNameAsInput.has_value()){
       ReportError2(content,loop.loopVariable,sameNameAsInput.value(),"Loop variable","Overshadows input variable");
       anyError = true;
     }
-    
-    for(Token tok : loop.startSym){
-      if(IsIdentifier(tok) && !Contains(inputs,tok)){
-        printf("On address gen: %.*s:%d\n",UN(name),name.loc.start.line);
-        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
-        anyError = true;
-      }
-    }
-    for(Token tok : loop.endSym){
-      if(IsIdentifier(tok) && !Contains(inputs,tok)){
-        printf("On address gen: %.*s:%d\n",UN(name),name.loc.start.line);
-        printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
-        anyError = true;
-      }
-    }
-  }
 
-  auto list = PushArenaList<Token>(temp);
-  for(AddressGenForDef loop : loops){
-    *list->PushElem() = loop.loopVariable;
+    {
+      auto tokens = AccumTokens(loop.startSym,temp);
+      for(Token tok : tokens){
+        if(IsIdentifier(tok) && !Contains(inputs,tok)){
+          printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
+          anyError = true;
+        }
+      }
+    }
+
+    {
+      auto tokens = AccumTokens(loop.endSym,temp);
+      for(Token tok : tokens){
+        if(IsIdentifier(tok) && !Contains(inputs,tok)){
+          printf("\t[Error] Loop expression variable '%.*s' does not appear inside input list (did you forget to declare it as input?)\n",UN(tok));
+          anyError = true;
+        }
+      }
+    }
   }
-  auto allVariables = PushArrayFromList(temp,list);
   
   if(anyError){
     return nullptr;
@@ -667,7 +578,7 @@ AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGen
   
   auto loopVarBuilder = StartArray<String>(temp);
   for(int i = 0; i < loops.size; i++){
-    AddressGenForDef loop = loops[i];
+    AddressGenForDef2 loop = loops[i];
 
     *loopVarBuilder.PushElem() = PushString(temp,loop.loopVariable);
   }
@@ -675,12 +586,12 @@ AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGen
       
   // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
   SymbolicExpression* loopExpression = PushLiteral(temp,1);
-  for(AddressGenForDef loop : loops){
+  for(AddressGenForDef2 loop : loops){
     // TODO: Handle parsing errors
     // TODO: Performance, we are parsing this twice, there is another below. Maybe we can join the loops into a single one
 
-    SymbolicExpression* start = ParseSymbolicExpression(loop.startSym,temp);
-    SymbolicExpression* end = ParseSymbolicExpression(loop.endSym,temp);
+    SymbolicExpression* start = SymbolicFromSpecExpression(loop.startSym,temp);
+    SymbolicExpression* end = SymbolicFromSpecExpression(loop.endSym,temp);
 
     SymbolicExpression* diff = SymbolicSub(end,start,temp);
 
@@ -721,11 +632,11 @@ AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGen
       term = PushLiteral(temp,0);
     }
 
-    AddressGenForDef loop = loops[i];
+    AddressGenForDef2 loop = loops[i];
     
     // TODO: Performance, we are parsing the start and end stuff twice. This is the second, the first is above.
-    SymbolicExpression* start = ParseSymbolicExpression(loop.startSym,temp);
-    SymbolicExpression* end = ParseSymbolicExpression(loop.endSym,temp);
+    SymbolicExpression* start = SymbolicFromSpecExpression(loop.startSym,temp);
+    SymbolicExpression* end = SymbolicFromSpecExpression(loop.endSym,temp);
     
     LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,start,end,temp);
     expr = AddLoopLinearSum(sum,expr,temp);
@@ -743,8 +654,7 @@ AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGen
 
   LoopLinearSum* freeTerm = PushLoopLinearSumFreeTerm(toCalcConst,temp);
       
-  AddressAccess* result = globalAddressGen.Alloc();
-  result->name = PushString(out,name);
+  AddressAccess* result = PushStruct<AddressAccess>(out);
   result->inputVariableNames = CopyArray<String>(inputs,out);
   result->internal = PushLoopLinearSumSimpleVar("x",PushLiteral(temp,1),PushLiteral(temp,0),finalExpression,out);
   result->external = AddLoopLinearSum(expr,freeTerm,out);
@@ -770,10 +680,9 @@ static void EmitDebugAddressGenInfo(AddressAccess* access,CEmitter* c){
   c->Comment(externalStr);
 }
 
-static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
-  TEMP_REGION(temp,out);
+void EmitReadStatements(CEmitter* m,AccessAndType access,String varName,String extVarName){
+  TEMP_REGION(temp,nullptr);
 
-  String varName = "args";
   AddressAccess* initial = access.access;
   int maxLoops = access.inst.loopsSupported;
   
@@ -795,7 +704,7 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
     }
   };
 
-  auto EmitDoubleOrSingleLoopCode = [maxLoops,EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess* access){
+  auto EmitDoubleOrSingleLoopCode = [extVarName,maxLoops,EmitStoreAddressGenIntoConfig](CEmitter* c,int loopIndex,AddressAccess* access){
     TEMP_REGION(temp,c->arena);
     
     // TODO: The way we handle the free term is kinda sketchy.
@@ -821,7 +730,7 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
       EmitDebugAddressGenInfo(doubleLoop,c);
       Repr(b,doubleLoop);
 
-      Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,maxLoops,"ext",temp);
+      Array<Pair<String,String>> params = InstantiateRead(doubleLoop,loopIndex,true,maxLoops,extVarName,temp);
       EmitStoreAddressGenIntoConfig(c,params);
     }
 
@@ -832,15 +741,15 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
       EmitDebugAddressGenInfo(singleLoop,c);
       Repr(b,singleLoop);
 
-      Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,maxLoops,"ext",temp);
+      Array<Pair<String,String>> params = InstantiateRead(singleLoop,-1,false,maxLoops,extVarName,temp);
       EmitStoreAddressGenIntoConfig(c,params);
     }
 
     c->EndIf();
   };
   
-  auto Recurse = [EmitDoubleOrSingleLoopCode,&initial](auto Recurse,int loopIndex,CEmitter* c,Arena* out) -> void{
-    TEMP_REGION(temp,out);
+  auto Recurse = [EmitDoubleOrSingleLoopCode,&initial](auto Recurse,int loopIndex,CEmitter* c) -> void{
+    TEMP_REGION(temp,nullptr);
 
     LoopLinearSum* external = initial->external;
           
@@ -855,9 +764,9 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
           c->And();
         }
 
-        c->Var(PushString(temp,"a%d",loopIndex));
+        c->Var(PushString(temp,"_VERSAT_a%d",loopIndex));
         c->GreaterThan();
-        c->Var(PushString(temp,"a%d",i));
+        c->Var(PushString(temp,"_VERSAT_a%d",i));
       }
       
       if(loopIndex == 0){
@@ -870,7 +779,7 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
       c->Comment(PushString(temp,"Loop var %.*s is the largest",UN(external->terms[loopIndex].var)));
       EmitDoubleOrSingleLoopCode(c,loopIndex,initial);
       
-      Recurse(Recurse,loopIndex + 1,c,out);
+      Recurse(Recurse,loopIndex + 1,c);
     } else {
       c->Else();
 
@@ -881,52 +790,26 @@ static String GenerateReadCompilationFunction(AccessAndType access,Arena* out){
     }
   };
 
-  String addressGenName = initial->name;
-  Array<String> inputVars = initial->inputVariableNames;
-  
-  CEmitter* m = StartCCode(temp);
-
-  EmitDebugAddressGenInfo(initial,m);
-  
-  String functionName = PushString(temp,"CompileVUnit_%.*s_Ext",UN(addressGenName));
-  m->FunctionBlock("static AddressVArguments",functionName);
-  m->Argument("void*","ext");
-  
-  for(String input : inputVars){
-    m->Argument("int",input);
-  }
-  m->VarDeclare("AddressVArguments",varName,"{}");
-  
   if(initial->external->terms.size > 1){
     for(int i = 0; i <  initial->external->terms.size; i++){
       LoopLinearSumTerm term  =  initial->external->terms[i];
       String repr = PushRepr(temp,GetLoopHighestDecider(&term));
-      String name = PushString(temp,"a%d",i);
+      String name = PushString(temp,"_VERSAT_a%d",i);
       String comment = PushString(temp,"Loop var: %.*s",UN(term.var));
+
       m->Comment(comment);
       m->VarDeclare("int",name,repr);
     }
   
-    Recurse(Recurse,0,m,temp);
+    Recurse(Recurse,0,m);
   } else {
     EmitDoubleOrSingleLoopCode(m,0,initial);
   }
-  
-  m->Return(varName);
-  m->EndBlock();
-  CAST* ast = EndCCode(m);
-
-  StringBuilder* b = StartString(temp);
-  Repr(ast,b,false);
-  String data = EndString(out,b);
-
-  return data;
 }
 
-static String GenerateGenCompilationFunction(AccessAndType access,Arena* out){
-  TEMP_REGION(temp,out);
+void EmitMemStatements(CEmitter* m,AccessAndType access,String varName){
+  TEMP_REGION(temp,nullptr);
 
-  String varName = "args";
   AddressAccess* initial = access.access;
   
   auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
@@ -942,343 +825,39 @@ static String GenerateGenCompilationFunction(AccessAndType access,Arena* out){
     }
   };
 
-  String addressGenName = initial->name;
-  Array<String> inputVars = initial->inputVariableNames;
-  
-  CEmitter* m = StartCCode(temp);
+  Assert(access.dir != Direction_NONE);
 
-  auto builder = StartString(temp);
-  Repr(builder,initial->external);
-  String addressStr = EndString(temp,builder);
+  String addressStr = PushRepr(initial->external,temp);
+  m->Comment("[DEBUG] Address");
+  m->Comment(addressStr);
+
+  Array<Pair<String,String>> params = InstantiateMem(initial,access.port,access.dir == Direction_INPUT,access.inst.loopsSupported,temp);
+  EmitStoreAddressGenIntoConfig(m,params);
+}
+
+void EmitGenStatements(CEmitter* m,AccessAndType access,String varName){
+  TEMP_REGION(temp,nullptr);
+
+  AddressAccess* initial = access.access;
+  
+  auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
+    TEMP_REGION(temp,emitter->arena);
+          
+    for(int i = 0; i < params.size; i++){
+      String str = params[i].first;
+      
+      String t = PushString(temp,"%.*s.%.*s",UN(varName),UN(str));
+      String v = params[i].second;
+
+      emitter->Assignment(t,v);
+    }
+  };
+
+  String addressStr = PushRepr(initial->external,temp);
 
   m->Comment("[DEBUG] Address");
   m->Comment(addressStr);
-  
-  String functionName = PushString(temp,"CompileVUnit_%.*s",UN(addressGenName));
-  m->FunctionBlock("static AddressGenArguments",functionName);
-
-  for(String input : inputVars){
-    m->Argument("int",input);
-  }
-
-  m->VarDeclare("AddressGenArguments",varName,"{}");
 
   Array<Pair<String,String>> params = InstantiateGen(initial,access.inst.loopsSupported,temp);
   EmitStoreAddressGenIntoConfig(m,params);
-  
-  m->Return(varName);
-  m->EndBlock();
-  CAST* ast = EndCCode(m);
-
-  StringBuilder* b = StartString(temp);
-  Repr(ast,b,false);
-  String data = EndString(out,b);
-  
-  return data;
-}
-
-static String GenerateMemCompilationFunction(AccessAndType access,Arena* out){
-  TEMP_REGION(temp,out);
-
-  String varName = "args";
-  AddressAccess* initial = access.access;
-  
-  auto EmitStoreAddressGenIntoConfig = [varName](CEmitter* emitter,Array<Pair<String,String>> params) -> void{
-    TEMP_REGION(temp,emitter->arena);
-          
-    for(int i = 0; i < params.size; i++){
-      String str = params[i].first;
-      
-      String t = PushString(temp,"%.*s.%.*s",UN(varName),UN(str));
-      String v = params[i].second;
-
-      emitter->Assignment(t,v);
-    }
-  };
-
-  String addressGenName = initial->name;
-  Array<String> inputVars = initial->inputVariableNames;
-  
-  CEmitter* m = StartCCode(temp);
-
-  auto builder = StartString(temp);
-  Repr(builder,initial->external);
-  String addressStr = EndString(temp,builder);
-
-  m->Comment("[DEBUG] Address");
-  m->Comment(addressStr);
-
-  for(int i = 0; i < ARRAY_SIZE(memInfo); i++){
-    auto info = memInfo[i];
-
-    String functionName = PushString(temp,"CompileVUnit_%.*s_%.*s",UN(addressGenName),UN(info.name));
-    m->FunctionBlock("static AddressMemArguments",functionName);
-
-    for(String input : inputVars){
-      m->Argument("int",input);
-    }
-
-    m->VarDeclare("AddressMemArguments",varName,"{}");
-
-    Array<Pair<String,String>> params = InstantiateMem(initial,info.port,info.dir,access.inst.loopsSupported,temp);
-    EmitStoreAddressGenIntoConfig(m,params);
-  
-    m->Return(varName);
-    m->EndBlock();
-
-  }
-  
-  CAST* ast = EndCCode(m);
-
-  StringBuilder* b = StartString(temp);
-  Repr(ast,b,false);
-  String data = EndString(out,b);
-  
-  return data;
-}
-
-String GenerateAddressGenCompilationFunction(AccessAndType access,Arena* out){
-  FULL_SWITCH(access.inst.type){
-  case AddressGenType_READ:{
-    return GenerateReadCompilationFunction(access,out);
-  } break;
-  case AddressGenType_GEN:{
-    return GenerateGenCompilationFunction(access,out);
-  } break;
-  case AddressGenType_MEM:{
-    return GenerateMemCompilationFunction(access,out);
-  } break;
-  };
-
-  return {};
-}
-
-String GenerateAddressLoadingFunction(String structName,AddressGenInst inst,Arena* out){
-  TEMP_REGION(temp,out);
-
-  AddressGenType type = inst.type;
-  
-  CEmitter* m = StartCCode(temp);
-
-  String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UN(structName));
-  m->FunctionBlock("static void",loadFunctionName);
-  String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
-  String varName = "config";
-  m->Argument(argName,varName);
-
-  auto EmitAssign = [m,temp](String str){
-    String lhs = PushString(temp,"config->%.*s",UN(str));
-    String rhs = PushString(temp,"args.%.*s",UN(str));
-    m->Assignment(lhs,rhs);
-  };
-  
-  FULL_SWITCH(type){
-  case AddressGenType_GEN:{
-    m->Argument("AddressGenArguments","args");
-    for(int i = 0; i < META_AddressGenBaseParameters_Members.size; i++){
-      String str = META_AddressGenBaseParameters_Members[i];
-      EmitAssign(str);
-    }
-    for(int i = 2; i < inst.loopsSupported + 1; i++){
-      for(String format : AddressGenExtraFormat){
-        String inst = PushString(temp,format.data,i);
-        EmitAssign(inst);
-      }
-    }
-  } break;
-  case AddressGenType_READ:{
-    m->Argument("AddressVArguments","args");
-
-    for(int i = 0; i <  META_AddressVParameters_Members.size; i++){
-      String str = META_AddressVParameters_Members[i];
-      EmitAssign(str);
-    }
-    for(int i = 2; i < inst.loopsSupported + 1; i++){
-      for(String format : AddressGenExtraFormat){
-        String inst = PushString(temp,format.data,i);
-        EmitAssign(inst);
-      }
-    }
-  } break;
-  case AddressGenType_MEM:{
-    m->Argument("AddressMemArguments","args");
-
-    for(int i = 0; i <  META_AddressMemParameters_Members.size; i++){
-      String str = META_AddressMemParameters_Members[i];
-      EmitAssign(str);
-    }
-    for(int i = 2; i < inst.loopsSupported + 1; i++){
-      for(String format : AddressGenMemExtraFormat){
-        String inst = PushString(temp,format.data,i);
-        EmitAssign(inst);
-      }
-    }
-  } break;
-  }
-
-  CAST* ast = EndCCode(m);
-
-  StringBuilder* strBuilder = StartString(temp);
-  Repr(ast,strBuilder);
-  String data = EndString(out,strBuilder);
-
-  return data;
-}
-
-String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenInst inst,Arena* out){
-  TEMP_REGION(temp,out);
-
-  AddressGenType type = inst.type;
-  CEmitter* m = StartCCode(temp);
-      
-  if(type == AddressGenType_MEM){
-    for(int i = 0; i < ARRAY_SIZE(memInfo); i++){
-      auto info = memInfo[i];
-      
-      String functionName = PushString(temp,"%.*s_%.*s_%.*s",UN(access->name),UN(structName),UN(info.name));
-      String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UN(structName));
-
-      Array<String> inputVars = access->inputVariableNames;
-
-      m->FunctionBlock("static void",functionName);
-
-      String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
-      String varName = "config";
-      m->Argument(argName,varName);
-      
-      for(String input : inputVars){
-        m->Argument("int",input);
-      }
-
-      auto strBuilder = StartString(temp);
-      strBuilder->PushString("CompileVUnit_%.*s_%.*s(",UN(access->name),UN(info.name));
-
-      bool addComma = false;
-      for(String input : inputVars){
-        if(addComma){
-          strBuilder->PushString(",");
-        }
-        addComma = true;
-        strBuilder->PushString(input);
-      }
-      strBuilder->PushString(")");
-      String functionCall = EndString(temp,strBuilder);
-
-      String load = PushString(temp,"%.*s(%.*s,args)",UN(loadFunctionName),UN(varName));
-
-      m->Assignment("AddressMemArguments args",functionCall);
-      
-      m->Statement(load);
-      m->EndBlock();
-    }
-
-    CAST* ast = EndCCode(m);
-
-    auto strBuilder = StartString(temp);
-    Repr(ast,strBuilder);
-    String data = EndString(out,strBuilder);
-
-    return data;
-  }
-    
-  String functionName = PushString(temp,"%.*s_%.*s",UN(access->name),UN(structName));
-  String loadFunctionName = PushString(temp,"LoadVUnit_%.*s",UN(structName));
-
-  Array<String> inputVars = access->inputVariableNames;
-
-  m->FunctionBlock("static void",functionName);
-
-  String argName = PushString(temp,"volatile %.*sConfig*",UN(structName));
-  String varName = "config";
-  m->Argument(argName,varName);
-
-  FULL_SWITCH(type){
-  case AddressGenType_READ: {
-    m->Argument("void*","ext");
-  } break;
-  case AddressGenType_GEN: {
-  } break;
-  case AddressGenType_MEM:{
-    Assert(false);
-  } break;
-  }
-
-  for(String input : inputVars){
-    m->Argument("int",input);
-  }
-
-  auto strBuilder = StartString(temp);
-
-  // TODO: This is bad and was rushed, but the bigger problem is how the CEmitter does not have an function expression builder, kinda like the one used for the 'if' construction of expressions.
-  bool addComma = true;
-  FULL_SWITCH(type){
-  case AddressGenType_READ: {
-    strBuilder->PushString("CompileVUnit_%.*s_Ext(ext",UN(access->name));
-  } break;
-  case AddressGenType_GEN: {
-    strBuilder->PushString("CompileVUnit_%.*s(",UN(access->name));
-    addComma = false;
-  } break;
-  case AddressGenType_MEM:{
-    Assert(false);
-  } break;
-  }
-
-  for(String input : inputVars){
-    if(addComma){
-      strBuilder->PushString(",");
-    }
-    addComma = true;
-    strBuilder->PushString(input);
-  }
-  strBuilder->PushString(")");
-  String functionCall = EndString(temp,strBuilder);
-
-  String load = PushString(temp,"%.*s(%.*s,args)",UN(loadFunctionName),UN(varName));
-
-  FULL_SWITCH(type){
-  case AddressGenType_READ: {
-    m->Assignment("AddressVArguments args",functionCall);
-  } break;
-  case AddressGenType_GEN: {
-    m->Assignment("AddressGenArguments args",functionCall);
-  } break;
-  case AddressGenType_MEM:{
-    Assert(false);
-  } break;
-  }
-      
-  m->Statement(load);
-  CAST* ast = EndCCode(m);
-
-  strBuilder = StartString(temp);
-  Repr(ast,strBuilder);
-  String data = EndString(out,strBuilder);
-  return data;
-}
-
-String GenerateAddressPrintFunction(AddressAccess* access,Arena* out){
-  TEMP_REGION(temp,out);
-
-  CEmitter* m = StartCCode(temp);
-
-  Array<String> inputVars = access->inputVariableNames;
-
-  String functionName = PushString(temp,"Print_%.*s",UN(access->name));
-  m->FunctionBlock("static void",functionName);
-  for(String input : inputVars){
-    m->Argument("int",input);
-  }
-
-  for(String input : inputVars){
-    //String statement = PushString(temp,"printf(\"%.*s:%%d\\n\",%.*s)",UN(input),UN(input));
-    //m->Statement(statement);
-  }
-  
-  CAST* ast = EndCCode(m);
-
-  auto strBuilder = StartString(temp);
-  Repr(ast,strBuilder);
-  String data = EndString(out,strBuilder);
-  return data;
 }

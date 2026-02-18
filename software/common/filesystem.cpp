@@ -22,7 +22,7 @@ const char* FilePurpose_Name(FilePurpose p){
 static void CheckOrInitArena(){
   if(storeFileInfoArena.mem == nullptr){
     storeFileInfoArena = InitArena(Megabyte(1)); // Simple and effective, more robust code would probably change to a growable arena or something similar.
-    storeFileInfo = PushArenaList<FileInfo>(&storeFileInfoArena);
+    storeFileInfo = PushList<FileInfo>(&storeFileInfoArena);
   }
 }
 
@@ -67,5 +67,5 @@ FILE* OpenFile(String filepath,const char* mode,FilePurpose purpose){
 }
 
 Array<FileInfo> CollectAllFilesInfo(Arena* out){
-  return PushArrayFromList(out,storeFileInfo);
+  return PushArray(out,storeFileInfo);
 }

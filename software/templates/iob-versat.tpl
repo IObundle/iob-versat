@@ -23,16 +23,18 @@ extern "C"{
 
 typedef uint64_t uint64;
 
-iptr versat_base;
-VersatPrintf versatPrintf;
+static int versat_empty_printf(const char* format,...){return 0;}
 
-// NOTE: Use PRINT instead of versatPrintf, since versatPrintf is not required to be set.
+iptr versat_base;
+VersatPrintf versat_printf = versat_empty_printf;
+
+// NOTE: Use PRINT instead of versat_printf, since versat_printf is not required to be set.
 // NOTE: This is mostly a debug tool that should not be built upon. We want to use pc-emul to report errors to user, we do not want to polute embedded with error checkings that waste precious cpu cycles.
-#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
+#define PRINT(...) if(versat_printf){versat_printf(__VA_ARGS__);}
 
 static bool enableDMA;
 
-// TODO: Need to dephase typeof, it is a gnu extension, not valid C until version C23 which is recent to support
+// TODO: Need to dephase typeof, it is a gnu extension, not valid C until version C23 which is too recent to support
 typeof(accelConfig) accelConfig  = 0;
 typeof(accelState)  accelState   = 0;
 typeof(accelStatic) accelStatic = 0;
@@ -56,7 +58,7 @@ void versat_init(int base){
 }
 
 void SetVersatDebugPrintfFunction(VersatPrintf function){
-  versatPrintf = function;
+  versat_printf = function;
   PRINT("Versat successfully set print function\n");
 }
 

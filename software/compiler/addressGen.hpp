@@ -9,7 +9,8 @@
 struct SymbolicExpression;
 struct LoopLinearSum;
 struct LoopLinearSumTerm;
-struct AddressGenDef;
+struct CEmitter;
+struct SpecExpression;
 
 // TODO: We currently do not support loops that start at non zero values. The fix is simple, we can always shift loops from N..M to 0..(M-N) by adding more logic to the expression. Kinda not doing this for now since still have not found an example where this is needed.
 
@@ -21,6 +22,12 @@ struct AddressGenForDef{
   Token loopVariable;
   Array<Token> startSym;
   Array<Token> endSym;
+};
+
+struct AddressGenForDef2{
+  Token loopVariable;
+  SpecExpression* startSym;
+  SpecExpression* endSym;
 };
 
 struct AddressAccess{
@@ -58,44 +65,18 @@ struct CompiledAccess{
 };
 
 struct AddressGenInst{
-   AddressGenType type;
-   int loopsSupported;
+  AddressGenType type;
+  int loopsSupported;
 };
-
-template<> struct std::hash<AddressGenInst>{
-   std::size_t operator()(AddressGenInst const& s) const noexcept{
-     std::size_t res = (int)(s.type) * (int) s.loopsSupported;
-     return res;
-   }
-};
-
-static bool operator==(const AddressGenInst& l,const AddressGenInst& r){
-  if(l.type == r.type && l.loopsSupported == r.loopsSupported){
-    return true;
-  }
-  
-  return false;
-}
 
 struct AccessAndType{
   AddressAccess* access;
   AddressGenInst inst;
-};
 
-template<> struct std::hash<AccessAndType>{
-   std::size_t operator()(AccessAndType const& s) const noexcept{
-     std::size_t res = std::hash<void*>()(s.access) * std::hash<AddressGenInst>()(s.inst);
-     return res;
-   }
+  // For mem type of accesses. TODO: Check if we actually want data here or not.
+  int port;
+  Direction dir;
 };
-
-static bool operator==(const AccessAndType& l,const AccessAndType& r){
-  if(l.access == r.access && l.inst == r.inst){
-    return true;
-  }
-  
-  return false;
-}
 
 // ======================================
 // Misc (Probably gonna move these around eventually)
@@ -112,12 +93,8 @@ void   Print(AddressAccess* access);
 // ======================================
 // Compilation 
 
-AddressAccess* CompileAddressGen(Token name,Array<Token> inputs,Array<AddressGenForDef> loops,SymbolicExpression* addr,String content);
-
-// ======================================
-// Global getter for compiled address gens
-
-AddressAccess* GetAddressGenOrFail(String name);
+// TODO: We probably want to take in an Env* so that we can check stuff and we probably want to move this to the spec parser. No reason for other code to have token and to depend on parser stuff.
+AddressAccess* CompileAddressGen(Array<Token> inputs,Array<AddressGenForDef2> loops,SymbolicExpression* addr,String content);
 
 // ======================================
 // Conversion
@@ -126,14 +103,14 @@ AddressAccess* ConvertAccessTo1External(AddressAccess* access,Arena* out);
 AddressAccess* ConvertAccessTo2External(AddressAccess* access,int biggestLoopIndex,Arena* out);
 
 // ======================================
-// Codegen
+// Code emission
 
-String GenerateAddressGenCompilationFunction(AccessAndType access,Arena* out);
-String GenerateAddressLoadingFunction(String structName,AddressGenInst type,Arena* out);
-String GenerateAddressCompileAndLoadFunction(String structName,AddressAccess* access,AddressGenInst type,Arena* out);
-String GenerateAddressPrintFunction(AddressAccess* initial,Arena* out);
+void EmitReadStatements(CEmitter* m,AccessAndType access,String varName,String extVarName);
+void EmitMemStatements(CEmitter* m,AccessAndType access,String varName);
+void EmitGenStatements(CEmitter* m,AccessAndType access,String varName);
 
 // ======================================
 // LoopLinearSumTerm handling
 
 SymbolicExpression* GetLoopHighestDecider(LoopLinearSumTerm* term);
+

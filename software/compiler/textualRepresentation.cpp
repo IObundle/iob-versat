@@ -1,12 +1,7 @@
 #include "textualRepresentation.hpp"
 
+#include "merge.hpp"
 #include "declaration.hpp"
-
-String UniqueRepr(FUInstance* inst,Arena* out){
-  FUDeclaration* decl = inst->declaration;
-  String str = PushString(out,"%.*s_%.*s_%d",UN(decl->name),UN(inst->name),inst->id);
-  return str;
-}
 
 String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
   TEMP_REGION(temp,out);
@@ -20,7 +15,7 @@ String Repr(FUInstance* inst,GraphDotFormat format,Arena* out){
   bool id    = format & GraphDotFormat_ID;
   bool delay = format & GraphDotFormat_DELAY;
 
-  bool buffer = (HasVariableDelay(inst->declaration) || inst->declaration == BasicDeclaration::fixedBuffer);
+  bool buffer = (inst->declaration == BasicDeclaration::variableBuffer || inst->declaration == BasicDeclaration::fixedBuffer);
 
   if(expl && name){
     builder->PushString("Name:");

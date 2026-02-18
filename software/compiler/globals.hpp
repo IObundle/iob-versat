@@ -3,7 +3,6 @@
 #include "utilsCore.hpp"
 #include "memory.hpp"
 
-struct AddressGenDef;
 struct FUDeclaration;
 struct SymbolicExpression;
 struct VerilogPortSpec;
@@ -34,7 +33,6 @@ struct Options{
   String topName;
   int databusDataSize; // AXI_DATA_W
 
-  bool addInputAndOutputsToTop;
   bool debug;
   bool shadowRegister;
   bool architectureHasDatabus;

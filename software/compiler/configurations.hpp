@@ -2,6 +2,7 @@
 
 #include "memory.hpp"
 #include "accelerator.hpp"
+#include "addressGen.hpp"
 
 struct SimplePortInstance{
   int inst;
@@ -9,9 +10,9 @@ struct SimplePortInstance{
 };
 
 struct SimplePortConnection{
-  int outInst;
-  int outPort;
-  int inPort;
+  int otherInst;
+  int otherPort;
+  int port;
 };
 
 struct StructInfo;
@@ -26,16 +27,39 @@ struct StructInfo;
 // This approach is very slow but easier to debug since everything related to one unit is all in the same place.
 // Until I find a better way of debugging (visualizing) SoA, this will stay like this for a while.
 
+struct ParamAndValue{
+  String name;
+  SymbolicExpression* val;
+};
+
+enum SpecialUnitType{
+  SpecialUnitType_NONE = 0,
+  SpecialUnitType_INPUT = 1,
+  SpecialUnitType_OUTPUT = 2,
+  SpecialUnitType_FIXED_BUFFER = 3,
+  SpecialUnitType_VARIABLE_BUFFER = 4,
+  SpecialUnitType_OPERATION = 5
+};
+
 // TODO: Put some note explaining the required changes when inserting stuff here.
 struct InstanceInfo{
   int level;
   FUDeclaration* decl;
-  FUDeclaration* parent;
-  
+  String typeName;
+  String parentTypeName;
+
+  int localIndex;
+
   int id;
   String name;
   String baseName; // NOTE: If the unit does not belong to the merge partition the baseName will equal name.
   String fullName;
+
+  Array<Wire> configs;
+  Array<Wire> states;
+
+  Array<ExternalMemoryInterface> externalMemory;
+  SingleInterfaces singleInterfaces;
   
   Opt<int> globalStaticPos; // Separating static from global makes stuff simpler. If mixing together, do not forget that struct generation cares about source of configPos.
   Opt<int> globalConfigPos;
@@ -46,6 +70,8 @@ struct InstanceInfo{
   Array<int> individualWiresLocalConfigPos;
   Array<bool> individualWiresShared;
   
+  Array<ParamAndValue> params;
+
   int isConfigStatic; // Static must be handle separately, for the top level accelerator. 
   int configSize;
 
@@ -61,14 +87,16 @@ struct InstanceInfo{
   
   // Some of these could be removed and be computed from the others
   Opt<iptr> memMapped; // Used on Code Gen, to create the addresses for the memories.
+  Opt<int> memMapBits;
   Opt<int> memMappedSize;
-  Opt<int> memMappedBitSize;
   Opt<String> memDecisionMask; // This is local to the accelerator
 
   Opt<int> delayPos;
   Array<int> extraDelay;
   int baseNodeDelay;
-  int delaySize;
+  int numberDelays;
+
+  int variableBufferDelay;
 
   bool isComposite;
   bool isMerge;
@@ -88,10 +116,17 @@ struct InstanceInfo{
   Array<int> inputDelays;
   Array<int> outputLatencies;
   Array<int> portDelay;
-  int partitionIndex; // TODO: What does this do?
+  int partitionIndex; // TODO: What does this do? Probably a remnant from the old implementation.
 
   Array<SimplePortConnection> inputs; 
-  Array<String> addressGenUsed;
+  Array<SimplePortConnection> outputs;
+
+  Array<SimplePortInstance> inputsDirectly;
+  Array<bool> outputIsConnected;
+
+  AddressGenInst supportedAddressGen;
+
+  SpecialUnitType specialType;
 
   StructInfo* structInfo;
 };
@@ -99,6 +134,18 @@ struct InstanceInfo{
 struct ConfigFunction;
 
 /*
+
+Approach:
+
+Push the parameter stuff to the AcceleratorInfo.
+Make a function that iterates over the AcceleratorInfo and instantiates parameters.
+
+From that point on everything that requires information uses it from an instantiated AcceleratorInfo.
+The Circuits still output parameters, but the final product, the top level instance instantiates everything that is instantiated. The circuits are parameterized, the versat top level instance is not (unless we can sneak in a few stuff, as long as the software does not depend on it we can still provide it).
+
+The only thing that needs parameters is the 
+
+Change top level code generation function to use the instantiated values inside the AcceleratorInfo.
 
 What problem are we trying to solve?
 
@@ -132,7 +179,7 @@ For now, lets process to handle Composite units first and then we can tackle the
 */
 
 struct MergePartition{
-  String name; // For now this appears to not affect anything.
+  String name;
   Array<InstanceInfo> info;
 
   // TODO: Composite units currently break the meaning of baseType.
@@ -141,6 +188,8 @@ struct MergePartition{
   AcceleratorMapping* baseTypeFlattenToMergedBaseCircuit;
   Set<PortInstance>*  mergeMultiplexers;
   
+  // TODO: Weird that this is inside MergePartition but at the same time we need to know which merge partition this function belongs to in order to generate the 
+  //       The weirdness is mostly the fact that userFunctions are mostly "Global" in the sense that they cannot repeat but at the same time we need the MergePartition info which means that we might just take this out and have to store the merge partition info in some other way.
   Array<ConfigFunction*> userFunctions;
 
   Accelerator* recon;
@@ -168,10 +217,16 @@ struct AccelInfo{
   int numberConnections;
   int nDones;
 
-  String staticExpr;
-  String delayStart;
+  Array<Wire> configWires;
+  Array<Wire> stateWires;
+
+  Array<Wire> allStaticWires;
+
+  String staticExpr; // nocheckin: Check this 
+  String delayStart; // nocheckin: Check this. Why string? Why not an actual expression
   
-  int memoryMappedBits;
+  // TODO: Should be an SymbolicExpression. We probably want everything to be a symbolic expression at this point.
+  Opt<int> memMapBits;
   int unitsMapped;
   bool isMemoryMapped;
   bool signalLoop;
@@ -220,8 +275,7 @@ struct Partition{
   FUDeclaration* decl;
 };
 
-AccelInfoIterator StartIteration(AccelInfo* info);
-AccelInfoIterator StartIterationFromEnding(AccelInfo* info);
+AccelInfoIterator StartIteration(AccelInfo* info,int mergeIndex = 0);
 
 void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel);
 
@@ -245,5 +299,18 @@ Array<int> ExtractOutputLatencies(AccelInfoIterator top,Arena* out);
 Array<String> ExtractStates(Array<InstanceInfo> info,Arena* out);
 Array<Pair<String,int>> ExtractMem(Array<InstanceInfo> info,Arena* out);
 
+// TODO: Do we add this to AccelInfo?
+//       How much do we calculate at the time vs how much we just put inside accelInfo?
+String GetEntityMemName(InstanceInfo* info,Arena* out);
+
 String ReprStaticConfig(StaticId id,Wire* wire,Arena* out);
 
+SymbolicExpression* GetParameterValue(InstanceInfo* info,String name);
+
+bool IsUnitCombinatorialOperation(InstanceInfo* info);
+
+// ======================================
+// Static naming conventions
+
+String GetStaticFullName(InstanceInfo* info,Arena* out);
+String GetStaticWireFullName(InstanceInfo* info,Wire wire,Arena* out);

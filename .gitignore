@@ -1,4 +1,5 @@
 build/*
+tool_build/*
 libversat.a
 versat
 TAGS

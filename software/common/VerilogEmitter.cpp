@@ -1,6 +1,4 @@
 #include "VerilogEmitter.hpp"
-#include "symbolic.hpp"
-#include "utilsCore.hpp"
 
 // ============================================================================
 // Verilog module interface manipulation
@@ -11,7 +9,7 @@ void VerilogModuleBuilder::StartGroup(String name){
   if(!Empty(name)){
     currentPortGroupName = PushString(arena,name);
   }
-  currentPorts = PushArenaList<VerilogPortSpec>(arena);
+  currentPorts = PushList<VerilogPortSpec>(arena);
 }
 
 void VerilogModuleBuilder::EndGroup(bool preserveEmptyGroup){
@@ -19,7 +17,7 @@ void VerilogModuleBuilder::EndGroup(bool preserveEmptyGroup){
     VerilogPortGroup* group = this->groups->PushElem();
 
     group->name = this->currentPortGroupName;
-    group->ports = PushArrayFromList(arena,this->currentPorts);
+    group->ports = PushArray(arena,this->currentPorts);
   }
     
   this->currentPortGroupName = {};
@@ -89,7 +87,7 @@ void VerilogModuleBuilder::AddInterfaceIndexed(Array<VerilogPortSpec> interfaceF
 VerilogModuleBuilder* StartVerilogModuleInterface(Arena* arena){
   VerilogModuleBuilder* builder = PushStruct<VerilogModuleBuilder>(arena);
   builder->arena = arena;
-  builder->groups = PushArenaList<VerilogPortGroup>(arena);
+  builder->groups = PushList<VerilogPortGroup>(arena);
   
   return builder;
 }
@@ -180,14 +178,14 @@ Array<VerilogPortSpec> AddDirectionToName(Array<VerilogPortSpec> in,Arena* out){
 Array<VerilogPortSpec> ExtractAllPorts(VerilogModuleInterface* interface,Arena* out){
   TEMP_REGION(temp,out);
 
-  auto list = PushArenaList<VerilogPortSpec>(temp);
+  auto list = PushList<VerilogPortSpec>(temp);
   for(VerilogPortGroup group : interface->portGroups){
     for(VerilogPortSpec spec : group.ports){
       *list->PushElem() = spec;
     }
   }
 
-  Array<VerilogPortSpec> res = PushArrayFromList(out,list);
+  Array<VerilogPortSpec> res = PushArray(out,list);
   return res;
 }
 
@@ -463,9 +461,9 @@ void VEmitter::Module(String name){
   VAST* decl = PushVAST(VASTType_MODULE_DECL,arena);
 
   decl->module.name = PushString(arena,name);
-  decl->module.parameters = PushArenaList<Pair<String,String>>(arena);
-  decl->module.portDeclarations = PushArenaList<VAST*>(arena);
-  decl->module.declarations = PushArenaList<VAST*>(arena);
+  decl->module.parameters = PushList<Pair<String,String>>(arena);
+  decl->module.portDeclarations = PushList<VAST*>(arena);
+  decl->module.declarations = PushList<VAST*>(arena);
   
   InsertDeclaration(decl);
   PushLevel(decl);
@@ -498,8 +496,8 @@ void VEmitter::Task(String name){
   VAST* decl = PushVAST(VASTType_TASK_DECL,arena);
 
   decl->task.name = PushString(arena,name);
-  decl->task.portDeclarations = PushArenaList<VAST*>(arena);
-  decl->task.declarations = PushArenaList<VAST*>(arena);
+  decl->task.portDeclarations = PushList<VAST*>(arena);
+  decl->task.declarations = PushList<VAST*>(arena);
   
   InsertDeclaration(decl);
   PushLevel(decl);
@@ -515,7 +513,7 @@ void VEmitter::EndTask(){
 void VEmitter::StartPortGroup(){
   VAST* decl = PushVAST(VASTType_PORT_GROUP,arena);
   
-  decl->portGroup.portDeclarations = PushArenaList<VAST*>(arena);
+  decl->portGroup.portDeclarations = PushList<VAST*>(arena);
   
   InsertDeclaration(decl);
   PushLevel(decl);
@@ -678,7 +676,7 @@ void VEmitter::WireAndAssignJoinBlock(String name,String joinElem,int bitsize){
 
   wireAssignBlock->wireAssignBlock.name = PushString(arena,name);
   wireAssignBlock->wireAssignBlock.bitSize = PushString(arena,"%d",bitsize);
-  wireAssignBlock->wireAssignBlock.expressions = PushArenaList<VAST*>(arena);
+  wireAssignBlock->wireAssignBlock.expressions = PushList<VAST*>(arena);
   wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,joinElem);
   
   InsertDeclaration(wireAssignBlock);
@@ -690,7 +688,7 @@ void VEmitter::WireAndAssignJoinBlock(String name,String joinElem,String bitsize
 
   wireAssignBlock->wireAssignBlock.name = PushString(arena,name);
   wireAssignBlock->wireAssignBlock.bitSize = PushString(arena,bitsize);
-  wireAssignBlock->wireAssignBlock.expressions = PushArenaList<VAST*>(arena);
+  wireAssignBlock->wireAssignBlock.expressions = PushList<VAST*>(arena);
   wireAssignBlock->wireAssignBlock.joinElem = PushString(arena,joinElem);
   
   InsertDeclaration(wireAssignBlock);
@@ -794,7 +792,7 @@ void VEmitter::AlwaysBlock(String posedge1,String posedge2){
   combDecl->alwaysBlock.sensitivity[0] = PushString(arena,posedge1);
   combDecl->alwaysBlock.sensitivity[1] = PushString(arena,posedge2);
 
-  combDecl->alwaysBlock.declarations = PushArenaList<VAST*>(arena);
+  combDecl->alwaysBlock.declarations = PushList<VAST*>(arena);
   
   InsertDeclaration(combDecl);
   PushLevel(combDecl);
@@ -803,7 +801,7 @@ void VEmitter::AlwaysBlock(String posedge1,String posedge2){
 void VEmitter::InitialBlock(){
   VAST* initialDecl = PushVAST(VASTType_INITIAL_BLOCK,arena);
 
-  initialDecl->initialBlock.declarations = PushArenaList<VAST*>(arena);
+  initialDecl->initialBlock.declarations = PushList<VAST*>(arena);
   
   InsertDeclaration(initialDecl);
   PushLevel(initialDecl);
@@ -813,7 +811,7 @@ void VEmitter::CombBlock(){
   VAST* combDecl = PushVAST(VASTType_ALWAYS_BLOCK,arena);
 
   combDecl->alwaysBlock.sensitivity = {};
-  combDecl->alwaysBlock.declarations = PushArenaList<VAST*>(arena);
+  combDecl->alwaysBlock.declarations = PushList<VAST*>(arena);
   
   InsertDeclaration(combDecl);
   PushLevel(combDecl);
@@ -854,12 +852,12 @@ void VEmitter::Set(String identifier,int val){
 void VEmitter::If(String expression){
   VAST* ifAST = PushVAST(VASTType_IF,arena);
 
-  ifAST->ifExpr.ifExpressions = PushArenaList<VASTIf>(arena);
+  ifAST->ifExpr.ifExpressions = PushList<VASTIf>(arena);
   
   // Pushes the first expr+statement combo
   VASTIf expr = {};
   expr.ifExpression = PushString(arena,expression);
-  expr.statements = PushArenaList<VAST*>(arena);
+  expr.statements = PushList<VAST*>(arena);
 
   *ifAST->ifExpr.ifExpressions->PushElem() = expr;
   
@@ -876,7 +874,7 @@ void VEmitter::ElseIf(String expression){
 
   VASTIf expr = {};
   expr.ifExpression = PushString(arena,expression);
-  expr.statements = PushArenaList<VAST*>(arena);
+  expr.statements = PushList<VAST*>(arena);
 
   *ifAst->ifExpr.ifExpressions->PushElem() = expr;
 }
@@ -899,7 +897,7 @@ void VEmitter::Else(){
     ifAst = buffer[top-1];
   }
   
-  ifAst->ifExpr.elseStatements = PushArenaList<VAST*>(arena);
+  ifAst->ifExpr.elseStatements = PushList<VAST*>(arena);
 }
 
 void VEmitter::EndIf(){
@@ -912,7 +910,7 @@ void VEmitter::EndIf(){
 void VEmitter::Loop(String start,String loop,String incr){
   VAST* loopAST = PushVAST(VASTType_LOOP,arena);
 
-  loopAST->loopExpr.statements = PushArenaList<VAST*>(arena);
+  loopAST->loopExpr.statements = PushList<VAST*>(arena);
   loopAST->loopExpr.initExpr = PushString(arena,start);
   loopAST->loopExpr.loopExpr = PushString(arena,loop);
   loopAST->loopExpr.incrExpr = PushString(arena,incr);
@@ -937,8 +935,8 @@ void VEmitter::StartInstance(String moduleName,String instanceName){
 
   instanceAST->instance.moduleName = PushString(arena,moduleName);
   instanceAST->instance.name = PushString(arena,instanceName);
-  instanceAST->instance.parameters = PushArenaList<Pair<String,String>>(arena);
-  instanceAST->instance.portConnections = PushArenaList<VAST*>(arena);
+  instanceAST->instance.parameters = PushList<Pair<String,String>>(arena);
+  instanceAST->instance.portConnections = PushList<VAST*>(arena);
 
   InsertDeclaration(instanceAST);
   PushLevel(instanceAST);
@@ -1045,9 +1043,9 @@ VEmitter* StartVCode(Arena* out){
   emitter->arena = out;
   emitter->buffer = PushArray<VAST*>(out,16);
   emitter->topLevel = PushVAST(VASTType_TOP_LEVEL,out);
-  emitter->topLevel->top.declarations = PushArenaList<VAST*>(out);
-  emitter->topLevel->top.portConnections = PushArenaList<VAST*>(out);
-  emitter->topLevel->top.includes = PushArenaList<String>(out);
+  emitter->topLevel->top.declarations = PushList<VAST*>(out);
+  emitter->topLevel->top.portConnections = PushList<VAST*>(out);
+  emitter->topLevel->top.includes = PushList<String>(out);
 
   return emitter;
 }

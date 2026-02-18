@@ -1,6 +1,6 @@
 #pragma once
 
-#include <functional>
+//#include <functional>
 #include <cstdio>
 
 #include "debug.hpp"
@@ -53,8 +53,8 @@ struct GraphInfo{
   Color color;
 };
 
-typedef std::function<GraphInfo(FUInstance*,Arena* out)> NodeContent;
-typedef std::function<GraphInfo(Edge*,Arena* out)> EdgeContent;
+typedef GraphInfo (*NodeContent)(FUInstance*,Arena* out);
+typedef GraphInfo (*EdgeContent)(Edge*,Arena* out);
 
 extern NodeContent defaultNodeContent;
 extern EdgeContent defaultEdgeContent;
@@ -66,12 +66,6 @@ GraphPrintingContent GenerateDefaultPrintingContent(Accelerator* accel,Arena* ou
 
 String GenerateDotGraph(GraphPrintingContent content,Arena* out);
 
-void OutputDebugDotGraph(Accelerator* accel,String fileName);
-void OutputDebugDotGraph(Accelerator* accel,String fileName,FUInstance* highlight);
-void OutputDebugDotGraph(Accelerator* accel,String fileName,Set<FUInstance*>* highlight);
-
-GraphPrintingContent GenerateLatencyDotGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,Arena* out);
-
 void OutputContentToFile(String filepath,String content);
 
 // ============================================================================
@@ -79,9 +73,6 @@ void OutputContentToFile(String filepath,String content);
 
 // folderName can be empty string, file is created inside debug folder directly. 
 String PushDebugPath(Arena* out,String folderName,String fileName);
-
-// For this overload, no string can be empty, otherwise error
-String PushDebugPath(Arena* out,String folderName,String subFolder,String fileName);
 
 // ============================================================================
 // Debug path - Global way of defining a path tree for debug info
@@ -96,4 +87,4 @@ struct DebugPathMarker{
 String GetDebugRegionFilepath(String filename,Arena* out);
 
 void DebugRegionOutputDotGraph(Accelerator* accel,String fileName);
-void DebugRegionLatencyGraph(AccelInfoIterator top,Array<int> orderToIndex,Array<DelayInfo> nodeLatencyByOrder,Array<DelayInfo> edgeLatency,String filename);
+void DebugRegionOutputLatencyGraph(Accelerator* accel,NodeDelay* nodeDelay,PortDelay* portDelay,EdgeDelay* edgeToDelay,String fileName);

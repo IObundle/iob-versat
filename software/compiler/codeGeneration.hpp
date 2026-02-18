@@ -6,6 +6,21 @@
 #include "accelerator.hpp"
 #include "declaration.hpp"
 
+/*
+  NOTE: Very important. We do not want to have conditions affect the generated code that interfaces with the user. 
+        We want to generate the same "stuff" regardless of what the value is.
+        Trying to be clever and avoiding generating stuff because the value is not "needed"
+        might cause problems because some symbol might be missing in the generated code 
+        which causes the compiler to give out errors and that is not good.
+        And forcing the user to disable certain sections or changing its code is not good.
+        There is no problem in generating functions that are empty, structs that you know will not be used
+        or enums that you know will not be needed. 
+        Anything that belongs to the user interface must be generated, even if empty.
+
+        For internal usage then it is different. At this point we do want to make sure that we only generate what
+        we actually use in order to avoid compiler warnings, improve compilation speed and such.
+*/
+
 struct Accelerator;
 struct InstanceInfo;
 struct FUDeclaration;
@@ -57,20 +72,6 @@ struct SameMuxEntities{
   InstanceInfo* info;
 };
 
-template<> struct std::hash<SameMuxEntities>{
-   std::size_t operator()(SameMuxEntities const& s) const noexcept{
-     std::size_t res = s.configPos;
-     return res;
-   }
-};
-
-static bool operator==(const SameMuxEntities i0,const SameMuxEntities i1){
-  bool res = (i0.configPos == i1.configPos);
-  return res;
-}
-
-struct AddressGenDef;
-
 struct StructInfo;
 
 struct StructElement{
@@ -86,6 +87,29 @@ struct StructElement{
   bool doesNotBelong; // Leads to padding being added. From merge 
 };
 
+inline u64 Hash(StructInfo* info);
+inline bool operator==(StructInfo& l,StructInfo& r);
+
+inline u64 Hash(StructElement x){
+  u64 res = Hash(x.name) + 
+            x.size + 
+            x.localPos + 
+            (x.isMergeMultiplexer ? 1 : 0) + 
+            Hash(x.childStruct);
+  
+  return res;
+}
+
+inline bool operator==(StructElement lhs,StructElement rhs){
+  bool res = *lhs.childStruct == *rhs.childStruct &&
+             lhs.name == rhs.name &&
+             lhs.size == rhs.size &&
+             lhs.localPos == rhs.localPos &&
+             lhs.isMergeMultiplexer == rhs.isMergeMultiplexer;
+
+  return res;
+}
+
 struct StructInfo{
   String name;
   String originalName; // NOTE: kinda wathever, mainly used to generate generic address gens.
@@ -95,44 +119,21 @@ struct StructInfo{
   ArenaDoubleList<StructElement>* memberList;
 };
 
-size_t HashStructInfo(StructInfo* info);
-
-template<> struct std::hash<StructElement>{
-  std::size_t operator()(StructElement const& s) const noexcept{
-    std::size_t res = std::hash<String>()(s.name) + s.size + s.localPos + (s.isMergeMultiplexer ? 1 : 0);
-
-    if(s.childStruct != nullptr){
-      res += HashStructInfo(s.childStruct);
-    }
-    
-    return res;
-   }
-};
-
-static bool operator==(StructInfo& l,StructInfo& r);
-
-static bool operator==(StructElement& l,StructElement& r){
-  bool res = (*l.childStruct == *r.childStruct &&
-              l.name == r.name &&
-              l.size == r.size &&
-              l.localPos == r.localPos &&
-              l.isMergeMultiplexer == r.isMergeMultiplexer);
-  
+inline u64 Hash(StructInfo s){
+  u64 res = 0;
+  for(DoubleLink<StructElement>* ptr = s.memberList ? s.memberList->head : nullptr; ptr; ptr = ptr->next){
+    res += Hash(ptr->elem);
+  }
+  res += Hash(s.name);
   return res;
 }
 
-template<> struct std::hash<StructInfo>{
-   std::size_t operator()(StructInfo const& s) const noexcept{
-     std::size_t res = 0;
-     for(DoubleLink<StructElement>* ptr = s.memberList ? s.memberList->head : nullptr; ptr; ptr = ptr->next){
-       res += std::hash<StructElement>()(ptr->elem);
-     }
-     res += std::hash<String>()(s.name);
-     return res;
-   }
-};
+inline u64 Hash(StructInfo* info){
+  if(!info) { return 0;};
+  return Hash(*info);
+}
 
-static bool operator==(StructInfo& l,StructInfo& r){
+inline bool operator==(StructInfo& l,StructInfo& r){
   if(!(l.name == r.name)){
     return false;
   }
@@ -162,6 +163,6 @@ void OutputIterativeSource(FUDeclaration* decl,FILE* file);
 
 // Versat_instance, all external memory files, makefile for pc-emul, basically everything that is only generated once.
 // For the top instance and support files.
-void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,bool isSimple,AccelInfo info,VersatComputedValues val,Array<ExternalMemoryInterface> external);
+void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topLevelDecl,String hardwarePath,String softwarePath,VersatComputedValues val);
 
 void OutputTestbench(FUDeclaration* decl,FILE* file);

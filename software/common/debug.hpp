@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdio>
-
 struct Arena;
 
-void InitDebug(); // Call before any other debug function
+ // Call before any other debug function but after setting up general purpose arenas
+void InitDebug(const char* exeName);
 
 extern Arena* debugArena;
 extern bool debugFlag; // True if currently debugging

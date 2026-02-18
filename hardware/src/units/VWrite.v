@@ -299,11 +299,17 @@ module VWrite #(
    assign ext_2p_addr_in_0  = read_addr;
    assign read_data         = ext_2p_data_in_0;
 
-   reg reportedA;
    reg reportedB;
    reg reportedC;
 
    // Reports most common errors
+
+   /*
+   reg reportedA;
+   TODO: The value of gen_addr_temp goes past the values actually used. This causes this warning to 
+         trigger even when we do not actually read past the values of the memory.
+         If we want to keep the warnings around, need to fix this before restauring the warning logic.
+
    always @(posedge clk) begin
       if (run) begin
          reportedA <= 1'b0;
@@ -312,6 +318,7 @@ module VWrite #(
          reportedA <= 1'b1;
       end
    end
+   */
 
    always @(posedge clk) begin
       if (run) begin

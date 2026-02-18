@@ -236,7 +236,7 @@ struct CEmitter{
   void Return(String varToReturn = {});
 };
 
-CEmitter* StartCCode(Arena* out);
+CEmitter* StartCCode(Arena* freeArena);
 CAST* EndCCode(CEmitter* m);
 
 String PushASTRepr(CEmitter* e,Arena* out,bool cppStyle = false,int startLevel = 0);

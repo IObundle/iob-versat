@@ -90,7 +90,6 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
 
     configs[i].name = info->configs[i].name;
     configs[i].bitSize = size;
-    configs[i].isStatic = false;
     configs[i].stage = info->configs[i].stage;
 
     configs[i].sizeExpr = SymbolicExpressionFromVerilog(wire.bitSize,out);
@@ -103,7 +102,6 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
 
     states[i].name = info->states[i].name;
     states[i].bitSize = size;
-    states[i].isStatic = false;
     states[i].stage = info->states[i].stage;
 
     states[i].sizeExpr = SymbolicExpressionFromVerilog(wire.bitSize,out);
@@ -163,10 +161,10 @@ Opt<FUDeclaration*> RegisterModuleInfo(ModuleInfo* info,Arena* out){
   decl.externalMemory = external;
   decl.externalMemorySymbol = extSym;
   decl.numberDelays = info->nDelays;
-  decl.nIOs = info->nIO;
+  decl.info.nIOs = info->nIO;
 
   if(info->memoryMapped) {
-    decl.memoryMapBits = EvalRange(info->memoryMappedBits,instantiated);
+    decl.info.memMapBits = EvalRange(info->memoryMappedBits,instantiated);
   }
 
   decl.singleInterfaces = info->singleInterfaces;
@@ -257,12 +255,15 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   
   AccelInfo val = CalculateAcceleratorInfo(accel,true,out,calculateOrder);
   decl->info = val;
- 
-  decl->nIOs = val.nIOs;
-  if(val.isMemoryMapped){
-    decl->memoryMapBits = val.memoryMappedBits;
-  }
 
+  for(int i = 0; i < val.infos.size; i++){
+    for(auto iter = StartIteration(&val,i); iter.IsValid(); iter = iter.Next()){
+      InstanceInfo* info = iter.CurrentUnit();
+
+      info->parentTypeName = decl->name;
+    }
+  }
+ 
   // All the single interfaces are simple of propagating. We can just do an OR of everything.
   for(FUInstance* ptr : accel->allocated){
     decl->singleInterfaces |= ptr->declaration->singleInterfaces;
@@ -274,18 +275,61 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   decl->singleInterfaces |= SingleInterfaces_RUNNING;
   decl->singleInterfaces |= SingleInterfaces_CLK;
   decl->singleInterfaces |= SingleInterfaces_RESET;
-  
+
+  // NOTE: We are "instantiating" the memories in here since we need to know the actual size of the wires in response to the actual values 
+  decl->externalMemorySymbol = PushArray<ExternalMemorySymbolic>(out,val.externalMemoryInterfaces);
+  {
+    int externalIndex = 0;
+    for(FUInstance* ptr : accel->allocated){
+      Array<ExternalMemorySymbolic> arr = ptr->declaration->externalMemorySymbol;
+
+      Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(ptr,temp);
+
+      for(int i = 0; i < arr.size; i++){
+        ExternalMemorySymbolic sym = {};
+
+        sym.interface = arr[i].interface;
+        sym.type = arr[i].type;
+          
+        switch(arr[i].type){
+        case ExternalMemoryType_2P:{
+          sym.tp.bitSizeIn = ReplaceVariables(arr[i].tp.bitSizeIn,params,out);
+          sym.tp.dataSizeIn = ReplaceVariables(arr[i].tp.dataSizeIn,params,out);
+          sym.tp.bitSizeOut = ReplaceVariables(arr[i].tp.bitSizeOut,params,out);
+          sym.tp.dataSizeOut = ReplaceVariables(arr[i].tp.dataSizeOut,params,out);
+        } break;
+        case ExternalMemoryType_DP:{
+          sym.dp[0].bitSize = ReplaceVariables(arr[i].dp[0].bitSize,params,out);
+          sym.dp[0].dataSizeIn = ReplaceVariables(arr[i].dp[0].dataSizeIn,params,out);
+          sym.dp[0].dataSizeOut = ReplaceVariables(arr[i].dp[0].dataSizeOut,params,out);
+          sym.dp[1].bitSize = ReplaceVariables(arr[i].dp[1].bitSize,params,out);
+          sym.dp[1].dataSizeIn = ReplaceVariables(arr[i].dp[1].dataSizeIn,params,out);
+          sym.dp[1].dataSizeOut = ReplaceVariables(arr[i].dp[1].dataSizeOut,params,out);
+        } break;
+        }
+
+        decl->externalMemorySymbol[externalIndex] = sym;
+        decl->externalMemorySymbol[externalIndex].interface = externalIndex;
+        externalIndex += 1;
+      }
+    }
+  }
+
   decl->externalMemory = PushArray<ExternalMemoryInterface>(out,val.externalMemoryInterfaces);
-  int externalIndex = 0;
-  for(FUInstance* ptr : accel->allocated){
-    Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
-    for(int i = 0; i < arr.size; i++){
-      decl->externalMemory[externalIndex] = arr[i];
-      decl->externalMemory[externalIndex].interface = externalIndex;
-      externalIndex += 1;
+  {
+    int externalIndex = 0;
+    for(FUInstance* ptr : accel->allocated){
+      Array<ExternalMemoryInterface> arr = ptr->declaration->externalMemory;
+      for(int i = 0; i < arr.size; i++){
+        decl->externalMemory[externalIndex] = arr[i];
+        decl->externalMemory[externalIndex].interface = externalIndex;
+        externalIndex += 1;
+      }
     }
   }
     
+  // nocheckin : TODO: We have AccelInfo calculate this stuff meaning that we can just 
+  //                   get the data directly from there and remove this part. I think.
   decl->configs = PushArray<Wire>(out,val.configs);
   decl->states = PushArray<Wire>(out,val.states);
 
@@ -293,7 +337,11 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
   for(AccelInfoIterator iter = StartIteration(&val); iter.IsValid(); iter = iter.Step()){
     InstanceInfo* unit = iter.CurrentUnit();
 
-    Hashmap<String,SymbolicExpression*>* params = GetParametersOfUnit(unit->inst,temp);
+    Hashmap<String,SymbolicExpression*>* params = PushHashmap<String,SymbolicExpression*>(temp,unit->params.size);
+
+    for(ParamAndValue p : unit->params){
+      params->Insert(p.name,p.val);
+    }
     
     if(unit->isGloballyStatic){
       continue;
@@ -310,8 +358,7 @@ void FillDeclarationWithAcceleratorValues(FUDeclaration* decl,Accelerator* accel
         continue;
       }
 
-      FUDeclaration* d = unit->decl;
-      Wire wire = d->configs[i];
+      Wire wire = unit->configs[i];
       decl->configs[configIndex] = wire;
 
       // TODO: We need to do this for state as well. And we probably want to make this more explicit.
@@ -389,6 +436,9 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
 
   Arena* permanent = globalPermanent;
 
+  // We receive the circuit with all the instances. We also have any user provided param inside the instances themselves. The FUInstance contains the params.
+  // Any part of this code needs to instantiate everything that is a symbolic expression with those parameters, otherwise we run into trouble. And by everything I do mean everything.
+
     // Disabled for now.
 #if 0
   if(IsCombinatorial(circuit)){
@@ -461,18 +511,27 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,SubUnitOptions options){
   FillDeclarationWithDelayType(res);
  
 #if 1
-    // TODO: Maybe this check should be done elsewhere
-    for(FUInstance* ptr : circuit->allocated){
-      if(ptr->multipleSamePortInputs){
-        printf("Multiple inputs: %.*s\n",UN(name));
-        break;
-      }
+  // TODO: Maybe this check should be done elsewhere
+  for(FUInstance* ptr : circuit->allocated){
+    if(ptr->multipleSamePortInputs){
+      printf("Multiple inputs: %.*s\n",UN(name));
+      break;
     }
+  }
 #endif
-  
+
+  // Nothing can depend on data from the instances or the declaration otherwise how can we instantiate anything? We need to change the data in order to "instantiate" something.
+
   res->staticUnits = PushHashmap<StaticId,StaticData>(permanent,1000); // TODO: Set correct number of elements
-  
-  // Start by collecting all the existing static allocated units in subinstances
+
+  // We have to instantiate the static units because the parameters of the static wires depend on the parameters of the instance themselves.
+  // Alternatively, can we instantiate the parameters on the AccelInfo and let it work that way?
+
+  // NOTE: Basically, we cannot just pick the original unit wires and lift them, because these parameters might depend on the.
+  // NOTE: The more important issue is that we are not instantiate parameters anywhere. 
+
+  // If Module A() instantiates unit B with parameter C=D (whose default is F, we cannot keep carrying the F param. We need to carry the D parameter value instead.
+
   for(FUInstance* inst : res->fixedDelayCircuit->allocated){
     if(IsTypeHierarchical(inst->declaration)){
       for(auto pair : inst->declaration->staticUnits){
@@ -746,7 +805,7 @@ Hashmap<String,SymbolicExpression*>* GetParametersOfUnit(FUInstance* inst,Arena*
 Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<StaticId,StaticData>* staticUnits,int addrOffset,Arena* out){
   TEMP_REGION(temp,out);
   
-  auto list = PushArenaList<WireInformation>(temp);
+  auto list = PushList<WireInformation>(temp);
 
   SymbolicExpression* expr = PushLiteral(temp,0);
   
@@ -815,7 +874,7 @@ Array<WireInformation> CalculateWireInformation(Pool<FUInstance> nodes,Hashmap<S
     }
   }
   
-  return PushArrayFromList(out,list);
+  return PushArray(out,list);
 }
 
 bool CheckValidName(String name){

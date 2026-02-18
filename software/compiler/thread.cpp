@@ -1,7 +1,9 @@
+#if 0
 #include "thread.hpp"
 
 #include <pthread.h>
 #include <semaphore.h>
+
 #include <unistd.h>
 
 #include "utils.hpp"
@@ -165,3 +167,4 @@ WorkGroup* PushWorkGroup(Arena* out,int numberWork){
 
    return work;
 }
+#endif

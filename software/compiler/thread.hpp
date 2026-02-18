@@ -3,8 +3,9 @@
 /*
   Most of this code was made in an attempt to accelerate max clique, but for the most part this is
   mostly unused. Maybe in the future we might make use of this and for now we keep it as is.
-
 */
+
+#if 0
 
 #include "memory.hpp"
 
@@ -38,3 +39,5 @@ WorkGroup* PushWorkGroup(Arena* out,int numberWork);
 void DoWork(WorkGroup* work);
 
 #define MemoryBarrier() __asm__ __volatile__("":::"memory"); __sync_synchronize() // Gcc specific
+
+#endif

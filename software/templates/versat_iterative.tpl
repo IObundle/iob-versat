@@ -7,7 +7,6 @@ module @{accel.name} #(
       parameter AXI_ADDR_W = 32
 )
 (
-
    input run,
    input running,
 

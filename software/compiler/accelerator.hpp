@@ -1,8 +1,6 @@
 #pragma once
 
-#include "VerilogEmitter.hpp"
 #include "utils.hpp"
-#include "memory.hpp"
 #include "verilogParsing.hpp"
 
 struct FUInstance;
@@ -12,15 +10,10 @@ struct Edge;
 struct AccelInfo;
 struct ConfigFunction;
 struct InstanceInfo;
+struct SymbolicExpression;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
-
-enum Direction{
-  Direction_NONE,
-  Direction_OUTPUT,
-  Direction_INPUT
-};
 
 struct PortInstance{
   FUInstance* inst;
@@ -53,16 +46,14 @@ inline bool operator!=(const PortInstance& p1,const PortInstance& p2){
   return res;
 }
 
-template<> class std::hash<PortInstance>{
-public:
-  std::size_t operator()(PortInstance const& s) const noexcept{
-    std::size_t res = std::hash<FUInstance*>()(s.inst);
-    res *= ((int) s.dir) + 1;
-    res += s.port;
+inline u64 Hash(PortInstance s){
+  // NOTE: Hashing the pointer, not actually hashing the contents of the FU
+  u64 res = Hash(s.inst);
+  res *= ((int) s.dir) + 1;
+  res += s.port;
     
-    return res;
-  }
-};
+  return res;
+}
 
 struct Edge{ // A edge in a graph
   union{
@@ -76,6 +67,13 @@ struct Edge{ // A edge in a graph
   int delay;
   Edge* next;
 };
+
+inline u64 Hash(Edge s){
+  u64 res = Hash(s.units[0]);
+  res += Hash(s.units[1]);
+  res += s.delay;
+  return  res;
+}
 
 static inline Edge MakeEdge(FUInstance* out,int outPort,FUInstance* in,int inPort,int delay = 0){
   Edge edge = {};
@@ -205,11 +203,51 @@ struct Accelerator{ // Graph + data storage
   AcceleratorPurpose purpose;
 };
 
+struct StaticId{
+   FUDeclaration* parent;
+   String name;
+};
+
+inline u64 Hash(StaticId id){
+  u64 res = Hash(id.name) + Hash(id.parent);
+  return res;
+}
+inline bool operator==(const StaticId& id1,const StaticId& id2){
+   bool res = CompareString(id1.name,id2.name) && id1.parent == id2.parent;
+   return res;
+}
+
+struct StaticData{
+  FUDeclaration* decl; // Declaration of unit that contains the origin of the given configs
+  Array<Wire> configs; // The actual configs, which might differ from decl->configs because parameters might be instantiated 
+};
+
+struct StaticInfo{
+   StaticId id;
+   StaticData data;
+};
+
+
+struct WireInformation{
+  Wire wire;
+  int addr;
+  bool isStatic;
+  SymbolicExpression* startBitExpr;
+};
+
 // NOTE: These values are specific to the top accelerator only. They differ because of stuff like DMA, the config interface for the accelerator and so on.
 //       Any change that is specific to the top unit should change these values. More config space and things like that can be 'reserved' by changing the config values here and the same holds true for all the other interfaces.
 //       Code that does not care about the top level unit should just use the values found in AccelInfo.
 struct VersatComputedValues{
+  AccelInfo* info;
+  
   Array<VersatRegister> registers; // The index of the register is the same index on the accelerator. registers[0] is associated to pos 0 on the accelerator, registers[1] to pos 1 and so on.
+
+  Array<ExternalMemoryInterface> externalMemoryInterfaces;
+  Hashmap<StaticId,StaticData>* staticUnits;
+
+  // All configuration (including static and delays) wires
+  Array<WireInformation> allWiresInfo;
 
   // How many configs and state positions are reversed for Versat registers
   // TODO: We probably can remove this and use the size of registers to get this value.
@@ -243,7 +281,7 @@ struct VersatComputedValues{
   int memoryConfigDecisionBit;
 
   // External memories, not memory mapped.
-  int externalMemoryInterfaces;
+  //int externalMemoryInterfaces;
   int totalExternalMemory;  
 
   SymbolicExpression* configSizeExpr;
@@ -276,31 +314,9 @@ struct EdgeIterator{
   PoolIterator<FUInstance> end;
   ConnectionNode* currentPort;
   
-  bool HasNext();
-  Edge Next();
-};
-
-struct StaticId{
-   FUDeclaration* parent;
-   String name;
-};
-
-template<> class std::hash<StaticId>{
-   public:
-   std::size_t operator()(StaticId const& s) const noexcept{
-      std::size_t res = std::hash<String>()(s.name) + (std::size_t) s.parent;
-      return (std::size_t) res;
-   }
-};
-
-struct StaticData{
-  FUDeclaration* decl; // Declaration of unit that contains the origin of the given configs
-  Array<Wire> configs; // The actual configs, which might differ from decl->configs because parameters might be instantiated 
-};
-
-struct StaticInfo{
-   StaticId id;
-   StaticData data;
+  bool IsValid();
+  void Next();
+  Edge Value();
 };
 
 struct CalculatedOffsets{
@@ -322,6 +338,14 @@ struct SubMappingInfo{
   int subPort;
 };
 
+inline u64 Hash(SubMappingInfo t){
+     u64 res = Hash(t.subDeclaration) +
+               Hash(t.higherName) +
+               Hash(t.isInput) +
+               Hash(t.subPort);
+
+     return res;
+}
 inline bool operator==(const SubMappingInfo& p1,const SubMappingInfo& p2){
   bool res = (p1.subDeclaration == p2.subDeclaration &&
               CompareString(p1.higherName,p2.higherName) &&
@@ -329,18 +353,6 @@ inline bool operator==(const SubMappingInfo& p1,const SubMappingInfo& p2){
               p1.isInput == p2.isInput);
   return res;
 }
-
-template<> class std::hash<SubMappingInfo>{
-public:
-   std::size_t operator()(const SubMappingInfo& t) const noexcept{
-     std::size_t res = std::hash<FUDeclaration*>()(t.subDeclaration) +
-                       std::hash<String>()(t.higherName) +
-                       std::hash<bool>()(t.isInput) +
-                       std::hash<int>()(t.subPort);
-
-     return res;
-   }
-};
 
 typedef TrieMap<SubMappingInfo,PortInstance> SubMap;
 
@@ -426,7 +438,7 @@ int ExternalMemoryByteSize(Array<ExternalMemoryInterface> interfaces); // Size o
 
 // This computes the values for the top accelerator only.
 // Different of a regular accelerator because it can add more configs for DMA and other top level things
-VersatComputedValues ComputeVersatValues(AccelInfo* accel,Arena* out);
+VersatComputedValues ComputeVersatValues(Accelerator* graph,AccelInfo* accel,Arena* out);
 
 //
 // Accelerator mappings. A simple way of mapping nodes and port edges from one accelerator to another.
@@ -449,72 +461,3 @@ FUInstance* MappingMapNode(AcceleratorMapping* mapping,FUInstance* inst);
 Set<PortInstance>* MappingMapInput(AcceleratorMapping* map,Set<PortInstance>* set,Arena* out);
 
 void PrintSubMappingInfo(SubMap* info);
-
-struct FlattenWithMergeResult{
-  Accelerator* accel;
-  AcceleratorMapping* reconToFlattenInst;
-};
-
-bool CanBeFlattened(Accelerator* accel);
-FlattenWithMergeResult FlattenWithMerge(Accelerator* accel,int reconIndex);
-
-// ======================================
-// Hierarchical access (WIP)
-
-// Map from name in hierarchical access (ex: a.b.c[0].d) to an entity. The VARIABLE part is that this mapping is also used inside the parser to map stuff to things like variables or to special names that are specific to a given part of the code.
-
-enum EntityType{
-  EntityType_NODE,
-  EntityType_CONFIG_WIRE,
-  EntityType_STATE_WIRE,
-  EntityType_CONFIG_FUNCTION,
-  EntityType_VARIABLE_INPUT,
-  EntityType_VARIABLE_SPECIAL // For variables that exist "by default"
-};
-
-struct Entity{
-  EntityType type;
-  InstanceInfo* inst;
-
-  union {
-    Wire* wire;
-    ConfigFunction* func;
-    String varName;
-  };
-};
-
-enum VariableType{
-  VariableType_VOID_PTR,
-  VariableType_INTEGER
-};
-
-struct EnvScope{
-  TrieMap<String,VariableType>* variableTypes; // Variable not existing in here means that type is not know, not that it does not exist.
-};
-
-struct Error{
-  
-};
-
-// Env is more of a parser related thing than it is an accelerator related thing.
-// Need to copy this to a better place and start using it in other parts of the code that should use it.
-struct Env{
-  Arena* arena; // Preferably a free arena since environment needs freedom to push and pop data whenever it pleases.
-
-  // Store errors in here.
-  ArenaList<Error> errors;
-
-  TrieSet<String> specialKeywords;
-
-  ArenaDoubleList<EnvScope>* scopes;
-  DoubleLink<EnvScope>* current;
-
-  //void AddInput(VarDeclaration var);
-};
-
-Env* StartEnvironment(Arena* use);
-
-Opt<Entity> GetEntityFromHierAccess(AccelInfo* info,Array<String> accessExpr);
-Opt<Entity> GetEntityFromHierAccessWithEnvironment(AccelInfo* info,Env* env,Array<String> accessExpr);
-
-void AddOrSetVariable(Env* env,String name,VariableType type);

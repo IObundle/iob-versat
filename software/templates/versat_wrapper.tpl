@@ -89,8 +89,8 @@ struct DatabusAccess{
 // Global data 
 
 static V@{typeName}* dut = NULL;
-
-VersatPrintf versatPrintf;
+static int versat_empty_printf(const char* format,...){return 0;}
+VersatPrintf versat_printf = versat_empty_printf;
 bool CreateVCD;
 bool SimulateDatabus;
 bool versatInitialized;
@@ -107,8 +107,7 @@ volatile AcceleratorStatic* accelStatic = (volatile AcceleratorStatic*) &staticB
 // ============================================================================
 // Utilities
 
-#define PRINT(...) if(versatPrintf){versatPrintf(__VA_ARGS__);}
-#pragma GCC poison printf // Do not call printf, call PRINT
+#pragma GCC poison printf // Do not call printf, call versat_printf
 
 // TODO: Maybe this should not exist. There should exist one update function and every other function that needs to update stuff should just call that function. UPDATE as it stands should only be called inside the update function. Instead of having macros that call UPDATE, we should just call the update function directly inside the RESET macro and the START_RUN macro and so one. Everything depends on the update function and the UPDATE macro is removed and replaced inside the function. The only problem is that I do not know if the RESET macro can call the update function without something. Nonetheless, every "update" should go trough the update function and none should go through this macro.
 #ifdef TRACE
@@ -182,7 +181,7 @@ extern "C" void VersatAcceleratorCreate(){
    V@{typeName}* self = new V@{typeName}();
 
    if(dut){
-      PRINT("Initialize function is being called multiple times\n");
+      versat_printf("Initialize function is being called multiple times\n");
       exit(-1);
    }
 
@@ -344,9 +343,9 @@ extern "C" void VersatAcceleratorSimulate(){
     InternalUpdateAccelerator();
 
     if(i >= 10000000){
-      PRINT("Accelerator simulation has surpassed 10000000 cycles for a single run\n");
-      PRINT("Assuming that the accelerator is stuck in a never ending loop\n");
-      PRINT("Terminating simulation\n");
+      versat_printf("Accelerator simulation has surpassed 10000000 cycles for a single run\n");
+      versat_printf("Assuming that the accelerator is stuck in a never ending loop\n");
+      versat_printf("Terminating simulation\n");
       fflush(stdout);
       exit(-1);
     }   
@@ -437,7 +436,7 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
   iptr lengthAsTransfers = length / 4; // size of AXI_DATA_W;
   int current = index;
 
-  //PRINT("A: %p %ld %ld %ld %d\n",start_address,amount_minus_one,length,addr_shift,index);
+  //versat_printf("A: %p %ld %ld %ld %d\n",start_address,amount_minus_one,length,addr_shift,index);
 
   for(int i = 0; i < amount_minus_one + 1; i++){
      if(current < lengthAsTransfers){
@@ -449,7 +448,7 @@ iptr SimulateAddressPosition(iptr start_address,iptr amount_minus_one,iptr lengt
      }
   }
 
-  PRINT("SimulateAddressPosition reached a not possible state\n");
+  versat_printf("SimulateAddressPosition reached a not possible state\n");
   return 0;
 }
 
@@ -605,8 +604,8 @@ void SimulateAndPrintAddressGen2(AddressVArguments args){
    
    Simulate(&args,buffer);
    
-   PRINT("Total transfers: %ld\n",(args.amount_minus_one + 1) * args.length);   
-   PRINT("Number of samples: %d\n",bufferSize);   
+   versat_printf("Total transfers: %ld\n",(args.amount_minus_one + 1) * args.length);   
+   versat_printf("Number of samples: %d\n",bufferSize);   
 
    // TODO: We need to allow the user to print out stuff based on a flag, because sometimes we just want the total transfers and total samples.
 #if 0
@@ -614,7 +613,7 @@ void SimulateAndPrintAddressGen2(AddressVArguments args){
       iptr addr = (iptr) buffer[i];
       iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
 
-      PRINT("%d : %ld\n",i,(address - args.ext_addr) / 4);
+      versat_printf("%d : %ld\n",i,(address - args.ext_addr) / 4);
    }
 #endif
    
@@ -716,14 +715,14 @@ SimulateVReadResult SimulateVRead(AddressVArguments args){
           UP();
           loops += 1;
           if(loops > 10000){
-            PRINT("Failed on A\n");
+            versat_printf("Failed on A\n");
             goto end;
           }
       }
       
       if(self->store_o){
         iptr addr = self->addr_o / 4; // DATA_W 
-        //PRINT("%d\n",addr);
+        //versat_printf("%d\n",addr);
         seen[addr] = true;
       }
 
@@ -837,7 +836,7 @@ int SimulateAddressGen(iptr* arrayToFill,int arraySize,AddressVArguments args){
           UP();
           loops += 1;
           if(loops > 10000){
-            PRINT("Failed on A\n");
+            versat_printf("Failed on A\n");
             goto end;
           }
       }
@@ -952,13 +951,13 @@ void SimulateAndPrintAddressGen(AddressVArguments args){
    // Maybe waiting for the databus is not needed.
    int loops = 0;
    int totalIndex = 0;
-   PRINT("LoopIndex : Index of position being accessed\n");
+   versat_printf("LoopIndex : Index of position being accessed\n");
    while(!self->doneAddress){
       while(!self->valid_o){
           UP();
           loops += 1;
           if(loops > 10000){
-            PRINT("Failed on A\n");
+            versat_printf("Failed on A\n");
             goto end;
           }
       }
@@ -967,7 +966,7 @@ void SimulateAndPrintAddressGen(AddressVArguments args){
         iptr addr = self->addr_o / 4; // DATA_W 
         iptr address = SimulateAddressPosition(args.ext_addr,args.amount_minus_one,args.length,args.addr_shift,addr);
 
-        PRINT("%d : %ld\n",totalIndex++,(address - args.ext_addr) / 4);
+        versat_printf("%d : %ld\n",totalIndex++,(address - args.ext_addr) / 4);
       }
 
       UP();
@@ -1083,12 +1082,12 @@ void versat_init(int base){
 }
 
 void SetVersatDebugPrintfFunction(VersatPrintf function){
-  versatPrintf = function;
+  versat_printf = function;
 }
 
 static void CheckVersatInitialized(){
   if(!versatInitialized){
-    PRINT("Versat has not been initialized\n");
+    versat_printf("Versat has not been initialized\n");
     fflush(stdout);
     exit(-1);
   }
@@ -1128,26 +1127,46 @@ void EndAccelerator(){
 void VersatMemoryCopy(volatile void* dest,volatile const void* data,int size){
   CheckVersatInitialized();
 
-  char* byteViewDest = (char*) dest;
-  char* configView = (char*) accelConfig;
-  int* view = (int*) data;
+  char* versatStart = (char*) versat_base;
+  char* versatEnd = versatStart + versatAddressSpace;
+  
+  char* destChar = (char*) dest;
+  char* dataChar = (char*) data;
 
-  bool destInsideConfig = (byteViewDest >= configView && byteViewDest < configView + AcceleratorConfigSize);
-  bool destEndOutsideConfig = destInsideConfig && (byteViewDest + size > configView + AcceleratorConfigSize);
+  bool destInsideVersat = (destChar >= versatStart && destChar < versatEnd);
+  bool dataInsideVersat = (dataChar >= versatStart && dataChar < versatEnd);
 
-  if(destEndOutsideConfig){
-    PRINT("VersatMemoryCopy: Destination starts inside config and ends outside\n");
-    PRINT("This is most likely an error, no transfer is being made\n");
+  if(destInsideVersat == true && dataInsideVersat == true){
+    versat_printf("VersatMemoryCopy is not capable of performing copies from Versat to Versat");
+    return;
+  } 
+
+  if(destInsideVersat == false && dataInsideVersat == false){
+    memcpy((void*) dest,(void*) data,size);
     return;
   }
-  
-  if(destInsideConfig){
-    memcpy((void*) dest,(void*) data,size);
-  } else {
-    for(int i = 0; i < (size / 4); i++){
-      VersatUnitWrite(dest,i,view[i]);
+
+  if(destInsideVersat){
+    char* configView = (char*) accelConfig;
+    bool destInsideConfig = (destChar >= configView && destChar < configView + AcceleratorConfigSize);
+    
+    int* dataView = (int*) data;
+
+    // TODO: We technically also have to check for static and delay and stuff like that.
+    if(destInsideConfig){
+      memcpy((void*) dest,(void*) data,size);
+    } else {
+      for(int i = 0; i < (size / 4); i++){
+        VersatUnitWrite(dest,i,dataView[i]);
+      }
     }
-  }
+  } else {
+    int* destView = (int*) dest;
+  
+    for(int i = 0; i < (size / 4); i++){
+      destView[i] = VersatUnitRead(data,i);
+    }
+  } 
 }
 
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val){

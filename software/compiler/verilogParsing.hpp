@@ -46,9 +46,18 @@ struct Wire{
   String name;
   int bitSize; // TODO: This needs to be removed. We need to base all the logic on sizeExpr in order to properly handle parameters. Furthermore, if we eventually need to collapse parameters into concrete values, SymbolicExpressions can also do that. 
   VersatStage stage;
-  bool isStatic; // TODO: Not really used much, especially because we did not implement static wires at unit level yet.
+
   SymbolicExpression* sizeExpr;
 };
+
+inline u64 Hash(Wire w){
+  u64 res = Hash(w.name);
+  return res;
+}
+inline bool operator==(Wire lhs,Wire rhs){
+  bool res = (lhs.name == rhs.name);
+  return res;
+}
 
 struct WireExpression{
   String name;
@@ -115,6 +124,16 @@ struct ExternalMemoryID{
   ExternalMemoryType type;
 };
 
+inline u64 Hash(ExternalMemoryID id){
+  u64 res = id.interface * 2 + id.type;
+  return res;
+}
+
+inline bool operator==(ExternalMemoryID lhs,ExternalMemoryID rhs){
+  bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
+  return res;
+}
+
 struct ExternalInfoTwoPorts : public ExternalMemoryTwoPortsExpression{
   bool write;
   bool read;
@@ -132,18 +151,6 @@ struct ExternalMemoryInfo{
   };
   ExternalMemoryType type;
 };
-
-template<> struct std::hash<ExternalMemoryID>{
-  std::size_t operator()(ExternalMemoryID const& s) const noexcept{
-    std::size_t hash = s.interface * 2 + (int) s.type;
-    return hash;
-  }
-};
-
-inline bool operator==(const ExternalMemoryID& lhs,const ExternalMemoryID& rhs){
-  bool res = (memcmp(&lhs,&rhs,sizeof(ExternalMemoryID)) == 0);
-  return res;
-}
 
 enum SingleInterfaces{
   SingleInterfaces_DONE        = (1<<1),
@@ -164,6 +171,11 @@ struct PortInfo{
   ExpressionRange range;
 };
 
+enum ModuleSource{
+  ModuleSource_DEFAULT_UNIT,
+  ModuleSource_USER_UNIT
+};
+
 struct ModuleInfo{
   String name;
   Array<ParameterExpression> defaultParameters;
@@ -182,6 +194,7 @@ struct ModuleInfo{
   bool doesIO;
   bool memoryMapped;
   bool isSource;
+  ModuleSource moduleSource;
 };
 
 SymbolicExpression* SymbolicExpressionFromVerilog(Expression* topExpr,Arena* out);

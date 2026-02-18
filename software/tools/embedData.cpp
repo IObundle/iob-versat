@@ -268,7 +268,7 @@ EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
 
   AssertToken(tok,"{");
 
-  auto memberList = PushArenaList<Pair<String,String>>(temp);
+  auto memberList = PushList<Pair<String,String>>(temp);
   while(!tok->Done()){
     Token name = tok->NextToken();
     CheckIdentifier(name);
@@ -301,7 +301,7 @@ EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
 
   EnumDef* res = enums.Alloc();
   res->name = enumTypeName;
-  res->valuesNamesWithValuesIfExist = PushArrayFromList(out,memberList);
+  res->valuesNamesWithValuesIfExist = PushArray(out,memberList);
 
   return res;
 }
@@ -315,7 +315,7 @@ StructDef* ParseStruct(Tokenizer* tok,Arena* out){
 
   AssertToken(tok,"{");
 
-  auto memberList = PushArenaList<Pair<String,String>>(temp);
+  auto memberList = PushList<Pair<String,String>>(temp);
   while(!tok->Done()){
     Token type = tok->NextToken();
     CheckIdentifier(type);
@@ -337,7 +337,7 @@ StructDef* ParseStruct(Tokenizer* tok,Arena* out){
 
   StructDef* res = structs.Alloc();
   res->name = structTypeName;
-  res->typeAndName = PushArrayFromList(out,memberList);
+  res->typeAndName = PushArray(out,memberList);
 
   return res;
 }
@@ -363,7 +363,7 @@ Array<Token> ParseList(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
   AssertToken(tok,"(");
 
-  auto typeList = PushArenaList<Token>(temp);
+  auto typeList = PushList<Token>(temp);
   while(!tok->Done()){
     Token name = tok->NextToken();
     CheckIdentifier(name);
@@ -378,7 +378,7 @@ Array<Token> ParseList(Tokenizer* tok,Arena* out){
   }
   AssertToken(tok,")");
 
-  Array<Token> defs = PushArrayFromList(out,typeList);
+  Array<Token> defs = PushArray(out,typeList);
   return defs;
 }
 
@@ -386,7 +386,7 @@ Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
   TEMP_REGION(temp,out);
   AssertToken(tok,"(");
 
-  auto typeList = PushArenaList<Parameter>(temp);
+  auto typeList = PushList<Parameter>(temp);
   while(!tok->Done()){
     TypeDef* def = ParseTypeDef(tok,out);
     
@@ -403,7 +403,7 @@ Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
   }
   AssertToken(tok,")");
 
-  Array<Parameter> defs = PushArrayFromList(out,typeList);
+  Array<Parameter> defs = PushArray(out,typeList);
   return defs;
 }
 
@@ -452,7 +452,7 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
   }
 
   // Parsing an array here.
-  auto valueList = PushArenaList<DataValue*>(temp);
+  auto valueList = PushList<DataValue*>(temp);
   while(!tok->Done()){
     DataValue* val = ParseValue(tok,out);
     *valueList->PushElem() = val;
@@ -467,16 +467,16 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
 
   DataValue* val = PushStruct<DataValue>(out);
   val->type = DataValueType_ARRAY;
-  val->asArray = PushArrayFromList(out,valueList);
+  val->asArray = PushArray(out,valueList);
   return val;
 }
 
 Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena* out){
   TEMP_REGION(temp,out);
 
-  auto valueTableList = PushArenaList<Array<DataValue*>>(temp);
+  auto valueTableList = PushList<Array<DataValue*>>(temp);
   while(!tok->Done()){
-    auto valueList = PushArenaList<DataValue*>(temp);
+    auto valueList = PushList<DataValue*>(temp);
     for(int i = 0; i < expectedColumns; i++){
       DataValue* val = ParseValue(tok,out);
       *valueList->PushElem() = val;
@@ -486,7 +486,7 @@ Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena
       }
     }
 
-    Array<DataValue*> array = PushArrayFromList(out,valueList);
+    Array<DataValue*> array = PushArray(out,valueList);
     *valueTableList->PushElem() = array;    
     
     tok->IfNextToken(",");
@@ -496,7 +496,7 @@ Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena
     }
   }
 
-  return PushArrayFromList(out,valueTableList);
+  return PushArray(out,valueTableList);
 }
 
 TableDef* ParseTable(Tokenizer* tok,Arena* out){
@@ -569,7 +569,7 @@ FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
   
   AssertToken(tok,"=");
 
-  auto list = PushArenaList<String>(temp);
+  auto list = PushList<String>(temp);
   while(!tok->Done()){
     if(tok->IfPeekToken(";")){
       break;
@@ -586,7 +586,7 @@ FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
   FileGroupDef* def = fileGroups.Alloc();
   def->name = groupName;
   def->commonFolder = commonFolder;
-  def->foldersFromRoot = PushArrayFromList(out,list);
+  def->foldersFromRoot = PushArray(out,list);
 
   return def;
 }
@@ -809,22 +809,26 @@ int main(int argc,const char* argv[]){
     fprintf(stderr,"Need at least 3 arguments: <exe> <defFile> <outputFilename> \n");
     return -1;
   }
+ 
+  // Initialize context arenas
+  Arena inst0 = InitArena(Megabyte(64));
+  contextArenas[0] = &inst0;
+  Arena inst1 = InitArena(Megabyte(64));
+  contextArenas[1] = &inst1;
 
-  InitDebug();
+  InitDebug(argv[0]);
   
   const char* defFilePath = argv[1];
   const char* outputPath = argv[2];
- 
-  // Initialize context arenas
-  Arena inst1 = InitArena(Megabyte(64));
-  contextArenas[0] = &inst1;
-  Arena inst2 = InitArena(Megabyte(64));
-  contextArenas[1] = &inst2;
 
   Arena arena3 = InitArena(Megabyte(64));
   
   TEMP_REGION(permanent,nullptr);
   TEMP_REGION(temp,permanent);
+
+  for(int i = 0; i < 8; i++){
+    singleUseCasesArenas[i] = InitArena(Megabyte(1));
+  }
 
   String content = PushFile(temp,defFilePath);
 
@@ -845,7 +849,7 @@ int main(int argc,const char* argv[]){
       headerName = OS_NormalizePath(headerName,temp);
       sourceName = OS_NormalizePath(sourceName,temp);
 
-      auto list = PushArenaList<String>(temp);
+      auto list = PushList<String>(temp);
 
       for(FileDef* def : files){
         String path = def->filepathFromRoot;
@@ -895,7 +899,8 @@ int main(int argc,const char* argv[]){
 
     DEFER_CLOSE_FILE(header);
 
-    CEmitter* h = StartCCode(temp);
+    FREE_ARENA(emitter);
+    CEmitter* h = StartCCode(emitter);
   
     h->Comment("File auto generated by embedData tool");
     h->Once();
@@ -1043,7 +1048,8 @@ int main(int argc,const char* argv[]){
     }
     DEFER_CLOSE_FILE(source);
 
-    CEmitter* c = StartCCode(temp);
+    FREE_ARENA(emitter);
+    CEmitter* c = StartCCode(emitter);
 
     // Trying to bundle header and source appears fine but kinda limited? 
     // TODO: We could just have 2 emitters and make an interface on top of them, if needed.
@@ -1123,7 +1129,7 @@ int main(int argc,const char* argv[]){
     c->Comment("Raw C array Arrays");
 
     auto EmitRawArray = [](CEmitter* m,String arrayName){
-      TEMP_REGION(temp,m->arena);
+      TEMP_REGION(temp,nullptr);
       m->Elem(PushString(temp,"%.*s_Raw",UN(arrayName)));
       m->Elem(PushString(temp,"ARRAY_SIZE(%.*s_Raw)",UN(arrayName)));
     };
@@ -1298,7 +1304,7 @@ int main(int argc,const char* argv[]){
     c->Comment("Embed File Groups");
 
     for(FileGroupDef* def : fileGroups){
-      auto list = PushArenaList<FileGroupInfo>(temp);
+      auto list = PushList<FileGroupInfo>(temp);
 
       for(String folderPath : def->foldersFromRoot){
         DIR* directory = opendir(SF("%.*s",UN(folderPath)));
@@ -1321,7 +1327,7 @@ int main(int argc,const char* argv[]){
         closedir(directory);
       }
 
-      Array<FileGroupInfo> allFilePaths = PushArrayFromList(temp,list);
+      Array<FileGroupInfo> allFilePaths = PushArray(temp,list);
      
       static int index = 0;
       // Emit temp var to store escaped string content

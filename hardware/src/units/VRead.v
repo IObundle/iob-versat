@@ -320,11 +320,15 @@ assign data_data = databus_rdata_0;
    assign ext_2p_read_0     = output_enabled;
    assign ext_2p_addr_in_0  = output_addr;
 
-   reg reportedA;
    reg reportedB;
    reg reportedC;
 
    // Reports most common errors
+   /*
+   reg reportedA;
+   TODO: The value of gen_addr_temp goes past the values actually used. This causes this warning to 
+         trigger even when we do not actually read past the values of the memory.
+         If we want to keep the warnings around, need to fix this before restauring the warning logic.
    always @(posedge clk) begin
       if(run) begin
          reportedA <= 1'b0;
@@ -333,6 +337,7 @@ assign data_data = databus_rdata_0;
          reportedA <= 1'b1;
       end
    end
+   */
 
    always @(posedge clk) begin
       if(run) begin
