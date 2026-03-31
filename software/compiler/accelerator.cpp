@@ -733,7 +733,6 @@ VersatComputedValues ComputeVersatValues(Accelerator* graph,AccelInfo* info,Aren
   SYM_Expr delayBits = SYM_Zero;
   int externalMemoryInterfaces = 0; 
   
-  auto builder = StartArray<ExternalMemorySymbolic>(temp);
   for(AccelInfoIterator iter = StartIteration(info); iter.IsValid(); iter = iter.Next()){
     InstanceInfo* unit = iter.CurrentUnit();
     
@@ -756,10 +755,6 @@ VersatComputedValues ComputeVersatValues(Accelerator* graph,AccelInfo* info,Aren
 
     externalMemoryInterfaces += unit->externalMemory.size;
 
-    if(unit->externalMemory.size){
-      builder.PushArray(unit->externalMemory);
-    }
-
     if(unit->singleInterfaces & SingleInterfaces_DONE){
       numberDones += 1;
     }
@@ -773,10 +768,7 @@ VersatComputedValues ComputeVersatValues(Accelerator* graph,AccelInfo* info,Aren
   }    
 
   res.nDones = numberDones;
-  
-  //Array<ExternalMemorySymbolic> allExternalMemories = EndArray(builder);
-  //res.totalExternalMemory = ExternalMemoryByteSize(allExternalMemories);
-  
+ 
   res.nStatics = info->statics;
   SYM_Expr staticBits = info->staticBits;
   

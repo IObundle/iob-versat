@@ -835,7 +835,9 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* out){
     return {};
   }
 
-  auto arr = StartArray<Value>(out);
+  TEMP_REGION(temp,out);
+
+  auto list = PushList<Value>(temp);
 
   int tokenIndex = 0;
   for(int formatIndex = 0; 1;){
@@ -865,7 +867,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* out){
         numberStr.size = &tok.data[tokenIndex] - numberStr.data;
         int number = ParseInt(numberStr);
 
-        Value* val = arr.PushElem();
+        Value* val = list->PushElem();
         *val = {};
         val->type = ValueType_NUMBER;
         val->number = number;
@@ -883,7 +885,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* out){
 
         str.size = &tok.data[tokenIndex] - str.data;
 
-        Value* val = arr.PushElem();
+        Value* val = list->PushElem();
         *val = {};
         val->type = ValueType_STRING;
         val->str = str;
@@ -902,7 +904,7 @@ Array<Value> ExtractValues(const char* format,String tok,Arena* out){
     }
   }
 
-  Array<Value> values = EndArray(arr);
+  Array<Value> values = PushArray(out,list);
 
   return values;
 }

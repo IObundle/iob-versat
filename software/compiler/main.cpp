@@ -45,13 +45,13 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
   
   toSee->Push(start);
 
-  auto arr = StartArray<int>(out);
+  auto list = PushList<int>(temp);
   while(toSee->Size()){
     int head = toSee->Pop();
 
     if(marked[head] == WAIT_CHILDREN){
       marked[head] = PERMANENT;
-      *arr.PushElem() = head;
+      *list->PushElem() = head;
       continue;
     }
     
@@ -78,10 +78,10 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
     // No sons
     if(firstSon == true){
       marked[head] = PERMANENT;
-      *arr.PushElem() = head;
+      *list->PushElem() = head;
     }
   }
-  return EndArray(arr);
+  return PushArray(out,list);
 }
 
 // This structure needs to represent the entire work that is required to perform 
@@ -730,9 +730,9 @@ int main(int argc,char* argv[]){
   if(!eval2.Error()){
     printf("STATE_BITS: %d\n",eval2.result);
   }
-  // nocheckin: We might just remove the mem used otherwise need to reimplement all the stuff needed to calculate this.
+
 #if 0
-  printf("MEM_USED: ");
+  // nocheckin: We might just remove the mem used otherwise need to reimplement all the stuff needed to calculate this  printf("MEM_USED: ");
   String content = ReprMemorySize(val.totalExternalMemory,temp);
   printf("%.*s",UN(content));
   printf("\n");
@@ -849,12 +849,6 @@ This should be enough for a good workday.
 
 TODO:
 NOTE:
-
-- Need to add a proper test to API_Mem.
-
-Parameters are still mildly broken. The AccelInfo is not properly taking parameters into account, meaning that the accelInfo of modules is misleading. The only reason that stuff works fine right is because we are instantiating parameters when computing the configs and state wires of the modules. The actual data inside the AccelInfo is still "bad" and not properly responding to the parameters that we are putting.
-
-In fact, maybe the problem is that the FUDeclaration for modules is not using data from AccelInfo directly and instead it is doing computations over other data. This is "bad". We want AccelInfo to be the sole source of truth for all the Accelerator related data. If AccelInfo is properly calculated, then the rest of the code should work fine since all the data that is needed is already provided.
 
 Of course some data cannot come from AccelInfo since simple modules do not contain one. 
 

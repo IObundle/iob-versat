@@ -250,7 +250,6 @@ struct AccelInfo{
   int delays;
   int nIOs;
   int statics;
-  int sharedUnits;
   int externalMemoryInterfaces;
   int numberConnections;
   int nDones;

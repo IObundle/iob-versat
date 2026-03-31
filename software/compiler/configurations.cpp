@@ -1177,8 +1177,6 @@ void FillStaticInfo(AccelInfo* info,Arena* out){
 
 void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel){
   TEMP_REGION(temp,nullptr);
-  
-  GrowableArray<bool> seenShared = StartArray<bool>(temp);
 
   // TODO: Use AccelInfoIterator
 
@@ -1211,15 +1209,6 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   for(FUInstance* ptr : accel->allocated){
     FUInstance* inst = ptr;
     FUDeclaration* type = inst->declaration;
-
-    // Check if shared
-    if(inst->sharedEnable){
-      if(!seenShared[inst->sharedIndex]){
-        info->sharedUnits += 1;
-      }
-
-      seenShared[inst->sharedIndex] = true;
-    }
     
     if(!SYM_IsZeroValue(type->info.memMapBitsSym)){
       info->isMemoryMapped = true;
@@ -1306,7 +1295,6 @@ void FillAccelInfoFromCalculatedInstanceInfo(AccelInfo* info,Accelerator* accel)
   
   for(FUInstance* ptr : accel->allocated){
     info->numberConnections += Size(ptr->allOutputs);
-
 
     if(ptr->declaration->singleInterfaces & SingleInterfaces_DONE){
       info->implementsDone = true;

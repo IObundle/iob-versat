@@ -53,12 +53,14 @@ String GetActualArrayName(String baseName,int index,Arena* out){
 FUDeclaration* InstantiateMerge(MergeDef def){
   TEMP_REGION(temp,nullptr);
   
-  auto declArr = StartArray<FUDeclaration*>(temp);
-  for(TypeAndInstance tp : def.declarations){
-    FUDeclaration* decl = GetTypeByNameOrFail(tp.typeName.identifier); // TODO: Rewrite stuff so that at this point we know that the type must exist
-    *declArr.PushElem() = decl;
+  int size = def.declarations.size;
+  
+  Array<FUDeclaration*> decl = PushArray<FUDeclaration*>(temp,size);
+  for(int i = 0; i <  size; i++){
+    TypeAndInstance tp = def.declarations[i];
+    FUDeclaration* d = GetTypeByNameOrFail(tp.typeName.identifier);
+    decl[i] = d;
   }
-  Array<FUDeclaration*> decl = EndArray(declArr);
 
   String name = PushString(globalPermanent,def.name.identifier);
 
@@ -1369,11 +1371,11 @@ InstanceDeclaration ParseInstanceDeclaration(Parser* parser,Arena* out){
 
       if(parser->IfNextToken('(')){
         // TODO: For now, we assume that every wire specified inside the spec file is a negative (remove share).
-        auto toShare = StartArray<Token>(out);
+        auto toShare = PushList<Token>(temp);
         while(!parser->Done()){
           Token name = parser->ExpectNext(TokenType_IDENTIFIER);
 
-          *toShare.PushElem() = name;
+          *toShare->PushElem() = name;
 
           if(parser->IfNextToken(',')){
             continue;
@@ -1384,12 +1386,12 @@ InstanceDeclaration ParseInstanceDeclaration(Parser* parser,Arena* out){
       
         parser->ExpectNext(')');
 
-        res.shareNames = EndArray(toShare);
+        res.shareNames = PushArray(out,toShare);
       }
 
       parser->ExpectNext('{');
 
-      auto array = StartArray<VarDeclaration>(out);
+      auto varList = PushList<VarDeclaration>(temp);
     
       while(!parser->Done()){
         Token peek = parser->PeekToken();
@@ -1398,11 +1400,11 @@ InstanceDeclaration ParseInstanceDeclaration(Parser* parser,Arena* out){
           break;
         }
 
-        *array.PushElem() = ParseVarDeclaration(parser,out);
+        *varList->PushElem() = ParseVarDeclaration(parser,out);
       
         parser->ExpectNext(';');
       }
-      res.declarations = EndArray(array);
+      res.declarations = PushArray(out,varList);
     
       parser->ExpectNext('}');
       res.modifier = parsedModifier;
@@ -2121,7 +2123,7 @@ MergeDef ParseMerge(Parser* parser,Arena* out){
     parser->ExpectNext('}');
   }
   
-  auto specificsArr = StartArray<SpecificMergeNode>(out);
+  auto specificsNodes = PushList<SpecificMergeNode>(temp);
   for(SpecNode node : specNodes){
     // TODO: We do not do this in here. Parser only parses, semantic checks are performed later.
     int firstIndex = -1;
@@ -2147,9 +2149,9 @@ MergeDef ParseMerge(Parser* parser,Arena* out){
     }
 #endif
 
-    *specificsArr.PushElem() = {firstIndex,node.first.subInstance.name.identifier,secondIndex,node.second.subInstance.name.identifier};
+    *specificsNodes->PushElem() = {firstIndex,node.first.subInstance.name.identifier,secondIndex,node.second.subInstance.name.identifier};
   }
-  Array<SpecificMergeNode> specifics = EndArray(specificsArr);
+  Array<SpecificMergeNode> specifics = PushArray(out,specificsNodes);
 
   MergeDef result = {};
   result.name = mergeName;
@@ -2418,7 +2420,9 @@ static ConfigVarDeclaration ParseConfigVarDeclaration(Parser* parser){
 }
 
 static Array<ConfigVarDeclaration> ParseConfigFunctionArguments(Parser* parser,Arena* out){
-  auto array = StartArray<ConfigVarDeclaration>(out);
+  TEMP_REGION(temp,out);
+
+  auto list = PushList<ConfigVarDeclaration>(temp);
 
   parser->ExpectNext('(');
   
@@ -2429,7 +2433,7 @@ static Array<ConfigVarDeclaration> ParseConfigFunctionArguments(Parser* parser,A
 
     ConfigVarDeclaration var = ParseConfigVarDeclaration(parser);
 
-    *array.PushElem() = var;
+    *list->PushElem() = var;
     
     if(parser->IfNextToken(',')){
       continue;
@@ -2440,7 +2444,7 @@ static Array<ConfigVarDeclaration> ParseConfigFunctionArguments(Parser* parser,A
 
   parser->ExpectNext(')');
 
-  return EndArray(array);
+  return PushArray(out,list);
 }
 
 ConfigFunctionDef* ParseConfigFunction(Parser* parser,Arena* out){

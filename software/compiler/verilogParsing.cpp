@@ -614,8 +614,9 @@ static Array<ParameterExpression> ParseParameters(Parser* tok,TrieMap<String,Val
 	Range currentRange;
 	ParameterType type;
    */
+  TEMP_REGION(temp,out);
 
-  auto params = StartArray<ParameterExpression>(out);
+  auto params = PushList<ParameterExpression>(temp);
 
   // TODO: Not used but must parse it anyway.
   ExpressionRange range = {};
@@ -731,7 +732,7 @@ static Array<ParameterExpression> ParseParameters(Parser* tok,TrieMap<String,Val
 
       map->Insert(paramName.identifier,val);
       
-      ParameterExpression* p = params.PushElem();
+      ParameterExpression* p = params->PushElem();
       p->name = paramName.identifier;
       p->expr = expr;
       p->flags = flags;
@@ -746,7 +747,7 @@ static Array<ParameterExpression> ParseParameters(Parser* tok,TrieMap<String,Val
     }
   }
 
-  return EndArray(params);
+  return PushArray(out,params);
 }
 
 VExpr* VerilogParseExpression(Parser* parser,Arena* out,int bindingPower){
