@@ -50,6 +50,18 @@ String GetActualArrayName(String baseName,int index,Arena* out){
   return PushString(out,"%.*s_%d",UN(baseName),index);
 }
 
+String GetActualArrayName(String baseName,Array<int> index,Arena* out){
+  TEMP_REGION(temp,out);
+  
+  Array<String> asString = PushArray<String>(temp,index.size);
+  for(int i = 0; i < index.size; i++){
+    asString[i] = PushString(temp,"%d",index[i]);
+  }
+  String idPart = JoinStrings(asString,"_",temp);
+  
+  return PushString(out,"%.*s_%.*s",UN(baseName),UN(idPart));
+}
+
 FUDeclaration* InstantiateMerge(MergeDef def){
   TEMP_REGION(temp,nullptr);
   
@@ -686,6 +698,22 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
   return ent;
 }
 
+Array<int> Env::CalculateArraySize(Array<SpecExpression*> exprs){
+  if(exprs.size <= 0){
+    Assert(false); // Not an error. Programmer cannot call this if empty (not an array)
+  }
+
+  Array<int> res = PushArray<int>(scopeArena,exprs.size);
+
+  int arraySize = 1;
+  for(int i = 0; i <  exprs.size; i++){
+    SpecExpression* expr = exprs[i];
+    res[i] = CalculateConstantExpression(expr);
+  }
+
+  return res;
+}
+
 int Env::CalculateConstantExpression(SpecExpression* top){
   TEMP_REGION(temp,nullptr);
 
@@ -800,20 +828,19 @@ Entity* Env::GetEntity(SpecExpression* id,Arena* out){
   return ent;
 }
 
-
 void Env::AddInput(VarDeclaration var){
   TEMP_REGION(temp,nullptr);
 
   Entity* ent = PushNewEntity(var.name);
 
-  if(var.isArray){
+  if(var.arrayDims.size){
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = var.name.identifier;
 
-    int arraySize = CalculateConstantExpression(var.arraySize);
-    ent->arraySize = arraySize;
-
-    for(int i = 0; i < arraySize; i++){
+    // MARK
+    ent->arraySize = CalculateArraySize(var.arrayDims)[0];
+    
+    for(int i = 0; i < ent->arraySize; i++){
       String actualName = GetActualArrayName(var.name.identifier,i,temp);
       FUInstance* input = CreateOrGetInput(circuit,actualName,insertedInputs++);
       table->Insert(input->name,input);
@@ -840,14 +867,14 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
 
   Entity* ent = PushNewEntity(var.name);
 
-  if(var.isArray){
+  if(var.arrayDims.size){
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = var.name.identifier;
 
-    int arraySize = CalculateConstantExpression(var.arraySize);
-    ent->arraySize = arraySize;
+    // MARK
+    ent->arraySize = CalculateArraySize(var.arrayDims)[0];
 
-    for(int i = 0; i < arraySize; i++){
+    for(int i = 0; i < ent->arraySize; i++){
       String actualName = GetActualArrayName(var.name.identifier,i,temp);
       FUInstance* inst = CreateFUInstanceWithDeclaration(type,actualName,decl);
       table->Insert(inst->name,inst);
@@ -937,6 +964,8 @@ void Env::AddEquality(ConnectionDef decl){
 
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = outVar.name.identifier;
+    
+    // MARK
     ent->arraySize = MAX(ent->arraySize,CalculateConstantExpression(outVar.index.low));
   }
 
@@ -1025,6 +1054,7 @@ FUInstanceIterator StartIteration(Env* env,Entity* ent){
   iter.ent = ent;
 
   if(ent->type == EntityType_FU_ARRAY){
+    // MARK
     iter.max = ent->arraySize;
   }
 
@@ -1293,22 +1323,24 @@ Var ParseVar(Parser* parser,Arena* out){
 }
 
 VarDeclaration ParseVarDeclaration(Parser* parser,Arena* out){
+  TEMP_REGION(temp,out);
+
   VarDeclaration res = {};
 
   res.name = parser->ExpectNext(TokenType_IDENTIFIER);
   
   // TODO: We should integrate the array parsing logic with this one
-  if(parser->IfNextToken('[')){
-    SpecExpression* arraySize = ParseMathExpression(parser,out);
+  auto list = PushList<SpecExpression*>(temp);
 
-    //Token number = parser->ExpectNext(TokenType_NUMBER);
-    //int arraySize = number.number;
+  while(parser->IfNextToken('[')){
+    SpecExpression* arraySize = ParseMathExpression(parser,out);
 
     parser->ExpectNext(']');
 
-    res.arraySize = arraySize;
-    res.isArray = true;
+    *list->PushElem() = arraySize;
   }
+
+  res.arrayDims = PushArray(out,list);
   
   return res;
 }

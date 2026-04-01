@@ -899,11 +899,10 @@ String GEN_GetStructMemberName(InstanceInfo* info,Wire wire,Arena* out){
   return res;
 }
 
-// TODO: The basePointerName is stupid. Need to normalize between wrapper and firmware names
 void EmitDisableReadsAndWrites(CEmitter* c,String basePointerName,AccelInfo* info){
   TEMP_REGION(temp,nullptr);
 
-  // MARK1
+  // TODO: The basePointerName is stupid. Need to normalize between wrapper and firmware names
   for(auto iter = StartIteration(info); iter.IsValid(); iter = iter.Step()){
     InstanceInfo* info = iter.CurrentUnit();
 
@@ -4938,7 +4937,7 @@ void OutputTopLevelFiles(Accelerator* accel,FUDeclaration* topDecl,String hardwa
 
   Array<TypeStructInfoElement> structuredConfigs = ExtractStructuredConfigs(info.infos[0].info,temp);
 
-  // MARK - We do not want to pass topDecl to outputHeader, we only do it because we are still trying to check how the userConfig functions would work and are mostly ignoring Merge stuff currently.
+  // TODO - We do not want to pass topDecl to outputHeader, we only do it because we are still trying to check how the userConfig functions would work and are mostly ignoring Merge stuff currently.
   String typeName = accel->name;
   
   Output_VersatInstance(typeName,info,topDecl,structuredConfigs,hardwarePath,val);

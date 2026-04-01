@@ -535,11 +535,6 @@ struct VerilogTokenizerState{
   }
 };
 
-
-// MARK1
-
-#if 1
-
 static Value Eval(VExpr* expr,TrieMap<String,Value>* map){
   switch(expr->type){
   case VExpr::OPERATION:{
@@ -1627,5 +1622,3 @@ B
 
   }
 }
-
-#endif

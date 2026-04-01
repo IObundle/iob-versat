@@ -655,7 +655,6 @@ Byte HexCharToNumber(char ch);
 void HexStringToHex(unsigned char* buffer,String str);
 int String_CommonPrefixSize(String first,String second);
 
-
 enum ValueType{
   ValueType_NIL,
   ValueType_NUMBER,

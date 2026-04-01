@@ -300,7 +300,7 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
 
       DecompConfigStatement decomp = DecomposeConfigStatement(env,simple,temp);
 
-      // MARK
+      // TODO: We can clear this code even further.
       Entity* ent = decomp.parentEntity; //env->GetEntity(simple->lhs,temp);
       Entity* wireEnt = decomp.subEntity;
       Entity* portEnt = decomp.subEntity;

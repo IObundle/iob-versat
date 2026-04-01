@@ -65,8 +65,7 @@ Array<Token> AccumTokens(SpecExpression* top,Arena* out);
 
 struct VarDeclaration{
   Token name;
-  SpecExpression* arraySize;
-  bool isArray;
+  Array<SpecExpression*> arrayDims;
 };
 
 struct ParameterDeclaration{
@@ -247,7 +246,10 @@ struct Entity{
 
   ConfigFunction* func;
 
+  
+
   int arraySize;
+  //Array<int> arrayDims;
 
   union {
     String varName;
@@ -312,7 +314,8 @@ struct Env{
   void CheckIfEntityExists(Token name);
   Entity* GetEntity(ConfigIdentifier* id,Arena* out);
   Entity* GetEntity(SpecExpression* id,Arena* out);
-
+  
+  Array<int> CalculateArraySize(Array<SpecExpression*> exprs);
   int CalculateConstantExpression(SpecExpression* top);
 
   void AddInput(VarDeclaration decl);

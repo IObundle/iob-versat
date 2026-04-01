@@ -43,40 +43,6 @@ String PushBinaryRepr(Arena* out,int number);
 String PushPointingString(Arena* out,int startPos,int size);
 Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
 
-
-template<typename Value,typename Error>
-struct Result{
-  union{
-    Value value;
-    Error error;
-  };
-  bool isError;
-  
-  Result() = default;
-  Result(Value val){value = val; isError = false;};
-  Result(Error err){error = err; isError = true;};
-  
-  //operator bool(){return !isError;} // This was previously commented out. Do not know if this can cause any error 
-};
-#define CHECK(RESULT) if((RESULT).isError){return (RESULT).error;}
-
-// For cases where both Value and Error are the type
-template<typename T>
-struct Result<T,T>{
-  union{
-    T value;
-    T error;
-  };
-  bool isError;
-
-  Result() = default;
-};
-
-template<typename T>
-Result<T,T> MakeResultValue(T val){Result<T,T> res = {}; res.value = val; return res;};
-template<typename T>
-Result<T,T> MakeResultError(T val){Result<T,T> res = {}; res.error = val; res.isError = true; return res;};
-
 // A templated type for carrying the index in an array
 // A performant design would allocate a separate array because these functions copy data around.
 // Use these for prototyping, easing of debugging and stuff

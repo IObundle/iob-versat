@@ -2099,7 +2099,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  // MARK: Causes MERGE_TwoLevels to fail if false, which 
+  // TODO: Causes MERGE_TwoLevels to fail if false, which 
   bool oldDelayCalc = true;
   
   FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent,oldDelayCalc);
