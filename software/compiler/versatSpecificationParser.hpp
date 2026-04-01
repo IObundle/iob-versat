@@ -254,13 +254,6 @@ struct Entity{
 
   ConfigFunction* func;
 
-#if 0
-  LEFT HERE - Need to add arrayDims and remove array size. Follow the MARK to see which needs to change.
-              Furthermore we need to change access expression to join all the accesses into a single array instead of doing this individually. We do not want a recursive approach where a multi array is an array of an array and so on. Instead if we have a multiarray we only have a single entity representing it with the dims stored inside an array and when we do access we do it all in one go. 
-              Also, since we will be dealing with arrays of integers that represent dimensions we might want to create some helper code. This is similar to what the Partitions struct does but not quiet. It is similar to how dimensions work in versat_ai code.
-              Also also, simplify the userConfigs code. We are gonna have to change stuff in that place anyway in order to properly implement this so we might as well tackle this.
-#endif
-
   int arraySize;
   //Array<int> arrayDims;
 
@@ -326,7 +319,6 @@ struct Env{
 
   void CheckIfEntityExists(Token name);
   
-  // MARK: We want to remove one of these and have a single way of doing this.
   Entity* GetEntity(ConfigIdentifier* id,Arena* out);
   Entity* GetEntity(SpecExpression* id,Arena* out);
   

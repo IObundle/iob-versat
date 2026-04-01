@@ -831,8 +831,6 @@ void Env::AddInput(VarDeclaration var){
   if(var.arrayDims.size){
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = var.name.identifier;
-
-    // MARK
     ent->arraySize = CalculateArraySize(var.arrayDims)[0];
     
     for(int i = 0; i < ent->arraySize; i++){
@@ -865,8 +863,6 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
   if(var.arrayDims.size){
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = var.name.identifier;
-
-    // MARK
     ent->arraySize = CalculateArraySize(var.arrayDims)[0];
 
     for(int i = 0; i < ent->arraySize; i++){
@@ -959,8 +955,6 @@ void Env::AddEquality(ConnectionDef decl){
 
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = outVar.name.identifier;
-    
-    // MARK
     ent->arraySize = MAX(ent->arraySize,CalculateConstantExpression(outVar.index.low));
   }
 
@@ -1049,7 +1043,6 @@ FUInstanceIterator StartIteration(Env* env,Entity* ent){
   iter.ent = ent;
 
   if(ent->type == EntityType_FU_ARRAY){
-    // MARK
     iter.max = ent->arraySize;
   }
 
