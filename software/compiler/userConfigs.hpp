@@ -60,6 +60,8 @@ inline bool IsLeaf(ConfigStatementType type){ return (type == ConfigStatementTyp
 struct ConfigStatement{
   ConfigStatementType type;
 
+  // Why have a ConfigIdentifier and a SpecExpression?
+
   // TODO: Union
   ConfigIdentifier* lhs;
   SpecExpression* rhs;

@@ -19,16 +19,11 @@
 
 static SpecExpression SPEC_LITERAL_0 = {.val = 0,.type = SpecType_LITERAL};
 
-// TODO: Rework expression parsing to support error reporting similar to module diff.
-//       A simple form of synchronization after detecting an error would vastly improve error reporting
-//       Change iterative and merge to follow module def.
-//       Need to detect multiple inputs to the same port and report error.
-//       Error reporting is very generic. Implement more specific forms.
-//       This parser is still not production ready. At the very least all the Asserts should be removed and replaced
-//         by actual error reporting. Not a single Assert is programmer error detector, all the current ones are
-//         user error that most be reported.
+// NOTE: Spec expression is more associated to the equality operator when defining the graph
+//       Math expression is everything else
+//       One of the biggest differences is that a SpecExpression can contain delay statements "ex: x{0}", while a math expression cannot.
 
-
+// TODO: We could join these into a single one if we can abstract the differences (which are not a lot).
 SpecExpression* ParseSpecExpression(Parser* parser,Arena* out,int bindingPower = 99);
 SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower = 99);
 
@@ -1581,7 +1576,7 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
     TEMP_REGION(temp,out);
 
     Token name = parser->ExpectNext(TokenType_IDENTIFIER);
-    
+
     res = PushStruct<SpecExpression>(out);
     res->name = name;
     res->type = SpecType_NAME;
@@ -2356,7 +2351,7 @@ static ConfigIdentifier* ParseConfigIdentifier(Parser* parser,Arena* out){
     }
 
     if(!parsed && parser->IfNextToken('[')){
-      SpecExpression* expr = ParseSpecExpression(parser,out);
+      SpecExpression* expr = ParseMathExpression(parser,out);
 
       parser->ExpectNext(']');
 

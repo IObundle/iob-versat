@@ -289,7 +289,7 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
       // TODO: Call entity function to make sure that the entity exists and it is a config wire
 
       String lhsName = GetBase(simple->lhs)->name.identifier;
-
+      
       auto forLoops = PushList<AddressGenForDef>(temp);
 
       for(int i = 0; i < stmts.size - 1; i++){
@@ -451,12 +451,6 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
       ConfigIdentifier* before = GetBeforeBase(stmt->lhs);
       if(before){
         wireName = before->name.identifier;
-      }
-
-      ConfigIdentifier id = {};
-
-      if(stmt->rhs->type == SpecType_SINGLE_ACCESS){
-        id.name = stmt->rhs->name;
       }
 
       Entity* ent = env->GetEntity(stmt->rhs,temp);
