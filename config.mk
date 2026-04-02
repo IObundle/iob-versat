@@ -1,4 +1,4 @@
-VERSAT_COMMON_FLAGS := -Wall -Wunused-variable -Wno-char-subscripts -Wno-switch-enum -Wno-switch -Wno-unused-function 
+VERSAT_COMMON_FLAGS := -Wall -Werror=return-type -Wunused-variable -Wno-char-subscripts -Wno-switch-enum -Wno-switch -Wno-unused-function 
 
 # Useful to run addressSanitizer every so often 
 # NOTE: disable ASLR or we are gonna keep having random segfaults.

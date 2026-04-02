@@ -104,18 +104,22 @@ int GetRangeCount(Env* env,Range<SpecExpression*> range){
 Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
   Entity* ent = env->GetEntity(var.name);
 
-  int expectedRanges = 1;
+  int expectedRanges = 0;
   if(ent->type == EntityType_FU_ARRAY){
-    expectedRanges += ent->arrayDims.size; // arraySize
+    expectedRanges = ent->arrayDims.size; // arraySize
   }
 
   if(var.index.size != expectedRanges){
+    DEBUG_BREAK();
     env->ReportError(var.name,"Too many array subscriptions for this entity");
   }
 
-  Range<SpecExpression*> range = var.index[var.index.size - 1];
-  int indexCount = GetRangeCount(env,range);
+  int totalRangeCount = 1;
+  for(Range<SpecExpression*> range : var.index){
+    totalRangeCount *= GetRangeCount(env,range);
+  }
 
+  int indexCount = totalRangeCount;
   int portCount = GetRangeCount(env,var.extra.port);
   int delayCount = GetRangeCount(env,var.extra.delay);
 
@@ -130,7 +134,7 @@ Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
     return {PortRangeType_ERROR,0};
   }
   
-  if(var.isArrayAccess && indexCount != 1){
+  if(indexCount != 1){
     return {PortRangeType_ARRAY_RANGE,indexCount};
   }
 
@@ -139,8 +143,9 @@ Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
   } else if(delayCount != 1){
     return {PortRangeType_DELAY_RANGE,delayCount};
   }
-
+  
   NOT_POSSIBLE("Every condition should have been checked by now");
+  return {PortRangeType_ERROR,0};
 }
 
 bool IsValidGroup(Env* env,VarGroup group){
@@ -156,7 +161,9 @@ bool IsValidGroup(Env* env,VarGroup group){
 }
 
 int NumberOfConnections(Env* env,VarGroup group){
-  Assert(IsValidGroup(env,group));
+  if(!IsValidGroup(env,group)){
+    return 0;
+  }
 
   int count = 0;
 
@@ -165,84 +172,6 @@ int NumberOfConnections(Env* env,VarGroup group){
   }
 
   return count;
-}
-
-GroupIterator IterateGroup(Env* env,VarGroup group){
-  GroupIterator iter = {};
-  iter.group = group;
-  iter.env = env;
-  return iter;
-}
-
-bool HasNext(GroupIterator iter){
-  if(iter.groupIndex >= iter.group.vars.size){
-    return false;
-  }
-
-  return true;
-}
-
-struct ConnectionStartInfo{
-  bool isPort;
-  bool isDelay;
-  bool isArray;
-
-  Token name;
-
-  int port;
-  int delay;
-  int arrayIndex;
-};
-
-ConnectionStartInfo Next(GroupIterator& iter){
-  Assert(HasNext(iter));
-
-  ConnectionStartInfo res = {};
-
-  Var var = iter.group.vars[iter.groupIndex];
-  Pair<PortRangeType,int> info = GetConnectionInfo(iter.env,var);
-  
-  PortRangeType type = info.first;
-  int maxCount = info.second;
-
-  Assert(type != PortRangeType_ERROR);
-
-  res.name = var.name;
-
-  res.port = iter.env->CalculateConstantExpression(var.extra.port.start);
-  res.delay = iter.env->CalculateConstantExpression(var.extra.delay.start);
-
-  Range<SpecExpression*> range = var.index[var.index.size - 1];
-  res.arrayIndex = iter.env->CalculateConstantExpression(range.start);
-
-  if(type == PortRangeType_SINGLE){
-    iter.groupIndex += 1;
-  } else {
-    switch(type){
-    case PortRangeType_SINGLE: break;
-    case PortRangeType_ERROR: break;
-    case PortRangeType_PORT_RANGE:{
-      res.isPort = true;
-      res.port += iter.varIndex;
-    } break;
-    case PortRangeType_DELAY_RANGE:{
-      res.isDelay = true;
-      res.delay += iter.varIndex;
-    } break;
-    case PortRangeType_ARRAY_RANGE:{
-      res.isArray = true;
-      res.arrayIndex += iter.varIndex;
-    } break;
-    }
-
-    iter.varIndex += 1;
-    if(iter.varIndex >= maxCount){
-      iter.varIndex = 0;
-      iter.groupIndex += 1;
-    }
-  }
-  
-  return res;
 }
 
 // TODO: Merge this function with the RegisterSubUnit function. There is no purpose to having this be separated.
@@ -860,6 +789,29 @@ Entity* Env::GetEntity(SpecExpression* id,Arena* out){
   return ent;
 }
 
+Array<int> Env::ConvertRangeToStart(Array<Range<SpecExpression*>> range,Arena* out){
+  Array<int> res = PushArray<int>(out,range.size);
+
+  for(int i = 0; i <  range.size; i++){
+    Range<SpecExpression*> r = range[i];
+    res[i] = CalculateConstantExpression(r.start);
+  }
+
+  return res;
+}
+
+Array<int> Env::ConvertRangeToEnd(Array<Range<SpecExpression*>> range,Arena* out){
+  Array<int> res = PushArray<int>(out,range.size);
+
+  for(int i = 0; i <  range.size; i++){
+    Range<SpecExpression*> r = range[i];
+    res[i] = CalculateConstantExpression(r.end);
+  }
+
+  return res;
+}
+ 
+
 Array<int> Env::ConvertRangeToIndex(Array<Range<SpecExpression*>> range,Arena* out){
   Array<int> res = PushArray<int>(out,range.size);
 
@@ -886,7 +838,9 @@ void Env::AddInput(VarDeclaration var){
     ent->arrayBaseName = var.name.identifier;
     ent->arrayDims = CalculateArraySize(var.arrayDims);
 
-    for(auto iter = StartIteration(ent->arrayDims,temp); iter->IsValid(); iter->Advance()){
+    auto zeroArray = PushArray<int>(temp,ent->arrayDims.size);
+
+    for(auto iter = StartIteration(ent->arrayDims,zeroArray,temp); iter->IsValid(); iter->Advance()){
       Array<int> index = iter->Current();
 
       String actualName = GetActualArrayName(var.name.identifier,index,temp);
@@ -920,12 +874,14 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
     ent->arrayBaseName = var.name.identifier;
     ent->arrayDims = CalculateArraySize(var.arrayDims);
 
-    for(auto iter = StartIteration(ent->arrayDims,temp); iter->IsValid(); iter->Advance()){
+    auto zeroArray = PushArray<int>(temp,ent->arrayDims.size);
+
+    for(auto iter = StartIteration(ent->arrayDims,zeroArray,temp); iter->IsValid(); iter->Advance()){
       Array<int> index = iter->Current();
 
       String actualName = GetActualArrayName(var.name.identifier,index,temp);
-      FUInstance* input = CreateOrGetInput(circuit,actualName,insertedInputs++);
-      table->Insert(input->name,input);
+      FUInstance* inst = CreateFUInstanceWithDeclaration(type,actualName,decl);
+      table->Insert(inst->name,inst);
     }
   } else {
     FUInstance* inst = CreateFUInstanceWithDeclaration(type,var.name.identifier,decl);
@@ -969,19 +925,26 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
 void Env::AddConnection(ConnectionDef decl){
   Assert(decl.type == ConnectionType_CONNECTION);
 
-  int nOutConnections = NumberOfConnections(this,decl.output);
-  int nInConnections = NumberOfConnections(this,decl.input);
+  TEMP_REGION(temp,nullptr);
 
-  if(nOutConnections != nInConnections){
-    ReportError({},"Connection missmatch");
+  GroupIterator out = IterateGroup(this,&decl.output,temp);
+  GroupIterator in  = IterateGroup(this,&decl.input,temp);
+
+  if(!out.IsValid() || !in.IsValid()){
+    return;
   }
 
-  GroupIterator out = IterateGroup(this,decl.output);
-  GroupIterator in  = IterateGroup(this,decl.input);
+  if(out.Size() != in.Size()){
+    ReportError({},"Different size on connection");
+    printf("Left side has size: %d\n",out.Size());
+    printf("Right side has size: %d\n",in.Size());
+    return;
+  }
 
-  while(HasNext(out) && HasNext(in)){
-    ConnectionStartInfo outVar = Next(out);
-    ConnectionStartInfo inVar = Next(in);
+  int count = 0;
+  while(out.IsValid() && in.IsValid()){
+    Connection outVar = out.Current();
+    Connection inVar = in.Current();
 
     FUInstance* outInstance = GetFUInstance(outVar.name,outVar.arrayIndex);
     FUInstance* inInstance = GetFUInstance(inVar.name,inVar.arrayIndex);
@@ -989,9 +952,13 @@ void Env::AddConnection(ConnectionDef decl){
     int outPort = outVar.port;
     int inPort  = inVar.port;
     ConnectUnits(outInstance,outPort,inInstance,inPort,outVar.delay);
+
+    count += 1;
+    out.Advance();
+    in.Advance();
   }
 
-  Assert(HasNext(out) == HasNext(in));
+  Assert(out.IsValid() == in.IsValid());
 }
 
 void Env::AddEquality(ConnectionDef decl){
@@ -1062,6 +1029,7 @@ void Env::AddVariable(Token name){
   entity->varName = name.identifier;
 }
 
+#if 1
 FUInstanceIterator FUInstanceIterator::Next(){
   FUInstanceIterator next = *this;
   
@@ -1091,16 +1059,20 @@ FUInstance* FUInstanceIterator::Current(){
 }
 
 FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out){
+  TEMP_REGION(temp,out);
+
   FUInstanceIterator iter = {};
   iter.env = env;
   iter.ent = ent;
 
+  auto zeroArray = PushArray<int>(temp,ent->arrayDims.size);
   if(ent->type == EntityType_FU_ARRAY){
-    iter.iter = StartIteration(ent->arrayDims,out);
+    iter.iter = StartIteration(ent->arrayDims,zeroArray,out);
   }
 
   return iter;
 }
+#endif
 
 PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
   Arena* perm = globalPermanent;
@@ -2555,27 +2527,85 @@ Array<Token> AccumTokens(SpecExpression* top,Arena* out){
   return PushArray(out,list);
 }
 
-DimIterator* StartIteration(Array<int> dimensions,Arena* out){
-  DimIterator* res = PushStruct<DimIterator>(out);
+void ArrayIndexIncrementInPlace(Array<int> dims,Array<int> startValue,Array<int> index){
+  Assert(dims.size == index.size);
+  int size = dims.size;
 
-  res->dim = CopyArray(dimensions,out);
-  res->current = PushArray<int>(out,dimensions.size);
+  for(int i = size - 1; i >= 0; i--){
+    index[i] += 1;
 
-  return res;
-}
-
-// MARK: Move to a better place
-void DimIterator::Advance(){
-  for(int i = current.size - 1; i >= 0; i--){
-    current[i] += 1;
-
-    if(i != 0 && current[i] >= dim[i]){
-      current[i] = 0;
+    if(i != 0 && index[i] >= dims[i]){
+      index[i] = startValue[i];
       continue;
     }
 
     break;
   }
+}
+
+int ArrayIndexToInteger(Array<int> dims,Array<int> index){
+  Assert(dims.size == index.size);
+  int size = dims.size;
+
+  int res = 0;
+  for(int i = 0; i < size; i++){
+    int val = index[i];
+    for(int j = i + 1; j < size; j++){
+      val *= dims[j];
+    }
+
+    res += val;
+  }
+
+  return res;
+}
+
+Array<int> IntegerToArrayIndex(Array<int> dims,int index,Arena* out){
+  int size = dims.size;
+
+  Array<int> res = PushArray<int>(out,size);
+
+  int value = index;
+  for(int i = 0; i < index; i++){
+    int dimTotalSize = 1;
+    for(int j = i + 1; j < size; j++){
+      dimTotalSize *= dims[j];
+    }
+
+    res[i] = value / dimTotalSize;
+    value = value % dimTotalSize;
+  }
+
+  return res;
+}
+
+DimIterator* StartIteration(Array<int> dimensions,Array<int> startValues,Arena* out){
+  DimIterator* res = PushStruct<DimIterator>(out);
+
+  res->dim = CopyArray(dimensions,out);
+  res->startValue = CopyArray(startValues,out);
+  res->current = PushArray<int>(out,dimensions.size);
+
+  return res;
+}
+
+int DimIterator::Size(){
+  int size = 1;
+
+  for(int i = 0; i < dim.size; i++){
+    size *= MAX(1,dim[i] - startValue[i]);
+  }
+
+  return size;
+}
+
+void DimIterator::Invalidate(){
+  current[0] = dim[0];
+}
+
+// MARK: Move to a better place
+void DimIterator::Advance(){
+  ArrayIndexIncrementInPlace(dim,startValue,current);
 }
 
 bool DimIterator::IsValid(){
@@ -2588,4 +2618,167 @@ bool DimIterator::IsValid(){
 
 Array<int> DimIterator::Current(){
   return current;
+}
+
+VarIterator* StartIteration(Env* env,Var var,Arena* out){
+  TEMP_REGION(temp,out);
+
+  VarIterator* res = PushStruct<VarIterator>(out);
+
+  Entity* ent = env->GetEntity(var.name);
+
+  int expectedIndexSize = 0;
+  if(ent->type == EntityType_FU_ARRAY){
+    expectedIndexSize = ent->arrayDims.size;
+  }
+
+  res->name = var.name;
+
+  res->startDelay = env->CalculateConstantExpression(var.extra.delay.start);
+  res->startPort  = env->CalculateConstantExpression(var.extra.port.start);
+
+  res->endDelay = env->CalculateConstantExpression(var.extra.delay.end);
+  res->endPort  = env->CalculateConstantExpression(var.extra.port.end);
+
+  res->currentDelay = res->startDelay;
+  res->currentPort = res->startPort;
+
+  auto start = env->ConvertRangeToStart(var.index,temp);
+  auto end = env->ConvertRangeToEnd(var.index,temp);
+
+  res->arrayIndex = StartIteration(end,start,out);
+
+  if(ent->type != EntityType_FU_ARRAY && var.index.size){
+    env->ReportError({},"Error, var is not an array and does not support array subscriptions");
+    res->Invalidate();
+    return res;
+  }
+
+  if(var.index.size != expectedIndexSize){
+    DEBUG_BREAK();
+    env->ReportError({},"Error, var has more or less accesses than needed");
+    res->Invalidate();
+    return res;
+  }
+
+  // TODO: We can put more error checking in here.
+  //       If ports are bigger than the declaration allows.
+  //       If the iteration dims are bigger than the declaration.
+  //       And so on.
+
+  return res;
+}
+
+int VarIterator::Size(){
+  int size = 1;
+
+  size *= MAX(1,(endDelay - startDelay));
+  size *= MAX(1,(endPort - startPort));
+  size *= arrayIndex->Size();
+  
+  return size;
+}
+
+void VarIterator::Invalidate(){
+  arrayIndex->Invalidate();
+}
+
+void VarIterator::Advance(){
+  currentPort += 1;
+
+  if(currentPort >= endPort){
+    currentPort = startPort;
+  } else {
+    return;
+  }
+
+  currentDelay += 1;
+
+  if(currentDelay >= endDelay){
+    currentDelay = startDelay;
+  } else {
+    return;
+  }
+
+  arrayIndex->Advance();
+}
+
+bool VarIterator::IsValid(){
+  return arrayIndex->IsValid();
+}
+
+Connection VarIterator::Current(){
+  Connection con = {};
+
+  con.name = name;
+  con.port = currentPort;
+  con.delay = currentDelay;
+  con.arrayIndex = arrayIndex->Current();
+
+  return con;
+}
+
+GroupIterator IterateGroup(Env* env,VarGroup* group,Arena* out){
+  GroupIterator iter = {};
+  iter.env = env;
+  
+  int size = group->vars.size;
+
+  iter.group = group;
+  iter.innerIters = PushArray<VarIterator*>(out,size);
+  for(int i = 0; i < size; i++){
+    iter.innerIters[i] = StartIteration(env,group->vars[i],out);
+  }
+  
+  // Iterate from right to left from textual POV
+  ReverseInPlace(iter.innerIters);
+
+  for(int i = 0; i < size; i++){
+    if(!iter.innerIters[i]->IsValid()){
+      iter.Invalidate();
+    }
+  }
+
+  return iter;
+}
+
+int GroupIterator::Size(){
+  int size = 0;
+
+  for(VarIterator* iter : innerIters){
+    size += iter->Size();
+  }
+
+  return size;
+}
+
+void GroupIterator::Invalidate(){
+  currentIter = innerIters.size;
+}
+
+bool GroupIterator::IsValid(){
+  if(currentIter < innerIters.size){
+    return true;
+  }
+
+  return false;
+}
+
+void GroupIterator::Advance(){
+  Assert(IsValid());
+
+  innerIters[currentIter]->Advance();
+  
+  if(!innerIters[currentIter]->IsValid()){
+    currentIter += 1;
+  }
+}
+
+Connection GroupIterator::Current(){
+  TEMP_REGION(temp,nullptr);
+
+  Assert(IsValid());
+
+  Connection con = innerIters[currentIter]->Current();
+  return con;
 }

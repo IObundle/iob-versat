@@ -27,7 +27,8 @@ struct Var{
 
   ConnectionExtra extra;
   Array<Range<SpecExpression*>> index;
-
+  
+  // TODO: Is this needed?
   bool isArrayAccess;
 };
 
@@ -316,12 +317,17 @@ struct Env{
 
   Entity* PushNewEntity(Token name);
   Entity* GetEntity(Token name);
+  
+  // TODO: Need to remove this. We want the tokens to do proper error report.
   Entity* GetEntity(String name);
 
   void CheckIfEntityExists(Token name);
   
   Entity* GetEntity(ConfigIdentifier* id,Arena* out);
   Entity* GetEntity(SpecExpression* id,Arena* out);
+
+  Array<int> ConvertRangeToStart(Array<Range<SpecExpression*>> range,Arena* out);
+  Array<int> ConvertRangeToEnd(Array<Range<SpecExpression*>> range,Arena* out);
   
   Array<int> ConvertRangeToIndex(Array<Range<SpecExpression*>> range,Arena* out);
 
@@ -344,18 +350,30 @@ struct Env{
 
 Env* StartEnvironment(Arena* freeUse,Arena* freeUse2);
 
+#if 1
 // MARK: Move to a better place
+// TODO: We might as well remove this and push the logic to VarIterator.
 struct DimIterator{
   Array<int> dim;
+  Array<int> startValue;
   Array<int> current;
+
+  int Size();
+  void Invalidate();
 
   void Advance();
   bool IsValid();
   Array<int> Current();
 };
 
-DimIterator* StartIteration(Array<int> dimensions,Arena* out);
+DimIterator* StartIteration(Array<int> dims,Array<int> startValues,Arena* out);
+#endif
 
+void ArrayIndexIncrementInPlace(Array<int> dims,Array<int> startValue,Array<int> index);
+int ArrayIndexToInteger(Array<int> dims,Array<int> index);
+Array<int> IntegerToArrayIndex(Array<int> dims,int index,Arena* out);
+
+#if 1
 struct FUInstanceIterator{
   Env* env;
   Entity* ent;
@@ -366,14 +384,70 @@ struct FUInstanceIterator{
   FUInstance* Current();
 };
 
-struct GroupIterator{
-  Env* env;
-  VarGroup group;
-  int groupIndex;
-  int varIndex; // Either port, delay or array unit.
+FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out);
+
+#endif
+
+struct ConnectionStartInfo{
+  Token name;
+  Entity* ent;
+
+  bool isPort;
+  bool isDelay;
+  bool isArray;
+
+  int port;
+  int delay;
+  
+  Array<int> arrayIndex;
 };
 
-FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out);
+struct Connection{
+  Token name;
+
+  int port;
+  int delay;
+  Array<int> arrayIndex;
+};
+
+struct VarIterator{
+  Token name;
+  
+  int startPort;
+  int currentPort;
+  int endPort;
+
+  int startDelay;
+  int currentDelay;
+  int endDelay;
+
+  DimIterator* arrayIndex;
+
+  int Size();
+  void Invalidate();
+
+  void Advance();
+  bool IsValid();
+  Connection Current();
+};
+
+VarIterator* StartIteration(Env* env,Var var,Arena* out);
+
+struct GroupIterator{
+  Env* env;
+  VarGroup* group;
+  Array<VarIterator*> innerIters;
+  int currentIter;
+
+  int Size();
+  void Invalidate();
+
+  bool IsValid();
+  void Advance();
+  Connection Current();
+};
+
+GroupIterator IterateGroup(Env* env,VarGroup* group,Arena* out);
 
 #if 0
 What is the problem in iterating over multiple dims?
@@ -394,5 +468,18 @@ We use ConnectionInfo to simplify the code for range
 Problem:
 
 We put all the arrays info into a single var. The GroupIterator iterates from var to var but we only assume that it contains a single array iteration. Something like {A[0..2][0..2],B[0..2]} is not currently possible because we cannot represent the A part of the iteration. Everything is encoded as a single digit which.
+
+Basically we can solve this if we can transform ArrayIndex -> Integer and Integer -> ArrayIndex.
+
+IMPORTANT:
+
+Remember that we also need to take into account the start of the range:
+
+A[2..3][2..3] should iterate in the form:
+
+A[2][2]
+A[2][3]
+A[3][2]
+A[3][3]
 
 #endif

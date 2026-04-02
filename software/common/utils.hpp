@@ -256,6 +256,16 @@ Array<T> CopyArray(Array<T> arr,Arena* out){
   return res;
 }
 
+template<typename T>
+void CopyArrayInPlace(Array<T> dst,Array<T> src){
+  // NOTE: Could also just copy the min size but we mostly only copy equal sized arrays.
+  Assert(dst.size == src.size);
+  
+  for(int i = 0; i < src.size; i++){
+    dst[i] = src[i];
+  }
+}
+
 template<typename T,typename D>
 Array<T> CopyArray(Array<D> arr,Arena* out){
   Array<T> res = PushArray<T>(out,arr.size);
