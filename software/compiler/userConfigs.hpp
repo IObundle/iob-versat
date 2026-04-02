@@ -64,7 +64,7 @@ struct ConfigStatement{
 
   // TODO: Union
   ConfigIdentifier* lhs;
-  SpecExpression* rhs;
+  MathExpression* rhs;
   AddressGenForDef def;
   Array<ConfigStatement*> childs; // Only for loops contains these right now.
 };
@@ -134,25 +134,6 @@ struct ConfigAssignment{
   
   String special;
 };
-
-// nocheckin: 
-inline Array<String> Add(Array<String> in,String toAdd,Arena* out){
-  Array<String> res = PushArray<String>(out,in.size + 1);
-  for(int i = 0; i < in.size; i++){
-    res[i] = in[i];
-  }
-  res[in.size] = toAdd;
-  return res;
-}
-
-inline Array<String> Add(String toAdd,Array<String> in,Arena* out){
-  Array<String> res = PushArray<String>(out,in.size + 1);
-  res[0] = toAdd;
-  for(int i = 0; i < in.size; i++){
-    res[i+1] = in[i];
-  }
-  return res;
-}
 
 struct ConfigStuff{
   ConfigStuffType type;

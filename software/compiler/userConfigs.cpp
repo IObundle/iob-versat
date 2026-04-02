@@ -54,7 +54,7 @@ struct DecompConfigStatement{
   Entity* subEntity;
 
   SYM_Expr expr;
-  Array<SpecExpression*> args;
+  Array<MathExpression*> args;
   Token entityName;
   Token wireName; 
 
@@ -99,12 +99,12 @@ DecompConfigStatement DecomposeConfigStatement(Env* env,ConfigStatement* stmt,Ar
     }
 
     // Right hand side
-    SpecExpression* rhs = stmt->rhs;
+    MathExpression* rhs = stmt->rhs;
     if(rhs->type == SpecType_ARRAY_ACCESS){
       // Statement of the form x = addr[expr]
       // This almost always implies a VUnit access 
       res.isArray = true;
-      res.expr = env->SymbolicFromSpecExpression(rhs->expressions[0]);
+      res.expr = env->SymbolicFromMathExpression(rhs->expressions[0]);
       res.entityName = rhs->name;
     } else if(rhs->type == SpecType_SINGLE_ACCESS){
       // Statement of the form x = ent.wire
@@ -115,7 +115,7 @@ DecompConfigStatement DecomposeConfigStatement(Env* env,ConfigStatement* stmt,Ar
     } else {    
       // Only expressions remain as valid statements
       res.isExpr = true;
-      res.expr = env->SymbolicFromSpecExpression(rhs);
+      res.expr = env->SymbolicFromMathExpression(rhs);
     }
   }
   
@@ -123,7 +123,7 @@ DecompConfigStatement DecomposeConfigStatement(Env* env,ConfigStatement* stmt,Ar
 }
 
 // TODO: We could do better. We could have a decompose ConfigStatement
-ParseResult ParseRHS(Env* env,SpecExpression* top,Arena* out){
+ParseResult ParseRHS(Env* env,MathExpression* top,Arena* out){
 /*
   RHS can be:
 
@@ -138,7 +138,7 @@ ParseResult ParseRHS(Env* env,SpecExpression* top,Arena* out){
   ParseResult res = {};
   if(top->type == SpecType_ARRAY_ACCESS){
     res.isArray = true;
-    res.expr = env->SymbolicFromSpecExpression(top->expressions[0]);
+    res.expr = env->SymbolicFromMathExpression(top->expressions[0]);
     res.entityName = top->name;
   } else if(top->type == SpecType_SINGLE_ACCESS){
     res.containsAccess = true;
@@ -146,7 +146,7 @@ ParseResult ParseRHS(Env* env,SpecExpression* top,Arena* out){
     res.wireName = top->expressions[0]->name;
   } else {    
     res.isExpr = true;
-    res.expr = env->SymbolicFromSpecExpression(top);
+    res.expr = env->SymbolicFromMathExpression(top);
   }
 
   return res;
@@ -308,7 +308,7 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
       // Function invocation is basically argument instantiation and replacing the 
       // statements with the new version.
       if(decomp.isFunctionInvoc){
-        Array<SpecExpression*> args = decomp.args;
+        Array<MathExpression*> args = decomp.args;
         ConfigFunction* function = decomp.func;
 
         // TODO: Not an assert, should be a proper error
@@ -333,7 +333,7 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
           // Arg is in the function space
           ConfigVariable arg = function->variables[i];
 
-          SYM_Expr var = env->SymbolicFromSpecExpression(args[i]);
+          SYM_Expr var = env->SymbolicFromMathExpression(args[i]);
 
           // TODO: Kinda stupid.
           Array<String> vars = SYM_GetAllVariables(var,temp);
@@ -538,8 +538,8 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
 
         SYM_Expr size = SYM_One;
         if(!singleStatement){
-          SYM_Expr start = env->SymbolicFromSpecExpression(stmt->def.startSym);
-          SYM_Expr end = env->SymbolicFromSpecExpression(stmt->def.endSym);
+          SYM_Expr start = env->SymbolicFromMathExpression(stmt->def.startSym);
+          SYM_Expr end = env->SymbolicFromMathExpression(stmt->def.endSym);
 
           size = end - start;
         }

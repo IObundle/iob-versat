@@ -18,23 +18,24 @@ enum PortRangeType{
 };
 
 struct ConnectionExtra{
-  Range<SpecExpression*> port;
-  Range<SpecExpression*> delay;
+  Range<MathExpression*> port;
+  Range<MathExpression*> delay;
 };
 
 struct Var{
   Token name;
 
   ConnectionExtra extra;
-  Array<Range<SpecExpression*>> index;
+  Array<Range<MathExpression*>> index;
+
+  bool IsArrayAccess(){return index.size > 0;}
   
   // TODO: Is this needed?
-  bool isArrayAccess;
+  //bool isArrayAccess;
 };
 
 struct VarGroup{
   Array<Var> vars;
-  Token fullText;
 };
 
 enum SpecType{
@@ -55,23 +56,40 @@ struct SpecExpression{
     int val;
     Token name;
   };
-  Token text;
   
   // NOTE: If array access, expressions is an array of the expressions in order and var contains the array name.
   SpecType type;
 };
 
+enum MathType{
+
+};
+
+struct MathExpression{
+  Array<MathExpression*> expressions;
+  union{
+    const char* op;
+    Var var;
+    int val;
+    Token name;
+  };
+  
+  // NOTE: If array access, expressions is an array of the expressions in order and var contains the array name.
+  SpecType type;
+};
+
+
 //nocheckin - TODO: We probably want to remove this after we move more logic to Env
-Array<Token> AccumTokens(SpecExpression* top,Arena* out);
+Array<Token> AccumTokens(MathExpression* top,Arena* out);
 
 struct VarDeclaration{
   Token name;
-  Array<SpecExpression*> arrayDims;
+  Array<MathExpression*> arrayDims;
 };
 
 struct ParameterDeclaration{
   Token name;
-  SpecExpression* defaultValue;
+  MathExpression* defaultValue;
 };
 
 struct PortExpression{
@@ -91,7 +109,7 @@ struct InstanceDeclaration{
   Array<VarDeclaration> declarations; // share(config) groups can have multiple different declarations. TODO: It is kinda weird that inside the syntax, the share allows groups of instances to be declared while this does not happen elsewhere. Not enought to warrant a look for now, but keep in mind for later.
 
   // NOTE: We could create a different expression type 
-  Array<Pair<String,SpecExpression*>> parameters;
+  Array<Pair<String,MathExpression*>> parameters;
 
   Array<Token> addressGenUsed; // NOTE: We do not check if address gen exists at parse time, we check it later.
   Array<Token> shareNames;
@@ -111,7 +129,6 @@ enum ConnectionType{
 struct ConnectionDef{
   ConnectionType type;
   VarGroup output;
-  Array<Token> transforms;
 
   // TODO: Union.
   VarGroup input;
@@ -194,9 +211,9 @@ struct ConfigIdentifier{
 
   // TODO: Union
   Token name;
-  SpecExpression* arrayExpr;
+  MathExpression* arrayExpr;
   Token functionName;
-  Array<SpecExpression*> arguments;
+  Array<MathExpression*> arguments;
 };
 
 inline ConfigIdentifier* GetBase(ConfigIdentifier* top){
@@ -218,7 +235,6 @@ inline ConfigIdentifier* GetBeforeBase(ConfigIdentifier* top){
 enum EntityType{
   EntityType_FU,
   EntityType_FU_ARRAY,
-  EntityType_NODE,
   EntityType_PARAM,
   EntityType_MEM_PORT, // User can "represent" a memory port by doing something like mem.in0 (input port 0).
   EntityType_CONFIG_WIRE,
@@ -313,7 +329,8 @@ struct Env{
   FUInstance* GetFUInstance(Token name,Array<int> arrayIndexIfArray);
 
   FUInstance* GetFUInstance(Var var);
-  FUInstance* GetOutputInstance();
+
+  Entity* PushReservedEntity(String name);
 
   Entity* PushNewEntity(Token name);
   Entity* GetEntity(Token name);
@@ -323,7 +340,7 @@ struct Env{
 
   void CheckIfEntityExists(Token name);
 
-#if 1
+#if 0
   - LEFT HERE - A Var is an "expression" inside a connect expression.
   -             A ConfigIdentifier is an "expression" inside a Config function. Mostly the lhs side of an assignemnt.
   -             A SpecExpression is also an expression and is mostly on the right side.
@@ -341,15 +358,15 @@ struct Env{
 #endif
   
   Entity* GetEntity(ConfigIdentifier* id,Arena* out);
-  Entity* GetEntity(SpecExpression* id,Arena* out);
+  Entity* GetEntity(MathExpression* id,Arena* out);
 
-  Array<int> ConvertRangeToStart(Array<Range<SpecExpression*>> range,Arena* out);
-  Array<int> ConvertRangeToEnd(Array<Range<SpecExpression*>> range,Arena* out);
+  Array<int> ConvertRangeToStart(Array<Range<MathExpression*>> range,Arena* out);
+  Array<int> ConvertRangeToEnd(Array<Range<MathExpression*>> range,Arena* out);
   
-  Array<int> ConvertRangeToIndex(Array<Range<SpecExpression*>> range,Arena* out);
+  Array<int> ConvertRangeToIndex(Array<Range<MathExpression*>> range,Arena* out);
 
-  Array<int> CalculateArraySize(Array<SpecExpression*> exprs);
-  int CalculateConstantExpression(SpecExpression* top);
+  Array<int> CalculateArraySize(Array<MathExpression*> exprs);
+  int CalculateConstantExpression(MathExpression* top);
 
   void AddInput(VarDeclaration decl);
   void AddInstance(InstanceDeclaration decl,VarDeclaration var);
@@ -362,14 +379,16 @@ struct Env{
 
   PortExpression InstantiateSpecExpression(SpecExpression* root);
 
-  SYM_Expr SymbolicFromSpecExpression(SpecExpression* spec);
+  SYM_Expr SymbolicFromMathExpression(MathExpression* spec);
 };
 
 Env* StartEnvironment(Arena* freeUse,Arena* freeUse2);
 
-#if 1
-// MARK: Move to a better place
-// TODO: We might as well remove this and push the logic to VarIterator.
+
+// NOTE: Even thought the specs use closed intervals, all the values inside the iterators
+//       are half intervals. Close on bottom and open on the top.
+//       The StartIteration functions perform the fixup to make sure that everything lines up
+
 struct DimIterator{
   Array<int> dim;
   Array<int> startValue;
@@ -384,40 +403,25 @@ struct DimIterator{
 };
 
 DimIterator* StartIteration(Array<int> dims,Array<int> startValues,Arena* out);
-#endif
+DimIterator* StartIteration(int size,Arena* out);
 
 void ArrayIndexIncrementInPlace(Array<int> dims,Array<int> startValue,Array<int> index);
 int ArrayIndexToInteger(Array<int> dims,Array<int> index);
 Array<int> IntegerToArrayIndex(Array<int> dims,int index,Arena* out);
 
-#if 1
 struct FUInstanceIterator{
   Env* env;
   Entity* ent;
+
+  bool used;
   DimIterator* iter;
 
-  FUInstanceIterator Next();
+  void Advance();
   bool IsValid();
   FUInstance* Current();
 };
 
 FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out);
-
-#endif
-
-struct ConnectionStartInfo{
-  Token name;
-  Entity* ent;
-
-  bool isPort;
-  bool isDelay;
-  bool isArray;
-
-  int port;
-  int delay;
-  
-  Array<int> arrayIndex;
-};
 
 struct Connection{
   Token name;
@@ -465,38 +469,3 @@ struct GroupIterator{
 };
 
 GroupIterator IterateGroup(Env* env,VarGroup* group,Arena* out);
-
-#if 0
-What is the problem in iterating over multiple dims?
-
-Can't we do something like:
-
-A[0..2][0..2] -> B[0..4]
-
-and generate
-
-A[0][0] -> B[0]
-A[0][1] -> B[1]
-A[1][0] -> B[2]
-A[1][1] -> B[3]
-
-We use ConnectionInfo to simplify the code for range 
-
-Problem:
-
-We put all the arrays info into a single var. The GroupIterator iterates from var to var but we only assume that it contains a single array iteration. Something like {A[0..2][0..2],B[0..2]} is not currently possible because we cannot represent the A part of the iteration. Everything is encoded as a single digit which.
-
-Basically we can solve this if we can transform ArrayIndex -> Integer and Integer -> ArrayIndex.
-
-IMPORTANT:
-
-Remember that we also need to take into account the start of the range:
-
-A[2..3][2..3] should iterate in the form:
-
-A[2][2]
-A[2][3]
-A[3][2]
-A[3][3]
-
-#endif

@@ -595,8 +595,8 @@ AddressAccess* CompileAddressGen(Env* env,Array<Token> inputs,Array<AddressGenFo
     // TODO: Handle parsing errors
     // TODO: Performance, we are parsing this twice, there is another below. Maybe we can join the loops into a single one
 
-    SYM_Expr start = env->SymbolicFromSpecExpression(loop.startSym);
-    SYM_Expr end = env->SymbolicFromSpecExpression(loop.endSym);
+    SYM_Expr start = env->SymbolicFromMathExpression(loop.startSym);
+    SYM_Expr end = env->SymbolicFromMathExpression(loop.endSym);
 
     SYM_Expr diff = end - start;
 
@@ -623,8 +623,8 @@ AddressAccess* CompileAddressGen(Env* env,Array<Token> inputs,Array<AddressGenFo
     AddressGenForDef loop = loops[i];
     
     // TODO: Performance, we are parsing the start and end stuff twice. This is the second, the first is above.
-    SYM_Expr start = env->SymbolicFromSpecExpression(loop.startSym);
-    SYM_Expr end = env->SymbolicFromSpecExpression(loop.endSym);
+    SYM_Expr start = env->SymbolicFromMathExpression(loop.startSym);
+    SYM_Expr end = env->SymbolicFromMathExpression(loop.endSym);
     
     LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,start,end,temp);
     expr = AddLoopLinearSum(sum,expr,temp);

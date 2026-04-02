@@ -10,6 +10,7 @@
 
 struct CEmitter;
 struct SpecExpression;
+struct MathExpression;
 struct Env;
 
 // TODO: We currently do not support loops that start at non zero values. The fix is simple, we can always shift loops from N..M to 0..(M-N) by adding more logic to the expression. Kinda not doing this for now since still have not found an example where this is needed.
@@ -18,8 +19,8 @@ struct Env;
 
 struct AddressGenForDef{
   String loopVariable;
-  SpecExpression* startSym;
-  SpecExpression* endSym;
+  MathExpression* startSym;
+  MathExpression* endSym;
 };
 
 // nocheckin: TODO: Is there a point to separating the internal and external stuff at this point?

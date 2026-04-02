@@ -398,6 +398,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Array<ParameterDef> params,S
     res->parameters[6 + i].defaultVal = def.defaultValue;
   }
 
+#if 0
   bool containsMerge = false;
 
   for(FUInstance* inst : circuit->allocated){
@@ -408,6 +409,7 @@ FUDeclaration* RegisterSubUnit(Accelerator* circuit,Array<ParameterDef> params,S
 
   if(containsMerge)
     printf("Contains Merged\n");
+#endif
   
   if(circuit->allocated.Size() == 0){
     res->baseCircuit = circuit;

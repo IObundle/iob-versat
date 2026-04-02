@@ -13,11 +13,13 @@
 #include "userConfigs.hpp"
 
 #include "parser.hpp"
+#include "versat.hpp"
 
 // ======================================
 // Constants
 
 static SpecExpression SPEC_LITERAL_0 = {.val = 0,.type = SpecType_LITERAL};
+static MathExpression MATH_LITERAL_0 = {.val = 0,.type = SpecType_LITERAL};
 
 // NOTE: Spec expression is more associated to the equality operator when defining the graph
 //       Math expression is everything else
@@ -25,7 +27,7 @@ static SpecExpression SPEC_LITERAL_0 = {.val = 0,.type = SpecType_LITERAL};
 
 // TODO: We could join these into a single one if we can abstract the differences (which are not a lot).
 SpecExpression* ParseSpecExpression(Parser* parser,Arena* out,int bindingPower = 99);
-SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower = 99);
+MathExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower = 99);
 
 String GetUniqueName(String name,Arena* out,InstanceTable* names){
   int counter = 0;
@@ -92,7 +94,7 @@ FUDeclaration* InstantiateMerge(MergeDef def){
   return Merge(decl,name,def.specifics,modifier);
 }
 
-int GetRangeCount(Env* env,Range<SpecExpression*> range){
+int GetRangeCount(Env* env,Range<MathExpression*> range){
   int start = env->CalculateConstantExpression(range.start);
   int end = env->CalculateConstantExpression(range.end);
   
@@ -110,12 +112,11 @@ Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
   }
 
   if(var.index.size != expectedRanges){
-    DEBUG_BREAK();
     env->ReportError(var.name,"Too many array subscriptions for this entity");
   }
 
   int totalRangeCount = 1;
-  for(Range<SpecExpression*> range : var.index){
+  for(Range<MathExpression*> range : var.index){
     totalRangeCount *= GetRangeCount(env,range);
   }
 
@@ -184,6 +185,37 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
   FREE_ARENA(envArena);
   FREE_ARENA(envArena2);
   Env* env = StartEnvironment(envArena,envArena2);
+  env->circuit = circuit;
+
+  bool addOutputInstance = false;
+  for(ConnectionDef& decl : def.connections){
+    for(Var v : decl.input.vars){
+      if(v.name.identifier == "out"){
+        addOutputInstance = true;
+        break;
+      }
+    }
+
+    for(Var v : decl.output.vars){
+      if(v.name.identifier == "out"){
+        addOutputInstance = true;
+        break;
+      }
+    }
+  }
+
+  if(addOutputInstance){
+    Entity* outEnt = env->PushReservedEntity("out");
+    
+    outEnt->type = EntityType_FU;
+    outEnt->instance = CreateOrGetOutput(circuit);
+
+    env->table->Insert("out",outEnt->instance);
+  }
+
+  // MARK: Need to check if out instance exists.
+  //       If exists we need to add it in here so that we can also mark it has special.
+  //       No instance can be named out. It is a reserved name.
 
   auto paramList = PushList<ParameterDef>(temp);
   for(ParameterDeclaration param : def.params){
@@ -192,11 +224,9 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
     ParameterDef* def = paramList->PushElem();
     
     def->name = param.name.identifier;
-    def->defaultValue = env->SymbolicFromSpecExpression(param.defaultValue);
+    def->defaultValue = env->SymbolicFromMathExpression(param.defaultValue);
   }
   auto params = PushArray(temp,paramList);
-
-  env->circuit = circuit;
 
   for(VarDeclaration& decl : def.inputs){
     env->AddInput(decl);
@@ -372,7 +402,7 @@ FUInstance* Env::CreateFUInstanceWithDeclaration(FUDeclaration* type,String name
   FUInstance* inst = CreateFUInstance(circuit,type,name);
   
   for(auto pair : decl.parameters){
-    SYM_Expr expr = SymbolicFromSpecExpression(pair.second);
+    SYM_Expr expr = SymbolicFromMathExpression(pair.second);
     bool result = SetParameter(inst,pair.first,expr);
 
     if(!result){
@@ -387,20 +417,16 @@ FUInstance* Env::GetFUInstance(Token name,int arrayIndexIfArray){
   TEMP_REGION(temp,nullptr);
 
   FUInstance* res = nullptr;
-  if(name.identifier == "out"){
-    res = GetOutputInstance();
-  } else {
-    Entity* ent = GetEntity(name);
+  Entity* ent = GetEntity(name);
 
-    // TODO: Error reporting if entity does not exist.
+  // TODO: Error reporting if entity does not exist.
 
-    String asStr = name.identifier;
-    if(ent->type == EntityType_FU_ARRAY){
-      asStr = GetActualArrayName(asStr,arrayIndexIfArray,temp);
-    }
-
-    res = table->GetOrElse(asStr,nullptr);
+  String asStr = name.identifier;
+  if(ent->type == EntityType_FU_ARRAY){
+    asStr = GetActualArrayName(asStr,arrayIndexIfArray,temp);
   }
+
+  res = table->GetOrElse(asStr,nullptr);
   return res;
 }
 
@@ -408,20 +434,15 @@ FUInstance* Env::GetFUInstance(Token name,Array<int> arrayIndexIfArray){
   TEMP_REGION(temp,nullptr);
 
   FUInstance* res = nullptr;
-  if(name.identifier == "out"){
-    res = GetOutputInstance();
-  } else {
-    Entity* ent = GetEntity(name);
+  Entity* ent = GetEntity(name);
 
-    // TODO: Error reporting if entity does not exist.
-
-    String asStr = name.identifier;
-    if(ent->type == EntityType_FU_ARRAY){
-      asStr = GetActualArrayName(asStr,arrayIndexIfArray,temp);
-    }
-
-    res = table->GetOrElse(asStr,nullptr);
+  // TODO: Error reporting if entity does not exist.
+  String asStr = name.identifier;
+  if(ent->type == EntityType_FU_ARRAY){
+    asStr = GetActualArrayName(asStr,arrayIndexIfArray,temp);
   }
+
+  res = table->GetOrElse(asStr,nullptr);
   return res;
 }
 
@@ -429,37 +450,30 @@ FUInstance* Env::GetFUInstance(Var var){
   TEMP_REGION(temp,nullptr);
   
   FUInstance* res = nullptr;
-  if(var.name.identifier == "out"){
-    if(var.isArrayAccess){
-      ReportError(var.name,"'out' special unit cannot have array subscriptions");
-    }
+  Entity* ent = GetEntity(var.name);
     
-    res = GetOutputInstance();
-  } else {
-    Entity* ent = GetEntity(var.name);
-    
-    String name = var.name.identifier;
-    if(ent->type == EntityType_FU_ARRAY){
-      Array<int> index = ConvertRangeToIndex(var.index,temp);
-      name = GetActualArrayName(name,index,temp);
-    }
-
-    res = table->GetOrElse(name,nullptr);
+  String name = var.name.identifier;
+  if(ent->type == EntityType_FU_ARRAY){
+    Array<int> index = ConvertRangeToIndex(var.index,temp);
+    name = GetActualArrayName(name,index,temp);
   }
+
+  res = table->GetOrElse(name,nullptr);
   return res;
 }
 
-FUInstance* Env::GetOutputInstance(){
-  FUInstance* res = GetUnit(circuit,"out");
+Entity* Env::PushReservedEntity(String name){
+  auto res = this->scopes[this->currentScope]->variable->GetOrAllocate(name);
 
-  if(!res){
-    res = CreateFUInstance(circuit,BasicDeclaration::output,"out");
-  }
-  
-  return res;
+  Assert(!res.alreadyExisted);
+
+  return res.data;
 }
 
 Entity* Env::PushNewEntity(Token name){
+  // MARK: We do not want to hardode this.
+  //       Need to add the concept of reserved name and use it to add out and any special
+  //       entity bypassing any logic that checks names.
   if(name.identifier == "out"){
     ReportError(name,"Cannot have a variable with the reserved name out");
   }
@@ -528,7 +542,7 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
       } break;
       case ConfigAccessType_ARRAY:{
         if(ent->type == EntityType_FU_ARRAY){
-          SYM_Expr expr = SymbolicFromSpecExpression(id->arrayExpr);
+          SYM_Expr expr = SymbolicFromMathExpression(id->arrayExpr);
           
           SYM_EvaluateResult eval = SYM_ConstantEvaluate(expr);
 
@@ -631,9 +645,6 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
             }
           }
         } break;
-        case EntityType_NODE:{
-          Assert(false); // We do not have nodes since Env is only used currently to store FUInstances and other parseed data stuff. Nothing concrete exists at this point in the code.
-        } break;
 
         case EntityType_CONFIG_FUNCTION:
         case EntityType_FU_ARRAY:
@@ -659,7 +670,7 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
   return ent;
 }
 
-Array<int> Env::CalculateArraySize(Array<SpecExpression*> exprs){
+Array<int> Env::CalculateArraySize(Array<MathExpression*> exprs){
   if(exprs.size <= 0){
     Assert(false); // Not an error. Programmer cannot call this if empty (not an array)
   }
@@ -668,20 +679,20 @@ Array<int> Env::CalculateArraySize(Array<SpecExpression*> exprs){
 
   int arraySize = 1;
   for(int i = 0; i <  exprs.size; i++){
-    SpecExpression* expr = exprs[i];
+    MathExpression* expr = exprs[i];
     res[i] = CalculateConstantExpression(expr);
   }
 
   return res;
 }
 
-int Env::CalculateConstantExpression(SpecExpression* top){
+int Env::CalculateConstantExpression(MathExpression* top){
   TEMP_REGION(temp,nullptr);
 
   // TODO: Need to report error if we find a non constant value in here.
   //       And then return 0
 
-  SYM_Expr expr = SymbolicFromSpecExpression(top);
+  SYM_Expr expr = SymbolicFromMathExpression(top);
   SYM_EvaluateResult eval = SYM_ConstantEvaluate(expr);
 
   //Assert(!eval.Error());
@@ -689,7 +700,7 @@ int Env::CalculateConstantExpression(SpecExpression* top){
   return eval.result;
 }
 
-Entity* Env::GetEntity(SpecExpression* id,Arena* out){
+Entity* Env::GetEntity(MathExpression* id,Arena* out){
   TEMP_REGION(temp,out);
 
   Entity* ent = nullptr;
@@ -703,7 +714,7 @@ Entity* Env::GetEntity(SpecExpression* id,Arena* out){
   if(id->type == SpecType_SINGLE_ACCESS){
     ent = GetEntity(id->name);
     
-    SpecExpression* accessExpr = id->expressions[0];
+    MathExpression* accessExpr = id->expressions[0];
     Assert(accessExpr->type == SpecType_NAME);
     
     String access = accessExpr->name.identifier;
@@ -789,22 +800,22 @@ Entity* Env::GetEntity(SpecExpression* id,Arena* out){
   return ent;
 }
 
-Array<int> Env::ConvertRangeToStart(Array<Range<SpecExpression*>> range,Arena* out){
+Array<int> Env::ConvertRangeToStart(Array<Range<MathExpression*>> range,Arena* out){
   Array<int> res = PushArray<int>(out,range.size);
 
   for(int i = 0; i <  range.size; i++){
-    Range<SpecExpression*> r = range[i];
+    Range<MathExpression*> r = range[i];
     res[i] = CalculateConstantExpression(r.start);
   }
 
   return res;
 }
 
-Array<int> Env::ConvertRangeToEnd(Array<Range<SpecExpression*>> range,Arena* out){
+Array<int> Env::ConvertRangeToEnd(Array<Range<MathExpression*>> range,Arena* out){
   Array<int> res = PushArray<int>(out,range.size);
 
   for(int i = 0; i <  range.size; i++){
-    Range<SpecExpression*> r = range[i];
+    Range<MathExpression*> r = range[i];
     res[i] = CalculateConstantExpression(r.end);
   }
 
@@ -812,11 +823,11 @@ Array<int> Env::ConvertRangeToEnd(Array<Range<SpecExpression*>> range,Arena* out
 }
  
 
-Array<int> Env::ConvertRangeToIndex(Array<Range<SpecExpression*>> range,Arena* out){
+Array<int> Env::ConvertRangeToIndex(Array<Range<MathExpression*>> range,Arena* out){
   Array<int> res = PushArray<int>(out,range.size);
 
   for(int i = 0; i <  range.size; i++){
-    Range<SpecExpression*> r = range[i];
+    Range<MathExpression*> r = range[i];
     
     if(r.start != r.end){
       ReportError({},"Did not expect a range at this point");
@@ -891,7 +902,7 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
     ent->instance = inst;
   }
 
-  for(auto iter = StartIteration(this,ent,temp); iter.IsValid(); iter = iter.Next()){
+  for(auto iter = StartIteration(this,ent,temp); iter.IsValid(); iter.Advance()){
     FUInstance* inst = iter.Current();
     
     switch(decl.modifier){
@@ -935,7 +946,9 @@ void Env::AddConnection(ConnectionDef decl){
   }
 
   if(out.Size() != in.Size()){
-    ReportError({},"Different size on connection");
+    DEBUG_BREAK();
+    ReportError(decl.output.vars[0].name,"Different size on connection");
+    ReportError(decl.input.vars[0].name,"Different size on connection");
     printf("Left side has size: %d\n",out.Size());
     printf("Right side has size: %d\n",in.Size());
     return;
@@ -973,7 +986,7 @@ void Env::AddEquality(ConnectionDef decl){
   PortExpression portSpecExpression = InstantiateSpecExpression(decl.expression);
 
   // When dealing with equality, we can just increase array size by accessing higher and higher values.
-  if(outVar.isArrayAccess){
+  if(outVar.IsArrayAccess()){
     auto res = this->scopes[this->currentScope]->variable->GetOrAllocate(outVar.name.identifier);
     Entity* ent = res.data;
 
@@ -984,7 +997,7 @@ void Env::AddEquality(ConnectionDef decl){
   }
 
   String name = outVar.name.identifier;
-  if(outVar.isArrayAccess){
+  if(outVar.IsArrayAccess()){
     Array<int> index = ConvertRangeToIndex(outVar.index,temp);
     name = GetActualArrayName(name,index,temp);
   }
@@ -1030,21 +1043,26 @@ void Env::AddVariable(Token name){
 }
 
 #if 1
-FUInstanceIterator FUInstanceIterator::Next(){
-  FUInstanceIterator next = *this;
-  
-  iter->Advance();
-  return next;
+void FUInstanceIterator::Advance(){
+  if(iter){
+    iter->Advance();
+  } else {
+    used = true;
+  }
 }
 
 bool FUInstanceIterator::IsValid(){
-  return iter->IsValid();
+  if(iter){
+    return iter->IsValid();
+  } else {
+    return !used;
+  }
 }
 
 FUInstance* FUInstanceIterator::Current(){
   Assert(IsValid());
 
-  FUInstance* inst;
+  FUInstance* inst = ent->instance;
   if(!iter){
     return ent->instance;
   } else {
@@ -1068,6 +1086,8 @@ FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out){
   auto zeroArray = PushArray<int>(temp,ent->arrayDims.size);
   if(ent->type == EntityType_FU_ARRAY){
     iter.iter = StartIteration(ent->arrayDims,zeroArray,out);
+  } else {
+    iter.iter = nullptr;
   }
 
   return iter;
@@ -1075,6 +1095,8 @@ FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out){
 #endif
 
 PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
+  TEMP_REGION(temp,nullptr);
+
   Arena* perm = globalPermanent;
   PortExpression res = {};
 
@@ -1100,20 +1122,19 @@ PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
     }
   }break;
   case SpecType_VAR:{
-    NOT_POSSIBLE();
-#if 0
     Var var = root->var;  
     String name = var.name.identifier;
 
-    if(var.isArrayAccess){
-      name = GetActualArrayName(var.name.identifier,CalculateConstantExpression(var.index.bottom),globalPermanent);
+    if(var.IsArrayAccess()){
+      Array<int> index = ConvertRangeToIndex(var.index,temp);
+
+      name = GetActualArrayName(var.name.identifier,index,globalPermanent);
     }
     
     FUInstance* inst = table->GetOrFail(name);
 
     res.inst = inst;
     res.extra = var.extra;
-#endif
   } break;
   case SpecType_OPERATION:{
     PortExpression expr0 = InstantiateSpecExpression(root->expressions[0]);
@@ -1145,8 +1166,8 @@ PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
       ConnectUnits(expr0.inst,start,inst,0,delay);
 
       res.inst = inst;
-      res.extra.port.end  = res.extra.port.start  = &SPEC_LITERAL_0;
-      res.extra.delay.end = res.extra.delay.start = &SPEC_LITERAL_0;
+      res.extra.port.end  = res.extra.port.start  = &MATH_LITERAL_0;
+      res.extra.delay.end = res.extra.delay.start = &MATH_LITERAL_0;
 
       return res;
     } else {
@@ -1204,8 +1225,8 @@ PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
     ConnectUnits(expr1.inst,start1,inst,1,delay1);
 
     res.inst = inst;
-    res.extra.port.end  = res.extra.port.start  = &SPEC_LITERAL_0;
-    res.extra.delay.end = res.extra.delay.start = &SPEC_LITERAL_0;
+    res.extra.port.end  = res.extra.port.start  = &MATH_LITERAL_0;
+    res.extra.delay.end = res.extra.delay.start = &MATH_LITERAL_0;
   } break;
   }
 
@@ -1213,8 +1234,8 @@ PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
   return res;
 }
 
-SYM_Expr Env::SymbolicFromSpecExpression(SpecExpression* spec){
-  auto Recurse = [this](auto Recurse,SpecExpression* top) -> SYM_Expr{
+SYM_Expr Env::SymbolicFromMathExpression(MathExpression* spec){
+  auto Recurse = [this](auto Recurse,MathExpression* top) -> SYM_Expr{
     SYM_Expr res = SYM_Zero;
 
     switch(top->type){
@@ -1264,8 +1285,8 @@ SYM_Expr Env::SymbolicFromSpecExpression(SpecExpression* spec){
   return res;
 }
 
-SpecExpression* ParseNumberOnly(Parser* parser,Arena* out){
-  SpecExpression* res = PushStruct<SpecExpression>(out);
+MathExpression* ParseNumberOnly(Parser* parser,Arena* out){
+  MathExpression* res = PushStruct<MathExpression>(out);
 
   res->val = parser->ExpectNext(TokenType_NUMBER).number;
   res->type = SpecType_LITERAL;
@@ -1273,10 +1294,10 @@ SpecExpression* ParseNumberOnly(Parser* parser,Arena* out){
   return res;
 }
 
-Range<SpecExpression*> ParseRange(Parser* parser,Arena* out){
-  Range<SpecExpression*> res = {};
+Range<MathExpression*> ParseRange(Parser* parser,Arena* out){
+  Range<MathExpression*> res = {};
 
-  SpecExpression* n1 = ParseNumberOnly(parser,out);
+  MathExpression* n1 = ParseNumberOnly(parser,out);
 
   Assert(n1);
 
@@ -1296,9 +1317,9 @@ Var ParseVar(Parser* parser,Arena* out){
   Token name = parser->ExpectNext(TokenType_IDENTIFIER);
 
   bool isArrayAccess = false;
-  auto list = PushList<Range<SpecExpression*>>(temp); 
+  auto list = PushList<Range<MathExpression*>>(temp); 
   while(parser->IfNextToken('[')){
-    Range<SpecExpression*> range = ParseRange(parser,out);
+    Range<MathExpression*> range = ParseRange(parser,out);
     *list->PushElem() = range;
 
     //isArrayAccess = true;
@@ -1306,20 +1327,20 @@ Var ParseVar(Parser* parser,Arena* out){
     parser->ExpectNext(']');
   }
   
-  SpecExpression* delayStart = &SPEC_LITERAL_0;
-  SpecExpression* delayEnd = &SPEC_LITERAL_0;
+  MathExpression* delayStart = &MATH_LITERAL_0;
+  MathExpression* delayEnd = &MATH_LITERAL_0;
   if(parser->IfNextToken('{')){
-    Range<SpecExpression*> range = ParseRange(parser,out);
+    Range<MathExpression*> range = ParseRange(parser,out);
     delayStart = range.start;
     delayEnd = range.end;
 
     parser->ExpectNext('}');
   }
 
-  SpecExpression* portStart = &SPEC_LITERAL_0;
-  SpecExpression* portEnd = &SPEC_LITERAL_0;
+  MathExpression* portStart = &MATH_LITERAL_0;
+  MathExpression* portEnd = &MATH_LITERAL_0;
   if(parser->IfNextToken(':')){
-    Range<SpecExpression*> range = ParseRange(parser,out);
+    Range<MathExpression*> range = ParseRange(parser,out);
 
     portStart = range.start;
     portEnd = range.end;
@@ -1327,7 +1348,6 @@ Var ParseVar(Parser* parser,Arena* out){
 
   Var var = {};
   var.name = name;
-  var.isArrayAccess = isArrayAccess;
   var.index = PushArray(out,list);
   var.extra.delay = {delayStart,delayEnd};
   var.extra.port = {portStart,portEnd};
@@ -1343,10 +1363,10 @@ VarDeclaration ParseVarDeclaration(Parser* parser,Arena* out){
   res.name = parser->ExpectNext(TokenType_IDENTIFIER);
   
   // TODO: We should integrate the array parsing logic with this one
-  auto list = PushList<SpecExpression*>(temp);
+  auto list = PushList<MathExpression*>(temp);
 
   while(parser->IfNextToken('[')){
-    SpecExpression* arraySize = ParseMathExpression(parser,out);
+    MathExpression* arraySize = ParseMathExpression(parser,out);
 
     parser->ExpectNext(']');
 
@@ -1467,7 +1487,7 @@ InstanceDeclaration ParseInstanceDeclaration(Parser* parser,Arena* out){
   res.typeName = parser->ExpectNext(TokenType_IDENTIFIER);
 
   Token possibleParameters = parser->PeekToken();
-  auto list = PushList<Pair<String,SpecExpression*>>(temp);
+  auto list = PushList<Pair<String,MathExpression*>>(temp);
   if(possibleParameters.type == '#'){
     parser->NextToken();
     parser->ExpectNext('(');
@@ -1478,7 +1498,7 @@ InstanceDeclaration ParseInstanceDeclaration(Parser* parser,Arena* out){
 
       parser->ExpectNext('(');
 
-      SpecExpression* expr = ParseMathExpression(parser,out);
+      MathExpression* expr = ParseMathExpression(parser,out);
 
       parser->ExpectNext(')');
       
@@ -1542,17 +1562,17 @@ VarGroup ParseVarGroup(Parser* parser,Arena* out){
   }
 }
 
-SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
-  SpecExpression* topUnary = nullptr;
-  SpecExpression* innerMostUnary = nullptr;
+MathExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
+  MathExpression* topUnary = nullptr;
+  MathExpression* innerMostUnary = nullptr;
 
-  SpecExpression* res = nullptr;
+  MathExpression* res = nullptr;
   
   // Parse unary
   while(!parser->Done()){
-    SpecExpression* parsed = nullptr;
+    MathExpression* parsed = nullptr;
     if(!parsed &&  parser->IfNextToken('-')){
-      parsed = PushStruct<SpecExpression>(out);
+      parsed = PushStruct<MathExpression>(out);
       parsed->op = "-";
     }
 
@@ -1567,7 +1587,7 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
     }
 
     if(parsed){
-      innerMostUnary->expressions = PushArray<SpecExpression*>(out,1);
+      innerMostUnary->expressions = PushArray<MathExpression*>(out,1);
       innerMostUnary->expressions[0] = parsed;
       innerMostUnary = parsed;
       continue;
@@ -1586,7 +1606,7 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
     parser->ExpectNext(')');
   } else if(atom.type == TokenType_NUMBER){
     Token number = parser->ExpectNext(TokenType_NUMBER);
-    res = PushStruct<SpecExpression>(out);
+    res = PushStruct<MathExpression>(out);
 
     res->type = SpecType_LITERAL;
     res->val = number.number;
@@ -1595,15 +1615,15 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
 
     Token name = parser->ExpectNext(TokenType_IDENTIFIER);
 
-    res = PushStruct<SpecExpression>(out);
+    res = PushStruct<MathExpression>(out);
     res->name = name;
     res->type = SpecType_NAME;
 
     if(parser->IfPeekToken('[')){
-      auto accesses = PushList<SpecExpression*>(temp);       
+      auto accesses = PushList<MathExpression*>(temp);       
       
       while(parser->IfNextToken('[')){
-        SpecExpression* insideArray = ParseMathExpression(parser,out);
+        MathExpression* insideArray = ParseMathExpression(parser,out);
 
         *accesses->PushElem() = insideArray;
 
@@ -1619,20 +1639,20 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
     if(parser->IfNextToken('.')){
       Token singleAccessName = parser->ExpectNext(TokenType_IDENTIFIER);
       
-      SpecExpression* singleAccess = PushStruct<SpecExpression>(out);
+      MathExpression* singleAccess = PushStruct<MathExpression>(out);
       singleAccess->type = SpecType_NAME;
       singleAccess->name = singleAccessName;
       
-      res->expressions = PushArray<SpecExpression*>(out,1);
+      res->expressions = PushArray<MathExpression*>(out,1);
       res->expressions[0] = singleAccess;
       res->type = SpecType_SINGLE_ACCESS;
     }
 
     if(parser->IfNextToken('(')){
-      auto args = PushList<SpecExpression*>(temp);       
+      auto args = PushList<MathExpression*>(temp);       
       
       while(!parser->Done()){
-        SpecExpression* arg = ParseMathExpression(parser,out);
+        MathExpression* arg = ParseMathExpression(parser,out);
 
         *args->PushElem() = arg;
         
@@ -1654,7 +1674,7 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
   }
 
   if(topUnary){
-    innerMostUnary->expressions = PushArray<SpecExpression*>(out,1);
+    innerMostUnary->expressions = PushArray<MathExpression*>(out,1);
     innerMostUnary->expressions[0] = res;
 
     res = topUnary;
@@ -1687,12 +1707,12 @@ SpecExpression* ParseMathExpression(Parser* parser,Arena* out,int bindingPower){
         if(info.bindingPower < bindingPower){
           parser->NextToken();
 
-          SpecExpression* right = ParseMathExpression(parser,out,info.bindingPower);
+          MathExpression* right = ParseMathExpression(parser,out,info.bindingPower);
       
-          SpecExpression* op = PushStruct<SpecExpression>(out);
+          MathExpression* op = PushStruct<MathExpression>(out);
 
           op->op = info.op;
-          op->expressions = PushArray<SpecExpression*>(out,2);
+          op->expressions = PushArray<MathExpression*>(out,2);
           op->expressions[0] = res;
           op->expressions[1] = right;
 
@@ -2291,10 +2311,10 @@ static ConfigIdentifier* ParseConfigIdentifier(Parser* parser,Arena* out){
       Token access = parser->ExpectNext(TokenType_IDENTIFIER);
 
       if(parser->IfNextToken('(')){
-        auto args = PushList<SpecExpression*>(temp);       
+        auto args = PushList<MathExpression*>(temp);       
       
         while(!parser->Done()){
-          SpecExpression* arg = ParseMathExpression(parser,out);
+          MathExpression* arg = ParseMathExpression(parser,out);
 
           *args->PushElem() = arg;
         
@@ -2319,7 +2339,7 @@ static ConfigIdentifier* ParseConfigIdentifier(Parser* parser,Arena* out){
     }
 
     if(!parsed && parser->IfNextToken('[')){
-      SpecExpression* expr = ParseMathExpression(parser,out);
+      MathExpression* expr = ParseMathExpression(parser,out);
 
       parser->ExpectNext(']');
 
@@ -2347,9 +2367,9 @@ static ConfigStatement* ParseConfigStatement(Parser* parser,Arena* out){
   if(parser->IfNextToken(TokenType_KEYWORD_FOR)){
     Token loopVariable = parser->ExpectNext(TokenType_IDENTIFIER);
  
-    SpecExpression* start = ParseMathExpression(parser,out);
+    MathExpression* start = ParseMathExpression(parser,out);
     parser->ExpectNext(TokenType_DOUBLE_DOT);
-    SpecExpression* end = ParseMathExpression(parser,out);
+    MathExpression* end = ParseMathExpression(parser,out);
 
     parser->ExpectNext('{');
 
@@ -2493,10 +2513,10 @@ ConfigFunctionDef* ParseConfigFunction(Parser* parser,Arena* out){
   return res;
 }
 
-Array<Token> AccumTokens(SpecExpression* top,Arena* out){
+Array<Token> AccumTokens(MathExpression* top,Arena* out){
   TEMP_REGION(temp,out);
 
-  auto AccumTokens = [](auto AccumTokens,SpecExpression* top,ArenaList<Token>* list) -> void {
+  auto AccumTokens = [](auto AccumTokens,MathExpression* top,ArenaList<Token>* list) -> void {
     switch(top->type){
     case SpecType_LITERAL: break;
     case SpecType_NAME: {
@@ -2517,7 +2537,7 @@ Array<Token> AccumTokens(SpecExpression* top,Arena* out){
       *list->PushElem() = top->name;
     } break;
     }
-    for(SpecExpression* child : top->expressions){
+    for(MathExpression* child : top->expressions){
       AccumTokens(AccumTokens,child,list);
     }
   };
@@ -2580,11 +2600,25 @@ Array<int> IntegerToArrayIndex(Array<int> dims,int index,Arena* out){
 }
 
 DimIterator* StartIteration(Array<int> dimensions,Array<int> startValues,Arena* out){
+  Assert(dimensions.size > 0);
+
   DimIterator* res = PushStruct<DimIterator>(out);
 
   res->dim = CopyArray(dimensions,out);
   res->startValue = CopyArray(startValues,out);
-  res->current = PushArray<int>(out,dimensions.size);
+  res->current = CopyArray(startValues,out);
+
+  return res;
+}
+
+DimIterator* StartIteration(int size,Arena* out){
+  DimIterator* res = PushStruct<DimIterator>(out);
+  
+  res->dim = PushArray<int>(out,1);
+  res->startValue = PushArray<int>(out,1);
+  res->current = PushArray<int>(out,1);
+
+  res->dim[0] = size;
 
   return res;
 }
@@ -2637,16 +2671,24 @@ VarIterator* StartIteration(Env* env,Var var,Arena* out){
   res->startDelay = env->CalculateConstantExpression(var.extra.delay.start);
   res->startPort  = env->CalculateConstantExpression(var.extra.port.start);
 
-  res->endDelay = env->CalculateConstantExpression(var.extra.delay.end);
-  res->endPort  = env->CalculateConstantExpression(var.extra.port.end);
+  res->endDelay = env->CalculateConstantExpression(var.extra.delay.end) + 1;
+  res->endPort  = env->CalculateConstantExpression(var.extra.port.end) + 1;
 
   res->currentDelay = res->startDelay;
   res->currentPort = res->startPort;
 
-  auto start = env->ConvertRangeToStart(var.index,temp);
-  auto end = env->ConvertRangeToEnd(var.index,temp);
+  if(var.index.size){
+    auto start = env->ConvertRangeToStart(var.index,temp);
+    auto end = env->ConvertRangeToEnd(var.index,temp);
 
-  res->arrayIndex = StartIteration(end,start,out);
+    for(int& i : end){
+      i += 1;
+    }
+
+    res->arrayIndex = StartIteration(end,start,out);
+  } else {
+    res->arrayIndex = StartIteration(1,out);
+  }
 
   if(ent->type != EntityType_FU_ARRAY && var.index.size){
     env->ReportError({},"Error, var is not an array and does not support array subscriptions");
@@ -2655,7 +2697,6 @@ VarIterator* StartIteration(Env* env,Var var,Arena* out){
   }
 
   if(var.index.size != expectedIndexSize){
-    DEBUG_BREAK();
     env->ReportError({},"Error, var has more or less accesses than needed");
     res->Invalidate();
     return res;
@@ -2729,9 +2770,6 @@ GroupIterator IterateGroup(Env* env,VarGroup* group,Arena* out){
   for(int i = 0; i < size; i++){
     iter.innerIters[i] = StartIteration(env,group->vars[i],out);
   }
-  
-  // Iterate from right to left from textual POV
-  ReverseInPlace(iter.innerIters);
 
   for(int i = 0; i < size; i++){
     if(!iter.innerIters[i]->IsValid()){
