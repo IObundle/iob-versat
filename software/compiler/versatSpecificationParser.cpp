@@ -1478,7 +1478,7 @@ InstanceDeclaration ParseInstanceDeclaration(Parser* parser,Arena* out){
 
       parser->ExpectNext('(');
 
-      SpecExpression* expr = ParseSpecExpression(parser,out);
+      SpecExpression* expr = ParseMathExpression(parser,out);
 
       parser->ExpectNext(')');
       

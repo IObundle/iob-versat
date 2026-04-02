@@ -318,10 +318,27 @@ struct Env{
   Entity* PushNewEntity(Token name);
   Entity* GetEntity(Token name);
   
-  // TODO: Need to remove this. We want the tokens to do proper error report.
+  // TODO: Need to remove this. We want tokens so that we can do proper error report.
   Entity* GetEntity(String name);
 
   void CheckIfEntityExists(Token name);
+
+#if 1
+  - LEFT HERE - A Var is an "expression" inside a connect expression.
+  -             A ConfigIdentifier is an "expression" inside a Config function. Mostly the lhs side of an assignemnt.
+  -             A SpecExpression is also an expression and is mostly on the right side.
+  -             Var is separate from the rest. It is the ConfigIdentifier and the SpecExpression that can be joined into the same flow.
+  -             Anything that the lhs differs from the rhs representation must be handled afterwards.
+  -             ConfigIdentifier is basically an "atom" of a SpecExpression that we created back when we where prototyping stuff and when the userConfig was distinct from a SpecExpression.
+  -             If we can augment SpecExpression to represent the same data that a ConfigIdentifier can represent then we are golden. We can also do this in a more direct approach by making a ConfigIdentifier be the "atom" of the SpecExpression. Of course we first need to make sure that we can still reprent everything that we could beforehand.
+  -             What even is a SpecExpression? 
+  -               Connection stuff is handled by Var. 
+  -               Equality does use SpecExpression.
+  -               Everything else is MathExpression right?
+  -             I'm almost positive that SpecExpression is only used for the Equality stuff.
+
+  -             In fact we might even separate SpecExpression into SpecExpression,MathExpr and UserConfigExpr or something similar and simplify the type portion of the code. 
+#endif
   
   Entity* GetEntity(ConfigIdentifier* id,Arena* out);
   Entity* GetEntity(SpecExpression* id,Arena* out);
