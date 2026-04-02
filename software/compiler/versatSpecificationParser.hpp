@@ -309,6 +309,7 @@ struct Env{
   // TODO: The arrayIndexIfArray does not tell us if we are trying to access an array or not.
   //       We probably need to encode such info so that we can properly error report
   FUInstance* GetFUInstance(Token name,int arrayIndexIfArray);
+  FUInstance* GetFUInstance(Token name,Array<int> arrayIndexIfArray);
 
   FUInstance* GetFUInstance(Var var);
   FUInstance* GetOutputInstance();
@@ -373,3 +374,25 @@ struct GroupIterator{
 };
 
 FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out);
+
+#if 0
+What is the problem in iterating over multiple dims?
+
+Can't we do something like:
+
+A[0..2][0..2] -> B[0..4]
+
+and generate
+
+A[0][0] -> B[0]
+A[0][1] -> B[1]
+A[1][0] -> B[2]
+A[1][1] -> B[3]
+
+We use ConnectionInfo to simplify the code for range 
+
+Problem:
+
+We put all the arrays info into a single var. The GroupIterator iterates from var to var but we only assume that it contains a single array iteration. Something like {A[0..2][0..2],B[0..2]} is not currently possible because we cannot represent the A part of the iteration. Everything is encoded as a single digit which.
+
+#endif

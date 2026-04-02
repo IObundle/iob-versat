@@ -106,7 +106,7 @@ Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
 
   int expectedRanges = 1;
   if(ent->type == EntityType_FU_ARRAY){
-    expectedRanges += 1; // arraySize
+    expectedRanges += ent->arrayDims.size; // arraySize
   }
 
   if(var.index.size != expectedRanges){
@@ -114,8 +114,8 @@ Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
   }
 
   Range<SpecExpression*> range = var.index[var.index.size - 1];
-  
   int indexCount = GetRangeCount(env,range);
+
   int portCount = GetRangeCount(env,var.extra.port);
   int delayCount = GetRangeCount(env,var.extra.delay);
 
@@ -245,7 +245,7 @@ ConnectionStartInfo Next(GroupIterator& iter){
   return res;
 }
 
-// TODO: Merge this function with the RegisterSubUnit function. There is not purpose to having this be separated.
+// TODO: Merge this function with the RegisterSubUnit function. There is no purpose to having this be separated.
 FUDeclaration* InstantiateModule(String content,ModuleDef def){
   Arena* perm = globalPermanent;
   TEMP_REGION(temp,perm);
@@ -455,6 +455,27 @@ FUInstance* Env::CreateFUInstanceWithDeclaration(FUDeclaration* type,String name
 }
 
 FUInstance* Env::GetFUInstance(Token name,int arrayIndexIfArray){
+  TEMP_REGION(temp,nullptr);
+
+  FUInstance* res = nullptr;
+  if(name.identifier == "out"){
+    res = GetOutputInstance();
+  } else {
+    Entity* ent = GetEntity(name);
+
+    // TODO: Error reporting if entity does not exist.
+
+    String asStr = name.identifier;
+    if(ent->type == EntityType_FU_ARRAY){
+      asStr = GetActualArrayName(asStr,arrayIndexIfArray,temp);
+    }
+
+    res = table->GetOrElse(asStr,nullptr);
+  }
+  return res;
+}
+
+FUInstance* Env::GetFUInstance(Token name,Array<int> arrayIndexIfArray){
   TEMP_REGION(temp,nullptr);
 
   FUInstance* res = nullptr;
@@ -961,7 +982,7 @@ void Env::AddConnection(ConnectionDef decl){
   while(HasNext(out) && HasNext(in)){
     ConnectionStartInfo outVar = Next(out);
     ConnectionStartInfo inVar = Next(in);
-      
+
     FUInstance* outInstance = GetFUInstance(outVar.name,outVar.arrayIndex);
     FUInstance* inInstance = GetFUInstance(inVar.name,inVar.arrayIndex);
 
