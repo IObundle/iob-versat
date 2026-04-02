@@ -102,7 +102,20 @@ int GetRangeCount(Env* env,Range<SpecExpression*> range){
 
 // Connection type and number of connections
 Pair<PortRangeType,int> GetConnectionInfo(Env* env,Var var){
-  int indexCount = GetRangeCount(env,var.index);
+  Entity* ent = env->GetEntity(var.name);
+
+  int expectedRanges = 1;
+  if(ent->type == EntityType_FU_ARRAY){
+    expectedRanges += 1; // arraySize
+  }
+
+  if(var.index.size != expectedRanges){
+    env->ReportError(var.name,"Too many array subscriptions for this entity");
+  }
+
+  Range<SpecExpression*> range = var.index[var.index.size - 1];
+  
+  int indexCount = GetRangeCount(env,range);
   int portCount = GetRangeCount(env,var.extra.port);
   int delayCount = GetRangeCount(env,var.extra.delay);
 
@@ -197,7 +210,9 @@ ConnectionStartInfo Next(GroupIterator& iter){
 
   res.port = iter.env->CalculateConstantExpression(var.extra.port.start);
   res.delay = iter.env->CalculateConstantExpression(var.extra.delay.start);
-  res.arrayIndex = iter.env->CalculateConstantExpression(var.index.start);
+
+  Range<SpecExpression*> range = var.index[var.index.size - 1];
+  res.arrayIndex = iter.env->CalculateConstantExpression(range.start);
 
   if(type == PortRangeType_SINGLE){
     iter.groupIndex += 1;
@@ -474,7 +489,7 @@ FUInstance* Env::GetFUInstance(Var var){
     
     String name = var.name.identifier;
     if(ent->type == EntityType_FU_ARRAY){
-      int index = CalculateConstantExpression(var.index.low);
+      Array<int> index = ConvertRangeToIndex(var.index,temp);
       name = GetActualArrayName(name,index,temp);
     }
 
@@ -823,6 +838,22 @@ Entity* Env::GetEntity(SpecExpression* id,Arena* out){
   return ent;
 }
 
+Array<int> Env::ConvertRangeToIndex(Array<Range<SpecExpression*>> range,Arena* out){
+  Array<int> res = PushArray<int>(out,range.size);
+
+  for(int i = 0; i <  range.size; i++){
+    Range<SpecExpression*> r = range[i];
+    
+    if(r.start != r.end){
+      ReportError({},"Did not expect a range at this point");
+    }
+
+    res[i] = CalculateConstantExpression(r.start);
+  }
+
+  return res;
+}
+
 void Env::AddInput(VarDeclaration var){
   TEMP_REGION(temp,nullptr);
 
@@ -831,10 +862,12 @@ void Env::AddInput(VarDeclaration var){
   if(var.arrayDims.size){
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = var.name.identifier;
-    ent->arraySize = CalculateArraySize(var.arrayDims)[0];
-    
-    for(int i = 0; i < ent->arraySize; i++){
-      String actualName = GetActualArrayName(var.name.identifier,i,temp);
+    ent->arrayDims = CalculateArraySize(var.arrayDims);
+
+    for(auto iter = StartIteration(ent->arrayDims,temp); iter->IsValid(); iter->Advance()){
+      Array<int> index = iter->Current();
+
+      String actualName = GetActualArrayName(var.name.identifier,index,temp);
       FUInstance* input = CreateOrGetInput(circuit,actualName,insertedInputs++);
       table->Insert(input->name,input);
     }
@@ -863,12 +896,14 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
   if(var.arrayDims.size){
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = var.name.identifier;
-    ent->arraySize = CalculateArraySize(var.arrayDims)[0];
+    ent->arrayDims = CalculateArraySize(var.arrayDims);
 
-    for(int i = 0; i < ent->arraySize; i++){
-      String actualName = GetActualArrayName(var.name.identifier,i,temp);
-      FUInstance* inst = CreateFUInstanceWithDeclaration(type,actualName,decl);
-      table->Insert(inst->name,inst);
+    for(auto iter = StartIteration(ent->arrayDims,temp); iter->IsValid(); iter->Advance()){
+      Array<int> index = iter->Current();
+
+      String actualName = GetActualArrayName(var.name.identifier,index,temp);
+      FUInstance* input = CreateOrGetInput(circuit,actualName,insertedInputs++);
+      table->Insert(input->name,input);
     }
   } else {
     FUInstance* inst = CreateFUInstanceWithDeclaration(type,var.name.identifier,decl);
@@ -955,12 +990,14 @@ void Env::AddEquality(ConnectionDef decl){
 
     ent->type = EntityType_FU_ARRAY;
     ent->arrayBaseName = outVar.name.identifier;
-    ent->arraySize = MAX(ent->arraySize,CalculateConstantExpression(outVar.index.low));
+
+    ent->arrayDims[0] = MAX(ent->arrayDims[0],CalculateConstantExpression(outVar.index[0].high));
   }
 
   String name = outVar.name.identifier;
   if(outVar.isArrayAccess){
-    name = GetActualArrayName(name,CalculateConstantExpression(outVar.index.low),temp);
+    Array<int> index = ConvertRangeToIndex(outVar.index,temp);
+    name = GetActualArrayName(name,index,temp);
   }
 
   FUInstance* inst = portSpecExpression.inst;
@@ -1043,7 +1080,7 @@ FUInstanceIterator StartIteration(Env* env,Entity* ent){
   iter.ent = ent;
 
   if(ent->type == EntityType_FU_ARRAY){
-    iter.max = ent->arraySize;
+    iter.max = ent->arrayDims;
   }
 
   return iter;
@@ -1263,17 +1300,17 @@ Range<SpecExpression*> ParseRange(Parser* parser,Arena* out){
 }
 
 Var ParseVar(Parser* parser,Arena* out){
+  TEMP_REGION(temp,out);
+  
   Token name = parser->ExpectNext(TokenType_IDENTIFIER);
 
   bool isArrayAccess = false;
-  SpecExpression* indexStart = &SPEC_LITERAL_0;
-  SpecExpression* indexEnd = &SPEC_LITERAL_0;
-  if(parser->IfNextToken('[')){
+  auto list = PushList<Range<SpecExpression*>>(temp); 
+  while(parser->IfNextToken('[')){
     Range<SpecExpression*> range = ParseRange(parser,out);
-    indexStart = range.start;
-    indexEnd = range.end;
+    *list->PushElem() = range;
 
-    isArrayAccess = true;
+    //isArrayAccess = true;
 
     parser->ExpectNext(']');
   }
@@ -1300,12 +1337,9 @@ Var ParseVar(Parser* parser,Arena* out){
   Var var = {};
   var.name = name;
   var.isArrayAccess = isArrayAccess;
-  var.index.start = indexStart;
-  var.index.end = indexEnd;
-  var.extra.delay.start = delayStart;
-  var.extra.delay.end = delayEnd;
-  var.extra.port.start = portStart;
-  var.extra.port.end = portEnd;
+  var.index = PushArray(out,list);
+  var.extra.delay = {delayStart,delayEnd};
+  var.extra.port = {portStart,portEnd};
 
   return var;
 }
@@ -1748,56 +1782,6 @@ SpecExpression* ParseSpecExpression(Parser* parser,Arena* out,int bindingPower){
     res = PushStruct<SpecExpression>(out);
     res->var = var;
     res->type = SpecType_VAR;
-
-    if(parser->IfPeekToken('[')){
-      auto accesses = PushList<SpecExpression*>(temp);       
-      
-      while(parser->IfNextToken('[')){
-        SpecExpression* insideArray = ParseSpecExpression(parser,out);
-
-        *accesses->PushElem() = insideArray;
-
-        parser->ExpectNext(']');
-      }
-
-      res->expressions = PushArray(out,accesses);
-      res->type = SpecType_ARRAY_ACCESS;
-    }
-
-    // TODO: This is mostly for state right side.
-    //       We might eventually just separate this into different parsing functions.
-    if(parser->IfNextToken('.')){
-      Token singleAccessName = parser->ExpectNext(TokenType_IDENTIFIER);
-      
-      SpecExpression* singleAccess = PushStruct<SpecExpression>(out);
-      singleAccess->type = SpecType_NAME;
-      singleAccess->name = singleAccessName;
-      
-      res->expressions = PushArray<SpecExpression*>(out,1);
-      res->expressions[0] = singleAccess;
-      res->type = SpecType_SINGLE_ACCESS;
-    }
-
-    if(parser->IfNextToken('(')){
-      auto args = PushList<SpecExpression*>(temp);       
-      
-      while(!parser->Done()){
-        SpecExpression* arg = ParseSpecExpression(parser,out);
-
-        *args->PushElem() = arg;
-        
-        if(parser->IfNextToken(',')){
-          continue;
-        }
-        
-        break;
-      }
-
-      parser->ExpectNext(')');
-      
-      res->expressions = PushArray(out,args);
-      res->type = SpecType_FUNCTION_CALL;
-    }
   } else {
     // TODO: Better error reporting
     parser->ReportUnexpectedToken(atom,{});
@@ -2550,4 +2534,39 @@ Array<Token> AccumTokens(SpecExpression* top,Arena* out){
   auto list = PushList<Token>(temp);
   AccumTokens(AccumTokens,top,list);
   return PushArray(out,list);
+}
+
+DimIterator* StartIteration(Array<int> dimensions,Arena* out){
+  DimIterator* res = PushStruct<DimIterator>(out);
+
+  res->dim = CopyArray(dimensions,out);
+  res->current = PushArray<int>(out,dimensions.size);
+
+  return res;
+}
+
+// MARK: Move to a better place
+void DimIterator::Advance(){
+  for(int i = current.size - 1; i >= 0; i--){
+    current[i] += 1;
+
+    if(current[i] >= dim[i]){
+      current[i] = 0;
+      continue;
+    }
+
+    break;
+  }
+}
+
+bool DimIterator::IsValid(){
+  if(current[0] >= dim[0]){
+    return false;
+  }
+ 
+  return true;
+}
+
+Array<int> DimIterator::Current(){
+  return current;
 }

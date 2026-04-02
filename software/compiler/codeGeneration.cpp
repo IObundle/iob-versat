@@ -515,10 +515,10 @@ void EmitCombOperations(AccelInfo info,VEmitter* m){
 void EmitInstanciateUnits(AccelInfo accelInfo,VEmitter* m,FUDeclaration* module,Array<Array<int>> wireIndexByInstanceGood,Array<Wire> configs){
   TEMP_REGION(temp,m->arena);
   
-  // nocheckin: TODO: This is stupid. We do not want to use the "Seen" pattern anymore.
-  //                  All this data needs to be represented inside the AccelInfo and 
-  //                  the code in here only does data access. We do not want to keep using this form of 
-  //                  implicit logic.
+  // TODO: This is stupid. We do not want to use the "Seen" pattern anymore.
+  //       All this data needs to be represented inside the AccelInfo and 
+  //       the code in here only does data access. We do not want to keep using this form of 
+  //       implicit logic.
   int delaySeen = 0;
   int statesSeen = 0;
   int doneSeen = 0;
@@ -627,7 +627,7 @@ void EmitInstanciateUnits(AccelInfo accelInfo,VEmitter* m,FUDeclaration* module,
       m->PortConnect("wstrb","wstrb");
       
       // nocheckin
-      // TODO: Proper checking
+      // TODO: Proper checking before reaching this point
       SYM_EvaluateResult res = SYM_ConstantEvaluate(unit->memMapSym);
       int p = res.result;
 

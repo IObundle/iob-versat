@@ -26,7 +26,7 @@ struct Var{
   Token name;
 
   ConnectionExtra extra;
-  Range<SpecExpression*> index;
+  Array<Range<SpecExpression*>> index;
 
   bool isArrayAccess;
 };
@@ -254,8 +254,8 @@ struct Entity{
 
   ConfigFunction* func;
 
-  int arraySize;
-  //Array<int> arrayDims;
+  //int arraySize;
+  Array<int> arrayDims;
 
   union {
     String varName;
@@ -322,6 +322,8 @@ struct Env{
   Entity* GetEntity(ConfigIdentifier* id,Arena* out);
   Entity* GetEntity(SpecExpression* id,Arena* out);
   
+  Array<int> ConvertRangeToIndex(Array<Range<SpecExpression*>> range,Arena* out);
+
   Array<int> CalculateArraySize(Array<SpecExpression*> exprs);
   int CalculateConstantExpression(SpecExpression* top);
 
@@ -341,11 +343,22 @@ struct Env{
 
 Env* StartEnvironment(Arena* freeUse,Arena* freeUse2);
 
+// MARK: Move to a better place
+struct DimIterator{
+  Array<int> dim;
+  Array<int> current;
+
+  void Advance();
+  bool IsValid();
+  Array<int> Current();
+};
+
+DimIterator* StartIteration(Array<int> dimensions,Arena* out);
+
 struct FUInstanceIterator{
   Env* env;
   Entity* ent;
-  int index;
-  int max;
+  DimIterator* iter;
 
   FUInstanceIterator Next();
   bool IsValid();
