@@ -372,4 +372,4 @@ struct GroupIterator{
   int varIndex; // Either port, delay or array unit.
 };
 
-FUInstanceIterator StartIteration(Env* env,Entity* ent);
+FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out);

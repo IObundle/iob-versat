@@ -167,9 +167,10 @@ int NumberOfConnections(Env* env,VarGroup group){
   return count;
 }
 
-GroupIterator IterateGroup(VarGroup group){
+GroupIterator IterateGroup(Env* env,VarGroup group){
   GroupIterator iter = {};
   iter.group = group;
+  iter.env = env;
   return iter;
 }
 
@@ -913,7 +914,7 @@ void Env::AddInstance(InstanceDeclaration decl,VarDeclaration var){
     ent->instance = inst;
   }
 
-  for(auto iter = StartIteration(this,ent); iter.IsValid(); iter = iter.Next()){
+  for(auto iter = StartIteration(this,ent,temp); iter.IsValid(); iter = iter.Next()){
     FUInstance* inst = iter.Current();
     
     switch(decl.modifier){
@@ -954,8 +955,8 @@ void Env::AddConnection(ConnectionDef decl){
     ReportError({},"Connection missmatch");
   }
 
-  GroupIterator out = IterateGroup(decl.output);
-  GroupIterator in  = IterateGroup(decl.input);
+  GroupIterator out = IterateGroup(this,decl.output);
+  GroupIterator in  = IterateGroup(this,decl.input);
 
   while(HasNext(out) && HasNext(in)){
     ConnectionStartInfo outVar = Next(out);
@@ -1042,31 +1043,25 @@ void Env::AddVariable(Token name){
 
 FUInstanceIterator FUInstanceIterator::Next(){
   FUInstanceIterator next = *this;
-  next.index += 1;
+  
+  iter->Advance();
   return next;
 }
 
 bool FUInstanceIterator::IsValid(){
-  bool res;
-  if(max == 0){
-    res = (index == 0);
-  } else {
-    res = (index < max);
-  }
-  
-  return res;
+  return iter->IsValid();
 }
 
 FUInstance* FUInstanceIterator::Current(){
   Assert(IsValid());
 
   FUInstance* inst;
-  if(this->max == 0){
+  if(!iter){
     return ent->instance;
   } else {
     TEMP_REGION(temp,nullptr);
     String baseName = ent->arrayBaseName;
-    String actualName = GetActualArrayName(baseName,index,temp);
+    String actualName = GetActualArrayName(baseName,iter->Current(),temp);
 
     inst = GetUnit(this->env->circuit,actualName);
   }
@@ -1074,13 +1069,13 @@ FUInstance* FUInstanceIterator::Current(){
   return inst;
 }
 
-FUInstanceIterator StartIteration(Env* env,Entity* ent){
+FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out){
   FUInstanceIterator iter = {};
   iter.env = env;
   iter.ent = ent;
 
   if(ent->type == EntityType_FU_ARRAY){
-    iter.max = ent->arrayDims;
+    iter.iter = StartIteration(ent->arrayDims,out);
   }
 
   return iter;
@@ -1112,6 +1107,8 @@ PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
     }
   }break;
   case SpecType_VAR:{
+    NOT_POSSIBLE();
+#if 0
     Var var = root->var;  
     String name = var.name.identifier;
 
@@ -1123,6 +1120,7 @@ PortExpression Env::InstantiateSpecExpression(SpecExpression* root){
 
     res.inst = inst;
     res.extra = var.extra;
+#endif
   } break;
   case SpecType_OPERATION:{
     PortExpression expr0 = InstantiateSpecExpression(root->expressions[0]);
@@ -2550,7 +2548,7 @@ void DimIterator::Advance(){
   for(int i = current.size - 1; i >= 0; i--){
     current[i] += 1;
 
-    if(current[i] >= dim[i]){
+    if(i != 0 && current[i] >= dim[i]){
       current[i] = 0;
       continue;
     }
