@@ -250,7 +250,6 @@ enum ParseWhitespaceOptions{
   ParseWhitespaceOptions_DEFAULT = ParseWhitespaceOptions_INCLUDE_NEWLINES
 };
 
-// TODO: We might add another parameter so that we can pass config parameters into the functions.
 TokenizeResult ParseWhitespace(const char* start,const char* end,ParseWhitespaceOptions options = ParseWhitespaceOptions_DEFAULT);
 TokenizeResult ParseNewline(const char* start,const char* end);
 TokenizeResult ParseComments(const char* start,const char* end);

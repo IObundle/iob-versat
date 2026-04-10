@@ -206,16 +206,10 @@ FUDeclaration* InstantiateModule(String content,ModuleDef def){
 
   if(addOutputInstance){
     Entity* outEnt = env->PushReservedEntity("out");
-    
     outEnt->type = EntityType_FU;
     outEnt->instance = CreateOrGetOutput(circuit);
-
     env->table->Insert("out",outEnt->instance);
   }
-
-  // MARK: Need to check if out instance exists.
-  //       If exists we need to add it in here so that we can also mark it has special.
-  //       No instance can be named out. It is a reserved name.
 
   auto paramList = PushList<ParameterDef>(temp);
   for(ParameterDeclaration param : def.params){
@@ -435,14 +429,27 @@ FUInstance* Env::GetFUInstance(Token name,Array<int> arrayIndexIfArray){
 
   FUInstance* res = nullptr;
   Entity* ent = GetEntity(name);
+  if(!ent){
+    ReportError(name,"Entity does not exist");
+    return nullptr;
+  }
+
+  bool isArray = (ent->type == EntityType_FU_ARRAY);
 
   // TODO: Error reporting if entity does not exist.
   String asStr = name.identifier;
-  if(ent->type == EntityType_FU_ARRAY){
+  if(isArray){
     asStr = GetActualArrayName(asStr,arrayIndexIfArray,temp);
   }
 
   res = table->GetOrElse(asStr,nullptr);
+  
+  if(!res){
+    if(isArray){
+      ReportError(name,"Out of bounds");
+    }
+  }
+
   return res;
 }
 
@@ -471,7 +478,7 @@ Entity* Env::PushReservedEntity(String name){
 }
 
 Entity* Env::PushNewEntity(Token name){
-  // MARK: We do not want to hardode this.
+  // MARK: We do not want to hardcode this.
   //       Need to add the concept of reserved name and use it to add out and any special
   //       entity bypassing any logic that checks names.
   if(name.identifier == "out"){
@@ -524,16 +531,18 @@ Entity* Env::GetEntity(String name){
   return nullptr;
 }
 
-Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
+EntityAndLeftoverAccess Env::GetEntity(ConfigIdentifier* id,Arena* out){
   TEMP_REGION(temp,out);
 
   ConfigIdentifier* ptr = id;
-  Assert(ptr->type == ConfigAccessType_BASE);
+  Assert(ptr->type == ConfigAccessType_BASE || ptr->type == ConfigAccessType_ARRAY);
 
   Entity* ent = GetEntity(ptr->name);
   
-  ptr = ptr->parent;
-  for(; ent && ptr; ptr = ptr->parent){
+  MathExpression* leftover = nullptr;
+
+  ptr = ptr->next;
+  for(; ent && ptr; ptr = ptr->next){
     Entity* nextEnt = nullptr;
 
     switch(ptr->type){
@@ -542,15 +551,14 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
       } break;
       case ConfigAccessType_ARRAY:{
         if(ent->type == EntityType_FU_ARRAY){
-          SYM_Expr expr = SymbolicFromMathExpression(id->arrayExpr);
-          
-          SYM_EvaluateResult eval = SYM_ConstantEvaluate(expr);
+          Array<MathExpression*> arrayExpr = id->arrayExpr;
 
-          if(eval.Error()){
-            ReportError({},"Not a constant expression");
+          if(arrayExpr.size == ent->arrayDims.size + 1){
+            leftover = arrayExpr[arrayExpr.size - 1];
+            arrayExpr.size -= 1;
           }
-          
-          int arrayIndex = eval.result;
+
+          Array<int> arrayIndex = CalculateArraySize(arrayExpr);
 
           String asStr = ent->arrayBaseName;
           if(ent->type == EntityType_FU_ARRAY){
@@ -559,7 +567,6 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
 
           FUInstance* res = table->GetOrElse(asStr,nullptr);
           
-          // NOTE: We only support 1D arrays doing things this way.
           nextEnt = GetEntity(res->name);
         }
 
@@ -667,7 +674,11 @@ Entity* Env::GetEntity(ConfigIdentifier* id,Arena* out){
     ent = nextEnt;
   }
 
-  return ent;
+  EntityAndLeftoverAccess result = {};
+  result.ent = ent;
+  result.leftover = leftover;
+
+  return result;
 }
 
 Array<int> Env::CalculateArraySize(Array<MathExpression*> exprs){
@@ -962,9 +973,11 @@ void Env::AddConnection(ConnectionDef decl){
     FUInstance* outInstance = GetFUInstance(outVar.name,outVar.arrayIndex);
     FUInstance* inInstance = GetFUInstance(inVar.name,inVar.arrayIndex);
 
-    int outPort = outVar.port;
-    int inPort  = inVar.port;
-    ConnectUnits(outInstance,outPort,inInstance,inPort,outVar.delay);
+    if(outInstance && inInstance){
+      int outPort = outVar.port;
+      int inPort  = inVar.port;
+      ConnectUnits(outInstance,outPort,inInstance,inPort,outVar.delay);
+    }
 
     count += 1;
     out.Advance();
@@ -2303,7 +2316,56 @@ static ConfigIdentifier* ParseConfigIdentifier(Parser* parser,Arena* out){
   base->name = id;
 
   ConfigIdentifier* ptr = base;
+  
+  auto list = PushList<MathExpression*>(temp);
+  while(parser->IfNextToken('[')){
+    MathExpression* expr = ParseMathExpression(parser,out);
+    *list->PushElem() = expr;
 
+    parser->ExpectNext(']');
+  }    
+
+  if(!Empty(list)){
+    ptr->type = ConfigAccessType_ARRAY;
+    ptr->arrayExpr = PushArray(out,list);
+  }
+
+  if(parser->IfNextToken('.')){
+    Token access = parser->ExpectNext(TokenType_IDENTIFIER);
+
+    ConfigIdentifier* parsed = nullptr;
+    if(parser->IfNextToken('(')){
+      auto args = PushList<MathExpression*>(temp);       
+      
+      while(!parser->Done()){
+        MathExpression* arg = ParseMathExpression(parser,out);
+
+        *args->PushElem() = arg;
+        
+        if(parser->IfNextToken(',')){
+          continue;
+        }
+        
+        break;
+      }
+
+      parser->ExpectNext(')');
+
+      parsed = PushStruct<ConfigIdentifier>(out);
+      parsed->type = ConfigAccessType_FUNC_CALL;
+      parsed->functionName = access;
+      parsed->arguments = PushArray(out,args);
+    } else {
+      parsed = PushStruct<ConfigIdentifier>(out);
+      parsed->type = ConfigAccessType_ACCESS;
+      parsed->name = access;
+    }
+
+    ptr->next = parsed;
+    ptr = parsed;
+  }
+
+#if 0
   while(!parser->Done()){
     ConfigIdentifier* parsed = nullptr;
 
@@ -2345,7 +2407,9 @@ static ConfigIdentifier* ParseConfigIdentifier(Parser* parser,Arena* out){
 
       parsed = PushStruct<ConfigIdentifier>(out);
       parsed->type = ConfigAccessType_ARRAY;
-      parsed->arrayExpr = expr;
+
+      parsed->arrayExpr = PushArray<MathExpression*>(out,1);
+      parsed->arrayExpr[0] = expr;
     }
 
     if(parsed){
@@ -2355,6 +2419,7 @@ static ConfigIdentifier* ParseConfigIdentifier(Parser* parser,Arena* out){
 
     break;
   }
+#endif
 
   return base;
 }

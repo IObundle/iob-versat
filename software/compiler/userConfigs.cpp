@@ -41,6 +41,7 @@ struct DecompConfigStatement{
   bool isVirtualWire;
   bool isSingleWire;
   bool isEntityOnly;
+  bool isLeftSideArray;
   
   // RHS type
   bool isExprOnly;
@@ -68,35 +69,49 @@ DecompConfigStatement DecomposeConfigStatement(Env* env,ConfigStatement* stmt,Ar
   if(stmt->type == ConfigStatementType_FUNCTION_CALL){
     res.isFunctionInvoc = true;
     
-    Entity* ent = env->GetEntity(stmt->lhs,out);
-    
-    res.func = ent->func;
-    res.args = stmt->lhs->parent->arguments;
+    EntityAndLeftoverAccess ent = env->GetEntity(stmt->lhs,out);
+ 
+    // User error or program error?
+    // nocheckin - Try to force this.
+    Assert(!ent.leftover);
+   
+    res.func = ent.ent->func;
+    res.args = stmt->lhs->next->arguments;
   }
   if(stmt->type == ConfigStatementType_EQUALITY){
     // Left hand side
-    Entity* lhs = env->GetEntity(stmt->lhs,out);
+    EntityAndLeftoverAccess lhs = env->GetEntity(stmt->lhs,out);
 
-    res.parentEntity = lhs;
+    res.parentEntity = lhs.ent;
     res.subEntity = nullptr;
 
-    if(IsEntitySubType(lhs->type)){
-      Assert(lhs->parent);
+    if(IsEntitySubType(lhs.ent->type)){
+      Assert(lhs.ent->parent);
 
-      res.parentEntity = lhs->parent;
-      res.subEntity = lhs;
+      res.parentEntity = lhs.ent->parent;
+      res.subEntity = lhs.ent;
     }
 
     if(res.subEntity && res.subEntity->type == EntityType_MEM_PORT){
       // Statement of the form mem.in0 = val
       // This can only be an expression on the other side.
       res.isVirtualWire = true;
+
+      // User error or program error?
+      // nocheckin - Try to force this.
+      Assert(!lhs.leftover);
     } else if(res.subEntity){
       // Statement of the form ent.wire = val
       res.isSingleWire = true;
+
+      // User error or program error?
+      // nocheckin - Try to force this.
+      Assert(!lhs.leftover);
     } else {
       res.isEntityOnly = true;
     }
+
+    res.isLeftSideArray = (lhs.leftover != nullptr);
 
     // Right hand side
     MathExpression* rhs = stmt->rhs;
@@ -515,25 +530,25 @@ ConfigFunction* InstantiateConfigFunction(Env* env,ConfigFunctionDef* def,FUDecl
 
         Assert(parsedRhs.isArray);
 
-        Entity* left = env->GetEntity(simple->lhs,temp);
+        EntityAndLeftoverAccess left = env->GetEntity(simple->lhs,temp);
         Entity* right = env->GetEntity(parsedRhs.entityName);
 
         Entity* unit = nullptr;
         Entity* addrVar = nullptr;
 
         TransferDirection dir = TransferDirection_NONE;
-        if(left->type == EntityType_FU){
+        if(left.ent->type == EntityType_FU){
           Assert(right->type == EntityType_VARIABLE_INPUT);
           dir = TransferDirection_READ;
 
-          unit = left;
+          unit = left.ent;
           addrVar = right;
         } else {
-          Assert(left->type == EntityType_VARIABLE_INPUT);
+          Assert(left.ent->type == EntityType_VARIABLE_INPUT);
           dir = TransferDirection_WRITE;
 
           unit = right;
-          addrVar = left;
+          addrVar = left.ent;
         }
 
         SYM_Expr size = SYM_One;

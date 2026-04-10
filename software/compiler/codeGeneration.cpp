@@ -3289,7 +3289,6 @@ void Output_Header(Array<TypeStructInfoElement> structuredConfigs,AccelInfo info
           assignStarter = "accelState";
         }
         
-        DEBUG_BREAK();
         // Because of merge, need to generate the config pointer that allow us to access the named members directly.
         if(isMerge){
           String stmt;

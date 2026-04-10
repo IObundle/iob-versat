@@ -194,24 +194,16 @@ enum ConfigAccessType{
   ConfigAccessType_FUNC_CALL
 };
 
-#if 0
-A ConfigIdentifier is basically just an "atom" of a SpecExpression
-It implements stuff that the SpecExpression atom does not implement, I think.
-But realistically it is basically just a special case of an atom.
-
-
-#endif
-
 // TODO: Probably rename this.
 // ConfigIdentifier is parsed in reverse order than expected. Name appears first and access expressions appear after.
 struct ConfigIdentifier{
   ConfigAccessType type;
 
-  ConfigIdentifier* parent;
+  ConfigIdentifier* next;
 
   // TODO: Union
   Token name;
-  MathExpression* arrayExpr;
+  Array<MathExpression*> arrayExpr;
   Token functionName;
   Array<MathExpression*> arguments;
 };
@@ -222,7 +214,7 @@ inline ConfigIdentifier* GetBase(ConfigIdentifier* top){
 
 inline ConfigIdentifier* GetBeforeBase(ConfigIdentifier* top){
   if(top){
-    return top->parent;
+    return top->next;
   }
   return nullptr;
 }
@@ -296,6 +288,11 @@ struct EnvScope{
   TrieMap<String,Entity>* variable;
 };
 
+struct EntityAndLeftoverAccess{
+  Entity* ent;
+  MathExpression* leftover;
+};
+
 // Env is more of a parser related thing than it is an accelerator related thing.
 // Need to copy this to a better place and start using it in other parts of the code that should use it.
 // NOTE: This is more like a FUDeclaration builder than an environment, I think
@@ -339,25 +336,13 @@ struct Env{
   Entity* GetEntity(String name);
 
   void CheckIfEntityExists(Token name);
-
-#if 0
-  - LEFT HERE - A Var is an "expression" inside a connect expression.
-  -             A ConfigIdentifier is an "expression" inside a Config function. Mostly the lhs side of an assignemnt.
-  -             A SpecExpression is also an expression and is mostly on the right side.
-  -             Var is separate from the rest. It is the ConfigIdentifier and the SpecExpression that can be joined into the same flow.
-  -             Anything that the lhs differs from the rhs representation must be handled afterwards.
-  -             ConfigIdentifier is basically an "atom" of a SpecExpression that we created back when we where prototyping stuff and when the userConfig was distinct from a SpecExpression.
-  -             If we can augment SpecExpression to represent the same data that a ConfigIdentifier can represent then we are golden. We can also do this in a more direct approach by making a ConfigIdentifier be the "atom" of the SpecExpression. Of course we first need to make sure that we can still reprent everything that we could beforehand.
-  -             What even is a SpecExpression? 
-  -               Connection stuff is handled by Var. 
-  -               Equality does use SpecExpression.
-  -               Everything else is MathExpression right?
-  -             I'm almost positive that SpecExpression is only used for the Equality stuff.
-
-  -             In fact we might even separate SpecExpression into SpecExpression,MathExpr and UserConfigExpr or something similar and simplify the type portion of the code. 
-#endif
   
-  Entity* GetEntity(ConfigIdentifier* id,Arena* out);
+#if 0
+  LEFT HERE - We need to return a leftover array access otherwise outside code cannot properly handle 
+              the missing array.
+#endif
+
+  EntityAndLeftoverAccess GetEntity(ConfigIdentifier* id,Arena* out);
   Entity* GetEntity(MathExpression* id,Arena* out);
 
   Array<int> ConvertRangeToStart(Array<Range<MathExpression*>> range,Arena* out);

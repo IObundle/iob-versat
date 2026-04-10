@@ -675,7 +675,6 @@ int main(int argc,char* argv[]){
       }
 
       // This is after parameter instantiation which means that we can actually calculate this.
-      
       SYM_EvaluateResult eval = SYM_ConstantEvaluate(unit->memMapSym);
       
       // nocheckin
@@ -706,8 +705,6 @@ int main(int argc,char* argv[]){
       mask.size = maskSize;
         
       unit->globalMemDecisionMask = mask;
-
-      printf("A: %.*s %.*s %.*s %d\n",UN(startBin),UN(endBin),UN(mask),sizeOfNonMask);
     }
   }
   
