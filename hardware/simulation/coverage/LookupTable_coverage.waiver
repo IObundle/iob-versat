@@ -6,8 +6,8 @@
 
 // waiver structure:
 // waive filename:line[:line] [reason]
-waive my_dp_asym_ram.v:1:178 "Testbench auxiliary module"
-waive my_iob_dp_ram.v:1:79 "Testbench auxiliary module"
+waive versat_dp_asym_ram.v:1:178 "Testbench auxiliary module"
+waive versat_iob_dp_ram.v:1:79 "Testbench auxiliary module"
 
 waive LookupTable.v:21 "rdata is always 0"
 waive LookupTable.v:32 "Port is always enabled"

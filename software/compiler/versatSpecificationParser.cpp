@@ -379,6 +379,8 @@ void Env::PopScope(){
 }
 
 FUInstance* Env::CreateInstance(FUDeclaration* type,String name){
+  // TODO: [0] 
+
   FUInstance* inst = CreateFUInstance(circuit,type,name);
 
   Token tok = {};
@@ -393,6 +395,8 @@ FUInstance* Env::CreateInstance(FUDeclaration* type,String name){
 
 
 FUInstance* Env::CreateFUInstanceWithDeclaration(FUDeclaration* type,String name,InstanceDeclaration decl){
+  // TODO: [0] 
+
   FUInstance* inst = CreateFUInstance(circuit,type,name);
   
   for(auto pair : decl.parameters){

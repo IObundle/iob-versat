@@ -105,7 +105,7 @@ module OnlyOutputMem_tb (
   end
   endtask
 
-  my_2p_asym_ram #(
+  versat_2p_asym_ram #(
     .W_DATA_W(DATA_W),
     .R_DATA_W(DATA_W),
     .ADDR_W(ADDR_W)

@@ -114,7 +114,7 @@ module RegFile_tb (
   end
   endtask
 
-  my_2p_asym_ram #(
+  versat_2p_asym_ram #(
     .W_DATA_W(AXI_DATA_W),
     .R_DATA_W(AXI_DATA_W),
     .ADDR_W(ADDR_W)
@@ -128,7 +128,7 @@ module RegFile_tb (
     .clk_i(clk)
   );
 
-  my_2p_asym_ram #(
+  versat_2p_asym_ram #(
     .W_DATA_W(AXI_DATA_W),
     .R_DATA_W(AXI_DATA_W),
     .ADDR_W(ADDR_W)

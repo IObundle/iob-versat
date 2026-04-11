@@ -7,7 +7,7 @@
 // The total size in bits is given by multiplying 2^ADDR_W * min(A_DATA_W,B_DATA_W)
 // The number of blocks used is equal to max([A|B]_DATA_W) / min([A|B]_DATA_W)
 
-module my_2p_asym_ram #(
+module versat_2p_asym_ram #(
    parameter W_DATA_W = 0,
    parameter R_DATA_W = 0,
    parameter ADDR_W   = 0
@@ -117,7 +117,7 @@ module my_2p_asym_ram #(
          end
       end
    endgenerate
-endmodule  // my_2p_asym_ram
+endmodule  // versat_2p_asym_ram
 
 `undef max
 `undef min

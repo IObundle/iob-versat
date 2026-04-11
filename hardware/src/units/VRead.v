@@ -299,7 +299,7 @@ assign data_data = databus_rdata_0;
             end
          end
 
-         WideAdapter #(
+         Versat_WideAdapter #(
             .INPUT_W (AXI_DATA_W),
             .OUTPUT_W(DATA_W),
             .SIZE_W  (DATA_W)

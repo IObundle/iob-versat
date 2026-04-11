@@ -114,7 +114,7 @@ module LookupTable #(
             end
          end
 
-         WideAdapter #(
+         Versat_WideAdapter #(
             .INPUT_W (DATA_W),
             .SIZE_W  (SIZE_W),
             .OUTPUT_W(DATA_W)
@@ -124,7 +124,7 @@ module LookupTable #(
             .out_o(outA_int)
          );
 
-         WideAdapter #(
+         Versat_WideAdapter #(
             .INPUT_W (DATA_W),
             .SIZE_W  (SIZE_W),
             .OUTPUT_W(DATA_W)

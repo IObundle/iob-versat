@@ -88,5 +88,5 @@ extern Array<VerilogPortSpec> INT_IObFormat;
 
 void InitializeDefaultData(Arena* perm);
 
-static String DP_ModuleName = "my_dp_asym_ram";
-static String TWO_P_ModuleName = "my_2p_asym_ram";
+static String DP_ModuleName = "versat_dp_asym_ram";
+static String TWO_P_ModuleName = "versat_2p_asym_ram";

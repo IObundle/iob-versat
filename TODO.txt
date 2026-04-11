@@ -1,1 +1,5 @@
 Start putting stuff in here numbered with a [N] bracket so that we can reference everything into a single place.
+
+[0] - Not properly handling the insertion of any instance named "out" or other special names that we might create in the future.
+
+

@@ -588,25 +588,36 @@ AddressAccess* CompileAddressGen(Env* env,Array<Token> inputs,Array<AddressGenFo
     *loopVarBuilder->PushElem() = PushString(temp,loop.loopVariable);
   }
   Array<String> loopVars = PushArray(out,loopVarBuilder);
-      
+
+  Array<SYM_Expr> loopEnd = PushArray<SYM_Expr>(temp,loops.size);
+  
+  SYM_Expr symbolicExpr = addr;
+
   // Builds expression for the internal address which is basically just a multiplication of all the loops sizes
   SYM_Expr loopExpression = SYM_One;
-  for(AddressGenForDef loop : loops){
+  for(int i = 0; i <  loops.size; i++){
+    AddressGenForDef loop = loops[i];
     // TODO: Handle parsing errors
-    // TODO: Performance, we are parsing this twice, there is another below. Maybe we can join the loops into a single one
-
     SYM_Expr start = env->SymbolicFromMathExpression(loop.startSym);
-    SYM_Expr end = env->SymbolicFromMathExpression(loop.endSym);
+    loopEnd[i] = env->SymbolicFromMathExpression(loop.endSym);
 
-    SYM_Expr diff = end - start;
+    // NOTE: We transform loops so that they always start at zero:
+    //       - for x a..b {x} <===> for x 0..b-a {(x+a)} 
+    if(start != SYM_Zero){
+      loopEnd[i] = loopEnd[i] - start;
 
+      SYM_Expr loopVar = SYM_Var(loop.loopVariable);
+      symbolicExpr = SYM_Replace(symbolicExpr,loopVar,loopVar + start);
+    }
+
+    SYM_Expr diff = loopEnd[i];
     loopExpression = loopExpression * diff;
+
   }
   SYM_Expr finalExpression = loopExpression;
 
   // Building expression for the external address
   // TODO: Handle parsing errors
-  SYM_Expr symbolicExpr = addr;
   SYM_Expr normalized = symbolicExpr;
 
   Pair<SYM_Expr,SYM_Expr> pair = SYM_BreakDiv(normalized);
@@ -622,18 +633,13 @@ AddressAccess* CompileAddressGen(Env* env,Array<Token> inputs,Array<AddressGenFo
 
     AddressGenForDef loop = loops[i];
     
-    // TODO: Performance, we are parsing the start and end stuff twice. This is the second, the first is above.
-    SYM_Expr start = env->SymbolicFromMathExpression(loop.startSym);
-    SYM_Expr end = env->SymbolicFromMathExpression(loop.endSym);
-    
-    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,start,end,temp);
+    LoopLinearSum* sum = PushLoopLinearSumSimpleVar(loop.loopVariable,term,SYM_Zero,loopEnd[i],temp);
     expr = AddLoopLinearSum(sum,expr,temp);
   }
   
   // Extracts the constant term
   SYM_Expr toCalcConst = fullExpr;
 
-  // TODO: Currently we are not dealing with loops that do not start at zero
   for(String str : loopVars){
     toCalcConst = SYM_Replace(toCalcConst,SYM_Var(str),SYM_Zero);
   }
