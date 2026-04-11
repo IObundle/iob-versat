@@ -22,25 +22,6 @@
 
 @{defines}
 
-@{memoryWireInfo}
-
-inline void CopyFromMemory(void* output,void* memory,int address,int memoryDataSize){
-   char* memoryAsChar = (char*) memory;
-   int trueAddress = ALIGN_DOWN(address,memoryDataSize);
-
-   // TODO: Check if we are not writing/reading outside the boundary
-   //Assert(trueAddress <= );
-   memcpy(output,&memoryAsChar[trueAddress],memoryDataSize);
-};
-
-inline void CopyToMemory(void* input,void* memory,int address,int memoryDataSize){
-   char* memoryAsChar = (char*) memory;
-   int trueAddress = ALIGN_DOWN(address,memoryDataSize);
-   
-   // TODO: Check if we are not writing/reading outside the boundary
-   memcpy(&memoryAsChar[trueAddress],input,memoryDataSize);
-}
-
 #ifdef TRACE
 
 VerilatedContext* contextp = new VerilatedContext;
@@ -55,7 +36,7 @@ static VerilatedVcdC* tfp = NULL;
 
 #endif // TRACE
 
-#include "V@{typeName}.h"
+#include "VVersat_verilator_wrapper.h"
 #ifdef SIMULATE_LOOPS
 #include "VSuperAddress.h"
 #endif
@@ -88,7 +69,9 @@ struct DatabusAccess{
 // ============================================================================
 // Global data 
 
-static V@{typeName}* dut = NULL;
+typedef VVersat_verilator_wrapper TopType;
+
+static TopType* dut = NULL;
 static int versat_empty_printf(const char* format,...){return 0;}
 VersatPrintf versat_printf = versat_empty_printf;
 bool CreateVCD;
@@ -146,8 +129,6 @@ typedef char Byte;
 
 // Everything is statically allocated
 
-@{declareExternalMemory}
-
 extern "C" void InitializeVerilator(){
 #ifdef TRACE
   Verilated::traceEverOn(true);
@@ -162,12 +143,6 @@ static void CloseWaveform(){
 #endif
 }
 
-static void FillMemoryWithGarbage(){
-  // Need to select a value that is not likely to appear and that the user can quickly identify as a "garbage" value.
-  int unlikelyValue = 0xBA;
-  memset(externalMemory,unlikelyValue,totalExternalMemory);
-}
-
 extern "C" void VersatAcceleratorCreate(){
 #ifdef TRACE
    if(CreateVCD){
@@ -178,15 +153,12 @@ extern "C" void VersatAcceleratorCreate(){
    #endif
    }
 #endif
-   V@{typeName}* self = new V@{typeName}();
+   TopType* self = new TopType();
 
    if(dut){
       versat_printf("Initialize function is being called multiple times\n");
       exit(-1);
    }
-
-   // In order to properly test memories, we fill them with a value different than zero. 
-   FillMemoryWithGarbage();
 
    dut = self;
 
@@ -232,7 +204,7 @@ static void InternalUpdateAccelerator(){
 
    int sizeOfData = (@{databusDataSize} / 8);
 
-   V@{typeName}* self = dut;
+   TopType* self = dut;
 
    // Databus must be updated before memories because databus could drive memories but memories "cannot" drive databus (in the sense that databus acts like a master if connected directly to memories but memories do not act like a master when connected to a databus. The unit logic is the one that acts like a master)
 
@@ -240,29 +212,8 @@ static void InternalUpdateAccelerator(){
    
    baseAddress = 0;
 
-   // Save external
-@{saveExternal}
-
    self->eval();
    UPDATE(self); // This line causes posedge clk events to activate
-   
-   // Memory Read
-{
-   baseAddress = 0;
-
-@{memoryRead}
-
-   self->eval();
-}
-
-// Memory write
-{
-  baseAddress = 0;
-
-@{memoryWrite}
-
-  self->eval();
-}
 
 #ifdef TRACE
    if(CreateVCD) tfp->dump(contextp->time());
@@ -274,7 +225,7 @@ static void InternalUpdateAccelerator(){
 }
 
 static bool IsDone(){
-   V@{typeName}* self = dut;
+   TopType* self = dut;
        
   return @{done};
 }
@@ -294,12 +245,11 @@ Once operator+(_OnceTag t,F&& f){
 @{declareExtraConfigs}
 
 extern "C" void VersatReset(){
-  FillMemoryWithGarbage();
   @{resetExtraConfigs}
 }
 
 static void InternalStartAccelerator(){
-  V@{typeName}* self = dut;
+  TopType* self = dut;
 
 @{internalStart}
 
@@ -317,7 +267,7 @@ static void InternalStartAccelerator(){
 }
 
 static void InternalEndAccelerator(){
-  V@{typeName}* self = dut;
+  TopType* self = dut;
 
   self->running = 0;
 
@@ -356,7 +306,7 @@ extern "C" void VersatAcceleratorSimulate(){
 }
 
 extern "C" int MemoryAccess(int address,int value,int write){
-  V@{typeName}* self = dut;
+  TopType* self = dut;
 
 @{memoryAccessDefines}
 
@@ -427,7 +377,7 @@ extern "C" int MemoryAccess(int address,int value,int write){
 }
 
 extern "C" void VersatSignalLoop(){
-   V@{typeName}* self = dut;
+   TopType* self = dut;
 
 #ifdef SIGNAL_LOOP
    self->signal_loop = 1;
@@ -438,7 +388,7 @@ extern "C" void VersatSignalLoop(){
 }
 
 extern "C" void VersatLoadDelay(volatile const unsigned int* delayBuffer){
-  V@{typeName}* self = dut;
+  TopType* self = dut;
 
 @{setDelays}
 }

@@ -84,13 +84,15 @@ int main(int argc,const char* argv[]){
     const char* ptr = content.data;
     const char* end = content.data + content.size;
 
+    printf("%p %p\n",ptr,end);
+
     while(ptr < end){
       TokenizeResult res = TokenizeFunction(ptr,end);
       TokenType type = res.token.type;
 
-      bool hash = true;
+      bool doHash = true;
       if(type == TokenType_WHITESPACE || type == TokenType_COMMENT || type == TokenType_EOF){
-        hash = false;
+        doHash = false;
       }
 
       int size = res.bytesParsed;
@@ -98,12 +100,13 @@ int main(int argc,const char* argv[]){
         size = 1;
       }
 
-      if(hash){
+      if(doHash){
         String asStr = String(ptr,size);
       
         for(int i = 0; i < asStr.size; i++){
           hash = ((hash << 5) + hash) + asStr[i];
         }
+        amountOfTokens += 1;
       }
 
       ptr += size;

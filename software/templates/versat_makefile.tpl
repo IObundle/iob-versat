@@ -1,4 +1,4 @@
-TYPE_NAME := @{typeName}
+TYPE_NAME := Versat_verilator_wrapper
 
 VSIM_HEADER := @{simLoopHeader}
 HARDWARE_FOLDER := @{hardwareFolder}
@@ -6,6 +6,7 @@ VHEADER := V$(TYPE_NAME).h pcEmulDefs.h
 SOFTWARE_FOLDER := .
 HARDWARE_SRC := @{hardwareUnits}
 HARDWARE_SRC += @{moduleUnits}
+HARDWARE_SRC += Versat_verilator_wrapper.v
 VERILATOR_ROOT?=$(shell ./GetVerilatorRoot.sh)
 INCLUDE := -I$(HARDWARE_FOLDER)
 

@@ -754,9 +754,6 @@ unsigned char* GetHexadecimal(const unsigned char* text, int str_size){
   return buffer;
 }
 
-
-
-
 // The following two functions together will error if not decimal or hexadecimal
 static int CharToInt(char ch){
   if(ch >= '0' && ch <= '9'){
