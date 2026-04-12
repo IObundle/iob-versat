@@ -16,8 +16,8 @@ module LookupTable #(
    input [DATA_W-1:0] in0,
    input [DATA_W-1:0] in1,
 
-   (* versat_latency = 3 *) output reg [DATA_W-1:0] out0,
-   (* versat_latency = 3 *) output reg [DATA_W-1:0] out1,
+   (* versat_latency = 4 *) output reg [DATA_W-1:0] out0,
+   (* versat_latency = 4 *) output reg [DATA_W-1:0] out1,
 
    output [ADDR_W-1:0] ext_dp_addr_0_port_0,
    output [DATA_W-1:0] ext_dp_out_0_port_0,
@@ -136,16 +136,19 @@ module LookupTable #(
       end
    endgenerate
 
+   reg [DATA_W-1:0] out0_reg,out1_reg;
+
    always @(posedge clk, posedge rst) begin
       if (rst) begin
          out0 <= 0;
          out1 <= 0;
+         out0_reg <= 0;
+         out1_reg <= 0;
       end else if (running) begin
-         out0 <= outA_int;
-         out1 <= outB_int;
-      end else begin
-         out0 <= 0;
-         out1 <= 0;
+         out0_reg <= outA_int;
+         out1_reg <= outB_int;
+         out0 <= out0_reg;
+         out1 <= out1_reg;
       end
    end
 
