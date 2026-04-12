@@ -624,7 +624,7 @@ AddressAccess* CompileAddressGen(Env* env,Array<Token> inputs,Array<AddressGenFo
 
   SYM_Expr fullExpr = pair.first;
   SYM_Expr dutyDiv = pair.second;
-        
+
   LoopLinearSum* expr = PushLoopLinearSumEmpty(temp);
   for(int i = 0; i < loopVars.size; i++){
     String var = loopVars[i];

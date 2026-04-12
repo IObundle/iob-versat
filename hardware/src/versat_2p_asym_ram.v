@@ -79,10 +79,10 @@ module versat_2p_asym_ram #(
          always @(posedge clk_i) r_addr_i_lsbs_reg <= r_addr_i[ADDR_W-1:0] >> SYMBOL_W;
 
          //read mux
-         always @* begin
-            r_data_o = 1'b0;
+         always @(posedge clk_i) begin
+            r_data_o <= 1'b0;
             for (l = 0; l < N; l = l + 1) begin
-               r_data_o = data_rd[r_addr_i_lsbs_reg];
+               r_data_o <= data_rd[r_addr_i_lsbs_reg];
             end
          end
 
@@ -98,10 +98,10 @@ module versat_2p_asym_ram #(
             end
          end
          //read parallel
-         always @* begin
-            r_data_o = 1'b0;
+         always @(posedge clk_i) begin
+            r_data_o <= 1'b0;
             for (k = 0; k < N; k = k + 1) begin
-               r_data_o[k*MINDATA_W+:MINDATA_W] = data_rd[k];
+               r_data_o[k*MINDATA_W+:MINDATA_W] <= data_rd[k];
             end
          end
 
@@ -112,8 +112,8 @@ module versat_2p_asym_ram #(
             data_wr[0] = w_data_i;
          end
          //read parallel
-         always @(data_rd[0]) begin
-            r_data_o = data_rd[0];
+         always @(posedge clk_i) begin
+            r_data_o <= data_rd[0];
          end
       end
    endgenerate
