@@ -20,6 +20,7 @@ module Buffer #(
    input [DELAY_W-1:0] amount
 );
 
+/*
 reg [DATA_W-1:0] mem[(2**(DELAY_W))-1:0];
 reg [DELAY_W-1:0] read;
 reg [DELAY_W-1:0] write;
@@ -45,8 +46,8 @@ always @(posedge clk,posedge rst) begin
       end
    end
 end
+*/
 
-/*
    wire [  DELAY_W:0] occupancy;
 
    wire               aboveOrEqual = (occupancy >= {1'b0, amount});
@@ -127,7 +128,5 @@ end
       if (amount == 0) out0 = inData;
       else out0 = fifo_data;
    end
-
-*/
 
 endmodule
