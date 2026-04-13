@@ -64,7 +64,7 @@ end
    wire [DELAY_W-1:0] ext_2p_addr_in;
    wire [ DATA_W-1:0] ext_2p_data_in;
 
-   versat_2p_asym_ram #(
+   versat_ram_2p_fast #(
       .W_DATA_W(DATA_W),
       .R_DATA_W(DATA_W),
       .ADDR_W  (DELAY_W)
