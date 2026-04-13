@@ -65,9 +65,8 @@ end
    wire [ DATA_W-1:0] ext_2p_data_in;
 
    versat_ram_2p_fast #(
-      .W_DATA_W(DATA_W),
-      .R_DATA_W(DATA_W),
-      .ADDR_W  (DELAY_W)
+      .DATA_W(DATA_W),
+      .ADDR_W(DELAY_W)
    ) ext_2p (
       // Writting port
       .w_en_i  (ext_2p_write),
