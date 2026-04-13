@@ -27,7 +27,6 @@ module versat_ram_2p_fast #(
 `ifdef NO_X_SIM
    integer i;
 `endif
-   reg [DATA_W-1:0] r_data;
    // Initialize the RAM
    initial begin
        if (MEM_INIT_FILE_INT != "none") begin
@@ -45,7 +44,7 @@ module versat_ram_2p_fast #(
    //read port
    always @(posedge clk_i) begin
        if (r_en_i) begin
-           r_data <= mem[r_addr_i];
+           r_data_o <= mem[r_addr_i];
        end
    end
 
