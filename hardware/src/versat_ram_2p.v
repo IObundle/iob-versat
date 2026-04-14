@@ -42,17 +42,17 @@ module versat_ram_2p #(
     end
    end
 
-   //read port
-   always @(posedge clk_i) begin
-       if (r_en_i) begin
-           r_data <= mem[r_addr_i];
-       end
-   end
-
    //write port
    always @(posedge clk_i) begin
        if (w_en_i) begin
            mem[w_addr_i] <= w_data_i;
+       end
+   end
+
+   //read port
+   always @(posedge clk_i) begin
+       if (r_en_i) begin
+           r_data <= mem[r_addr_i];
        end
    end
    

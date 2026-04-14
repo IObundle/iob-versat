@@ -67,10 +67,6 @@ module VRead #(
    input [DELAY_W-1:0] delay0
 );
 
-   //assign databus_wdata_0 = 0;
-   //assign databus_wstrb_0 = 0;
-   //assign databus_len_0   = length;
-
    // output databus
    wire              transferDone;
    reg               doneOutput;
@@ -311,7 +307,9 @@ assign data_data = databus_rdata_0;
             .out_o(out0_temp)
          );
       end else begin
-         assign out0_temp = ext_2p_data_in_0;
+         always @* begin
+            out0_temp = ext_2p_data_in_0;
+         end
       end  // if(AXI_DATA_W > DATA_W)
    endgenerate
 
