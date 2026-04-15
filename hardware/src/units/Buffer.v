@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Buffer #(
-   parameter DELAY_W = 7,
+   parameter DELAY_W = 3,
    parameter DATA_W  = 32
 ) (
    //control
@@ -13,10 +13,40 @@ module Buffer #(
    //input / output data
    input [DATA_W-1:0] in0,
 
+   // NOTE: Versat latency does not appear to do anything. I do not think that Versat actually takes this into account 
+   //       since this unit is used to fix delays and since the edges afterwards are represented as a "any" latency edge.
    (* versat_latency = 1 *) output reg [DATA_W-1:0] out0,
 
    input [DELAY_W-1:0] amount
 );
+
+/*
+reg [DATA_W-1:0] mem[(2**(DELAY_W))-1:0];
+reg [DELAY_W-1:0] read;
+reg [DELAY_W-1:0] write;
+
+wire [DELAY_W+1-1:0] high_occupancy = {1'b1,write} - {1'b0,read};
+wire [DELAY_W-1:0] occupancy = high_occupancy[DELAY_W-1:0];
+
+always @(posedge clk,posedge rst) begin
+   if(rst) begin
+      read <= 0;
+      write <= 0;
+   end else if(!running) begin
+      read <= 0;
+      write <= 0;
+   end else begin
+      // TODO: Need to run Vivado on a decent design to see the resource usage of this unit.
+      mem[write] <= in0;
+      out0 <= mem[read];
+
+      write <= write + 1;
+      if(occupancy == amount) begin
+         read <= read + 1;
+      end
+   end
+end
+*/
 
    wire [  DELAY_W:0] occupancy;
 
@@ -34,19 +64,18 @@ module Buffer #(
    wire [DELAY_W-1:0] ext_2p_addr_in;
    wire [ DATA_W-1:0] ext_2p_data_in;
 
-   my_2p_asym_ram #(
-      .W_DATA_W(DATA_W),
-      .R_DATA_W(DATA_W),
-      .ADDR_W  (DELAY_W)
+   versat_ram_2p_fast #(
+      .DATA_W(DATA_W),
+      .ADDR_W(DELAY_W)
    ) ext_2p (
       // Writting port
       .w_en_i  (ext_2p_write),
-      .w_addr_i(ext_2p_addr_out),
+      .w_addr_i(ext_2p_addr_out << 2),
       .w_data_i(ext_2p_data_out),
 
       // Reading port
       .r_en_i  (ext_2p_read),
-      .r_addr_i(ext_2p_addr_in),
+      .r_addr_i(ext_2p_addr_in  << 2),
       .r_data_o(ext_2p_data_in),
 
       .clk_i(clk)

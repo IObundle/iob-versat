@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module my_iob_dp_ram #(
+module versat_iob_dp_ram #(
    parameter FILE   = "none",
    parameter DATA_W = 8,
    parameter ADDR_W = 6
@@ -68,4 +68,4 @@ module my_iob_dp_ram #(
       end
    end
 
-endmodule  // my_iob_dp_ram
+endmodule  // versat_iob_dp_ram

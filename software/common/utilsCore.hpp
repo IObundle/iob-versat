@@ -11,7 +11,7 @@
 #include <errno.h>
 
 #include "assert.h"
-#include "debug.hpp"
+//#include "debug.hpp"
 
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 
@@ -24,10 +24,16 @@
 
 inline float ABS(float f){return (f < 0.0f ? -f : f);};
 
+extern bool currentlyDebugging;
+
 // TODO: We probably want to standardize some of these. Do it right. Care about overflow and stuff like that
 //       Either that or use values from C or something.
 #ifndef INT_MAX
-#define INT_MAX ((1<<30) + ((1<<30) - 1))
+#define INT_MAX 2147483647
+#endif
+
+#ifndef INT_MIN
+#define INT_MIN -2147483648
 #endif
 
 #define ALIGN_DOWN(val,size) (val & (~(size - 1)))
@@ -70,13 +76,17 @@ inline float ABS(float f){return (f < 0.0f ? -f : f);};
 
 // NOTE: This macro instructs gcc to give an error for any switch that does not implement every case.
 //       Always end the switch with the END_SWITCH macro to restore the proper diagnostic message (which is just a warning)
-#define FULL_SWITCH(expr) _Pragma("GCC diagnostic error \"-Wswitch-enum\"") \
-  switch(expr)
+#define FULL_SWITCH(expr) \
+  _Pragma("GCC diagnostic push") \
+  _Pragma("GCC diagnostic error \"-Wswitch-enum\"") \
+  switch(expr) \
+  _Pragma("GCC diagnostic pop")
 
-#define SWITCH(expr) _Pragma("GCC diagnostic warning \"-Wswitch-enum\"") \
-  switch(expr)
-
-#define END_SWITCH() _Pragma("GCC diagnostic warning \"-Wswitch-enum\"")
+#define SWITCH(expr) \
+  _Pragma("GCC diagnostic push") \
+  _Pragma("GCC diagnostic ignored \"-Wswitch-enum\"") \
+  switch(expr) \
+  _Pragma("GCC diagnostic pop")
 
 template<typename F>
 class _Defer{
@@ -188,6 +198,10 @@ if(_){ \
   } while(0)
 
 #define DEBUG_BREAK() DEBUG_BREAK_IF(true)
+
+#define ENTER_DEBUG() if(currentlyDebugging) { \
+  fflush(stdout); \
+  __asm__("int3");} \
 
 // TODO: Better name for this, or better ergonomics somewhat.
 #define DEBUG_BREAK_OR_EXIT() \
@@ -478,6 +492,16 @@ inline bool operator!=(String first,String second){
   return res;
 }
 
+inline bool operator<(String first,String second){
+  bool res = (strncmp(first.data,second.data,MIN(first.size,second.size)) < 0);
+  return res;
+}
+
+inline int Compare(String first,String second){
+  int res = strncmp(first.data,second.data,MIN(first.size,second.size));
+  return res;
+}
+
 template<typename T>
 bool operator==(Array<T> first,Array<T> second){
    if(first.size != second.size){
@@ -538,6 +562,30 @@ static bool operator==(const Pair<F,S>& p1,const Pair<F,S>& p2){
    return res;
 }
 
+enum FileContentState{
+  FileContentState_NOT_SET,
+  FileContentState_OK,
+  FileContentState_FAILED_TO_LOAD
+};
+
+struct FILE_Handle{
+  int id;
+};
+
+// Meta depends on this. Careful when changing stuff.
+struct FileContent{
+  String fileName;
+  // Without filename
+  String originalRelativePath;
+  String commonFolder;
+  String content;
+
+  FileContentState state;
+  FILE_Handle id;
+};
+
+String GetFilename(String fullpath);
+
 #define BIT_MASK(BIT) (1 << (BIT))
 #define GET_BIT(VAL,INDEX) (VAL & (BIT_MASK(INDEX)))
 #define SET_BIT(VAL,INDEX) (VAL | (BIT_MASK(INDEX)))
@@ -575,7 +623,7 @@ int AlignNextPower2(int val);
 int Align(int val,int alignment);
 unsigned int AlignBitBoundary(unsigned int val,int numberBits); // Align value so the lower numberBits are all zeros
 bool IsPowerOf2(int val);
-int RandomNumberBetween(int minimum,int maximum); // Maximum not included
+int RandomNumberBetween(int minimumIncluded,int maximumNotIncluded);
 
 void Print(Array<int> array,int digitSize = 0);
 void Print(Array<float> array,int digitSize = 0);
@@ -605,6 +653,32 @@ char GetHex(int value);
 Byte HexCharToNumber(char ch);
 
 void HexStringToHex(unsigned char* buffer,String str);
+int String_CommonPrefixSize(String first,String second);
+
+enum ValueType{
+  ValueType_NIL,
+  ValueType_NUMBER,
+  ValueType_STRING,
+  ValueType_BOOLEAN
+};
+
+struct Value{
+  ValueType type;
+
+  union{
+    bool boolean;
+    char ch;
+    i64 number;
+    String str;
+  };
+};
+
+// nocheckin: TODO: Reorganize
+bool Contains(String str,String toCheck);
+int ParseInt(String str);
+
+bool IsNum(char ch);
+bool CheckFormat(const char* format,String text);
 
 // Weak random generator but produces same results in pc-emul and in simulation
 void SeedRandomNumber(uint seed);
@@ -634,8 +708,6 @@ bool Empty(String str);
 
 char GetHexadecimalChar(int value);
 unsigned char* GetHexadecimal(const unsigned char* text, int str_size); // Helper function to display result
-
-bool IsAlpha(char ch);
 
 template<typename T>
 inline void Memset(T* buffer,T elem,int bufferSize){

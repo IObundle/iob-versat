@@ -18,22 +18,24 @@ enum PortRangeType{
 };
 
 struct ConnectionExtra{
-  Range<SpecExpression*> port;
-  Range<SpecExpression*> delay;
+  Range<MathExpression*> port;
+  Range<MathExpression*> delay;
 };
 
 struct Var{
   Token name;
 
   ConnectionExtra extra;
-  Range<SpecExpression*> index;
+  Array<Range<MathExpression*>> index;
 
-  bool isArrayAccess;
+  bool IsArrayAccess(){return index.size > 0;}
+  
+  // TODO: Is this needed?
+  //bool isArrayAccess;
 };
 
 struct VarGroup{
   Array<Var> vars;
-  Token fullText;
 };
 
 enum SpecType{
@@ -54,19 +56,40 @@ struct SpecExpression{
     int val;
     Token name;
   };
-  Token text;
   
   // NOTE: If array access, expressions is an array of the expressions in order and var contains the array name.
   SpecType type;
 };
 
-//nocheckin
-Array<Token> AccumTokens(SpecExpression* top,Arena* out);
+enum MathType{
+
+};
+
+struct MathExpression{
+  Array<MathExpression*> expressions;
+  union{
+    const char* op;
+    Var var;
+    int val;
+    Token name;
+  };
+  
+  // NOTE: If array access, expressions is an array of the expressions in order and var contains the array name.
+  SpecType type;
+};
+
+
+//nocheckin - TODO: We probably want to remove this after we move more logic to Env
+Array<Token> AccumTokens(MathExpression* top,Arena* out);
 
 struct VarDeclaration{
   Token name;
-  int arraySize;
-  bool isArray;
+  Array<MathExpression*> arrayDims;
+};
+
+struct ParameterDeclaration{
+  Token name;
+  MathExpression* defaultValue;
 };
 
 struct PortExpression{
@@ -86,7 +109,7 @@ struct InstanceDeclaration{
   Array<VarDeclaration> declarations; // share(config) groups can have multiple different declarations. TODO: It is kinda weird that inside the syntax, the share allows groups of instances to be declared while this does not happen elsewhere. Not enought to warrant a look for now, but keep in mind for later.
 
   // NOTE: We could create a different expression type 
-  Array<Pair<String,SpecExpression*>> parameters;
+  Array<Pair<String,MathExpression*>> parameters;
 
   Array<Token> addressGenUsed; // NOTE: We do not check if address gen exists at parse time, we check it later.
   Array<Token> shareNames;
@@ -106,7 +129,6 @@ enum ConnectionType{
 struct ConnectionDef{
   ConnectionType type;
   VarGroup output;
-  Array<Token> transforms;
 
   // TODO: Union.
   VarGroup input;
@@ -124,6 +146,7 @@ struct DefBase{
 
 struct ModuleDef : public DefBase{
   Token numberOutputs; // TODO: Not being used. Not sure if we gonna actually add this or not.
+  Array<ParameterDeclaration> params;
   Array<VarDeclaration> inputs;
   Array<InstanceDeclaration> declarations;
   Array<ConnectionDef> connections;
@@ -135,8 +158,6 @@ struct MergeDef : public DefBase{
   Array<SpecificMergeNode> specifics;
   Array<Token> mergeModifiers;
 };
-
-struct AddressGenForDef;
 
 struct ConstructDef{
   ConstructType type;
@@ -154,9 +175,6 @@ struct HierarchicalName{
 
 typedef Pair<HierarchicalName,HierarchicalName> SpecNode;
 
-void ReportError(String content,Token faultyToken,String error);
-void ReportError2(String content,Token faultyToken,Token goodToken,String faultyError,String good);
-
 bool IsModuleLike(ConstructDef def);
 Array<Token> TypesUsed(ConstructDef def,Arena* out);
 
@@ -172,7 +190,8 @@ FUDeclaration* InstantiateSpecifications(String content,ConstructDef def);
 enum ConfigAccessType{
   ConfigAccessType_BASE,
   ConfigAccessType_ACCESS,
-  ConfigAccessType_ARRAY
+  ConfigAccessType_ARRAY,
+  ConfigAccessType_FUNC_CALL
 };
 
 // TODO: Probably rename this.
@@ -180,12 +199,13 @@ enum ConfigAccessType{
 struct ConfigIdentifier{
   ConfigAccessType type;
 
-  ConfigIdentifier* parent;
-  union{
-    Token name;
-    SpecExpression* trueExpr;
-  };
+  ConfigIdentifier* next;
 
+  // TODO: Union
+  Token name;
+  Array<MathExpression*> arrayExpr;
+  Token functionName;
+  Array<MathExpression*> arguments;
 };
 
 inline ConfigIdentifier* GetBase(ConfigIdentifier* top){
@@ -194,7 +214,7 @@ inline ConfigIdentifier* GetBase(ConfigIdentifier* top){
 
 inline ConfigIdentifier* GetBeforeBase(ConfigIdentifier* top){
   if(top){
-    return top->parent;
+    return top->next;
   }
   return nullptr;
 }
@@ -207,7 +227,7 @@ inline ConfigIdentifier* GetBeforeBase(ConfigIdentifier* top){
 enum EntityType{
   EntityType_FU,
   EntityType_FU_ARRAY,
-  EntityType_NODE,
+  EntityType_PARAM,
   EntityType_MEM_PORT, // User can "represent" a memory port by doing something like mem.in0 (input port 0).
   EntityType_CONFIG_WIRE,
   EntityType_STATE_WIRE,
@@ -215,6 +235,8 @@ enum EntityType{
   EntityType_VARIABLE_INPUT,
   EntityType_VARIABLE_SPECIAL // For variables that exist "by default"
 };
+
+bool IsEntitySubType(EntityType type);
 
 enum VariableType{
   VariableType_VOID_PTR,
@@ -233,7 +255,6 @@ struct Entity{
   
   // TODO: Union
   //union {
-  //InstanceInfo* info;
   FUInstance* instance;
 
   bool isInput;
@@ -241,10 +262,15 @@ struct Entity{
   Wire* wire;
 
   ConfigFunction* func;
-  String varName;
 
-  int arraySize;
-  String arrayBaseName;
+  //int arraySize;
+  Array<int> arrayDims;
+
+  union {
+    String varName;
+    String arrayBaseName;
+    String paramName;
+  }; 
 
   VariableType varType;
   //};
@@ -260,6 +286,11 @@ struct EnvScope{
 
   //TrieMap<String,VariableType>* variableTypes;
   TrieMap<String,Entity>* variable;
+};
+
+struct EntityAndLeftoverAccess{
+  Entity* ent;
+  MathExpression* leftover;
 };
 
 // Env is more of a parser related thing than it is an accelerator related thing.
@@ -287,21 +318,40 @@ struct Env{
   void PopScope();
 
   FUInstance* CreateInstance(FUDeclaration* type,String name);
+  FUInstance* CreateFUInstanceWithDeclaration(FUDeclaration* type,String name,InstanceDeclaration decl);
 
   // TODO: The arrayIndexIfArray does not tell us if we are trying to access an array or not.
   //       We probably need to encode such info so that we can properly error report
   FUInstance* GetFUInstance(Token name,int arrayIndexIfArray);
+  FUInstance* GetFUInstance(Token name,Array<int> arrayIndexIfArray);
 
   FUInstance* GetFUInstance(Var var);
-  FUInstance* GetOutputInstance();
+
+  Entity* PushReservedEntity(String name);
 
   Entity* PushNewEntity(Token name);
   Entity* GetEntity(Token name);
+  
+  // TODO: Need to remove this. We want tokens so that we can do proper error report.
+  Entity* GetEntity(String name);
 
-  Entity* GetEntity(ConfigIdentifier* id,Arena* out);
-  Entity* GetEntity(SpecExpression* id,Arena* out);
+  void CheckIfEntityExists(Token name);
+  
+#if 0
+  LEFT HERE - We need to return a leftover array access otherwise outside code cannot properly handle 
+              the missing array.
+#endif
 
-  int CalculateConstantExpression(SpecExpression* top);
+  EntityAndLeftoverAccess GetEntity(ConfigIdentifier* id,Arena* out);
+  Entity* GetEntity(MathExpression* id,Arena* out);
+
+  Array<int> ConvertRangeToStart(Array<Range<MathExpression*>> range,Arena* out);
+  Array<int> ConvertRangeToEnd(Array<Range<MathExpression*>> range,Arena* out);
+  
+  Array<int> ConvertRangeToIndex(Array<Range<MathExpression*>> range,Arena* out);
+
+  Array<int> CalculateArraySize(Array<MathExpression*> exprs);
+  int CalculateConstantExpression(MathExpression* top);
 
   void AddInput(VarDeclaration decl);
   void AddInstance(InstanceDeclaration decl,VarDeclaration var);
@@ -309,55 +359,98 @@ struct Env{
   void AddConnection(ConnectionDef def);
   void AddEquality(ConnectionDef def);
 
+  void AddParam(Token name);
   void AddVariable(Token name);
 
   PortExpression InstantiateSpecExpression(SpecExpression* root);
+
+  SYM_Expr SymbolicFromMathExpression(MathExpression* spec);
 };
 
 Env* StartEnvironment(Arena* freeUse,Arena* freeUse2);
 
+
+// NOTE: Even thought the specs use closed intervals, all the values inside the iterators
+//       are half intervals. Close on bottom and open on the top.
+//       The StartIteration functions perform the fixup to make sure that everything lines up
+
+struct DimIterator{
+  Array<int> dim;
+  Array<int> startValue;
+  Array<int> current;
+
+  int Size();
+  void Invalidate();
+
+  void Advance();
+  bool IsValid();
+  Array<int> Current();
+};
+
+DimIterator* StartIteration(Array<int> dims,Array<int> startValues,Arena* out);
+DimIterator* StartIteration(int size,Arena* out);
+
+void ArrayIndexIncrementInPlace(Array<int> dims,Array<int> startValue,Array<int> index);
+int ArrayIndexToInteger(Array<int> dims,Array<int> index);
+Array<int> IntegerToArrayIndex(Array<int> dims,int index,Arena* out);
+
 struct FUInstanceIterator{
   Env* env;
   Entity* ent;
-  int index;
-  int max;
 
-  FUInstanceIterator Next();
+  bool used;
+  DimIterator* iter;
+
+  void Advance();
   bool IsValid();
   FUInstance* Current();
 };
 
-struct GroupIterator{
-  Env* env;
-  VarGroup group;
-  int groupIndex;
-  int varIndex; // Either port, delay or array unit.
+FUInstanceIterator StartIteration(Env* env,Entity* ent,Arena* out);
+
+struct Connection{
+  Token name;
+
+  int port;
+  int delay;
+  Array<int> arrayIndex;
 };
 
-FUInstanceIterator StartIteration(Env* env,Entity* ent);
+struct VarIterator{
+  Token name;
+  
+  int startPort;
+  int currentPort;
+  int endPort;
 
-// TODO
-// nocheckin
-SymbolicExpression* SymbolicFromSpecExpression(SpecExpression* spec,Arena* out);
+  int startDelay;
+  int currentDelay;
+  int endDelay;
 
-#if 0
-LEFT HERE - We are still removing old parser stuff and making the needed changes.
-            UserConfig is still broken and most tests are not working right now because of it.
-            A lot of stuff is kinda deorganized. Function declarations and structs that need to be moved.
-            Old structs and functions that might need to be removed and so on.
-#endif
+  DimIterator* arrayIndex;
 
-#if 0
-// nocheckin
-// TODO: We are actually dealing with 2 types of expressions. 
-//       Connection expressions can have a '{' and '}' after a variable.
-//       UserConfig expressions cannot (otherwise cannot differentiate on expr like 'for 0..1 {' )
+  int Size();
+  void Invalidate();
 
+  void Advance();
+  bool IsValid();
+  Connection Current();
+};
 
-LEFT HERE - Since we are simplifying this part of the codebase, might
-as well go all out and finish the job. Parser stuff needs to be
-simplified. 
-- Afterwards a small cleanup of anything that is left, any unused function, maybe 
-improve the error messages and start making better error message generation support.
-- Finally, move on to versat-ai and figure out why the convolution is giving out that bug.
-#endif
+VarIterator* StartIteration(Env* env,Var var,Arena* out);
+
+struct GroupIterator{
+  Env* env;
+  VarGroup* group;
+  Array<VarIterator*> innerIters;
+  int currentIter;
+
+  int Size();
+  void Invalidate();
+
+  bool IsValid();
+  void Advance();
+  Connection Current();
+};
+
+GroupIterator IterateGroup(Env* env,VarGroup* group,Arena* out);

@@ -35,14 +35,14 @@ Array<VerilogPortSpec> INT_IObFormat;
 
 void InitializeDefaultData(Arena* perm){
   static VerilogPortSpec iobDatabus[] = {
-    {"databus_ready",SYM_one,WireDir_INPUT},
-    {"databus_valid",SYM_one,WireDir_OUTPUT},
-    {"databus_addr",SYM_axiAddrW,WireDir_OUTPUT},
-    {"databus_rdata",SYM_axiDataW,WireDir_INPUT,SpecialPortProperties_IsShared},
-    {"databus_wdata",SYM_axiDataW,WireDir_OUTPUT},
-    {"databus_wstrb",SYM_axiStrobeW,WireDir_OUTPUT},
-    {"databus_len",SYM_lenW,WireDir_OUTPUT},
-    {"databus_last",SYM_one,WireDir_INPUT},
+    {"databus_ready",SYM_One,WireDir_INPUT},
+    {"databus_valid",SYM_One,WireDir_OUTPUT},
+    {"databus_addr",SYM_AxiAddrW,WireDir_OUTPUT},
+    {"databus_rdata",SYM_AxiDataW,WireDir_INPUT,SpecialPortProperties_IsShared},
+    {"databus_wdata",SYM_AxiDataW,WireDir_OUTPUT},
+    {"databus_wstrb",SYM_AxiStrobeW,WireDir_OUTPUT},
+    {"databus_len",SYM_LenW,WireDir_OUTPUT},
+    {"databus_last",SYM_One,WireDir_INPUT},
   };
   INT_IOb = {iobDatabus,ARRAY_SIZE(iobDatabus)};
 

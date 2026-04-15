@@ -67,6 +67,8 @@ void StartAccelerator(); // Also waits for previous run to end if accelerator is
 void EndAccelerator(); // Ensure the accelerator as finished running
 void ResetAccelerator();
 
+void VERSAT_DisableReadsAndWrites();
+
 // Fast data movement using internal Versat DMA if possible, otherwise regular memcpy style functions
 void VersatMemoryCopy(volatile void* dest,volatile const void* data,int byteSize);
 void VersatUnitWrite(volatile const void* baseaddr,int index,int val);

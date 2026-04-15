@@ -12,6 +12,9 @@
 #include "symbolic.hpp"
 #include "utilsCore.hpp"
 
+// TODO: Bad approach to muxing stuff.
+String muxTypeName = "Mux8";
+
 bool NodeConflict(FUInstance* inst){
   // For now, do not even try to map nodes that contain any config modifiers.
   if(inst->isStatic){
@@ -30,6 +33,8 @@ bool NodeConflict(FUInstance* inst){
 }
 
 bool NodeConflict(FUInstance* first,FUInstance* second){
+  TEMP_REGION(temp,nullptr);
+  
   // Only call this function if instances are the same decl.
   if(first->declaration != second->declaration){
     return true;
@@ -37,19 +42,31 @@ bool NodeConflict(FUInstance* first,FUInstance* second){
 
   FUDeclaration* decl = first->declaration;
 
+  TrieMap<String,SYM_Expr>* param1 = GetParametersOfUnit(first,temp);
+  TrieMap<String,SYM_Expr>* param2 = GetParametersOfUnit(second,temp);
+
   for(int i = 0; i <  decl->parameters.size; i++){
     Parameter param = decl->parameters[i];
 
-    ParameterValue val1 = first->parameterValues[i];
-    ParameterValue val2 = second->parameterValues[i];
+    // NOTE: 
+    // How do we know that the params are different? They could be anything and there is a 
+    // possability that instantiation could make these equal.
+    // If we have parameters with value X and value Y then it might fail but it could turn out
+    // later that X == Y. At the same time we cannot assume this unless we know that the merged 
+    // unit is the top unit.
+    if(param.flags & ParamFlags_Unique){
+      SYM_Expr val1 = param1->GetOrFail(param.name);
+      SYM_Expr val2 = param2->GetOrFail(param.name);
 
-    if((param.flags & ParamFlags_Unique) && !ExpressionEqual(val1.val,val2.val)){
-      DEBUG_BREAK();
-      return true;
+      if(val1 != val2){
+        return true;
+      }
     }
 
     // TODO: To handle order and reverse order, we need to store in the mapping the node that is supposed to be used.
     //       Basically, if we have a node that has ADDR_W = 10 and another that has ADDR_W = 12, then all else being equal we want to use the ADDR_W = 12 values instead of keeping the ADDR_W = 10.
+    // NOTE: This requires to move the logic a little bit higher. This function not only needs to report conflict but it also needs to be able to report which node preference. 
+    // NOTE2: Or we move the node preference to the merging function. Node conflict remains the same but we then add logic to the merging where we check if the node already present is preferred or if we want the "new" node (we only care about parameters since that is what separates nodes from each other [also static and config sharing but that needs to be resolved on node conflict anyway).
   }
 
   return false;
@@ -1267,7 +1284,7 @@ ReconstituteResult ReconstituteGraph(Accelerator* merged,TrieSet<PortInstance>* 
 
   TrieMap<FUInstance*,FUInstance*>* mergedToRecon = PushTrieMap<FUInstance*,FUInstance*>(temp);
 
-  FUDeclaration* muxType = GetTypeByName("CombMux8"); // TODO: Kind of an hack
+  FUDeclaration* muxType = GetTypeByName(muxTypeName); // TODO: Kind of an hack
 
   Set<PortInstance>* seen = PushSet<PortInstance>(temp,merged->allocated.Size());
   
@@ -1719,7 +1736,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
 
   // TODO: We eventually must be able to handle generic units instantiation.
   // NOTE: We could currently reduce resource usage by, after doing the merge, replacing every mux added with the smallest version that we can. Only changing the decl of an instance is easy.
-  FUDeclaration* muxType = GetTypeByName("CombMux8");
+  FUDeclaration* muxType = GetTypeByName(muxTypeName);
 
   for(TrieSet<PortInstance>*& s : mergeMultiplexers){
     s = PushTrieSet<PortInstance>(temp); // TODO: Correct size or change to TrieSet. NOTE: Temp because later on the function we replace this maps from fixedCircuit to flattened circuit
@@ -1849,12 +1866,12 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   declInst.name = name;
   declInst.parameters = PushArray<Parameter>(globalPermanent,6);
 
-  declInst.parameters[0] = {"ADDR_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[1] = {"DATA_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[2] = {"DELAY_W",PushLiteral(globalPermanent,7)};
-  declInst.parameters[3] = {"AXI_ADDR_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[4] = {"AXI_DATA_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[5] = {"LEN_W",PushLiteral(globalPermanent,20)};
+  declInst.parameters[0] = {"ADDR_W",SYM_Lit(32)};
+  declInst.parameters[1] = {"DATA_W",SYM_Lit(32)};
+  declInst.parameters[2] = {"DELAY_W",SYM_Lit(7)};
+  declInst.parameters[3] = {"AXI_ADDR_W",SYM_Lit(32)};
+  declInst.parameters[4] = {"AXI_DATA_W",SYM_Lit(32)};
+  declInst.parameters[5] = {"LEN_W",SYM_Lit(20)};
 
   Pair<Accelerator*,AcceleratorMapping*> baseCopy = CopyAcceleratorWithMapping(mergedAccel,AcceleratorPurpose_BASE,true,globalPermanent);
 
@@ -2082,7 +2099,7 @@ FUDeclaration* Merge(Array<FUDeclaration*> types,
   
   FUDeclaration* decl = RegisterFU(declInst);
 
-  // MARK: Causes MERGE_TwoLevels to fail if false, which 
+  // TODO: Causes MERGE_TwoLevels to fail if false, which 
   bool oldDelayCalc = true;
   
   FillDeclarationWithAcceleratorValues(decl,mergedAccel,globalPermanent,oldDelayCalc);
@@ -2278,7 +2295,7 @@ ReconstituteResult ReconstituteGraphFromStruct(Accelerator* merged,TrieSet<PortI
 
   TrieMap<FUInstance*,FUInstance*>* instancesAdded = PushTrieMap<FUInstance*,FUInstance*>(temp);
 
-  FUDeclaration* muxType = GetTypeByName("CombMux8"); // TODO: Kind of an hack
+  FUDeclaration* muxType = GetTypeByName(muxTypeName); // TODO: Kind of an hack
 
   FUInstance* mergedInstance = nullptr;
   for(FUInstance* inst : parentType->fixedDelayCircuit->allocated){
@@ -2693,6 +2710,28 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
 
       FUInstance* reconInst = MapOrCreateNode(recon,inputToRecon,flattenInst);
 
+      FUDeclaration* decl = flattenInst->declaration;
+      
+      for(int i = 0; i < decl->parameters.size; i++){
+        Parameter param = decl->parameters[i];
+
+        // nocheckin: TODO: Need to finish this and do it properly. 
+        //                  Also we might need to rethink our approach to merge and the best way of making sure that 
+        //                  parameters are properly handled.
+        if(param.flags & ParamFlags_Order){
+          Opt<SYM_Expr> flatValOpt = flattenInst->parameterValues[i].val;
+          Opt<SYM_Expr> mergeValOpt = mergedInst->parameterValues[i].val;
+
+          if(flatValOpt.has_value() || mergeValOpt.has_value()){
+            SYM_Expr flatVal = flatValOpt.value_or(param.defaultVal);
+            SYM_Expr mergeVal = mergeValOpt.value_or(param.defaultVal);
+
+            mergedInst->parameterValues[i].val = SYM_PosMax(flatVal,mergeVal);
+            reconInst->parameterValues[i].val = SYM_PosMax(flatVal,mergeVal);
+          }
+        }
+      }
+
       if(mergedInst){
         if(!(mergedInst->name == flattenInst->name)){
           mergedInst->name = PushString(globalPermanent,"%.*s_%.*s",UN(mergedInst->name),UN(flattenInst->name));
@@ -2728,7 +2767,7 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
 
   // TODO: We have the full information needed to only use the minimum amount of ports needed.
   //       We are not forced to use a fixed amount of ports.
-  FUDeclaration* muxType = GetTypeByName("CombMux8");
+  FUDeclaration* muxType = GetTypeByName(muxTypeName);
 
   DebugOutputGraphs(merged,"BeforeInsertingMux");
   
@@ -2831,12 +2870,12 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
   // TODO: Kinda hacked approach to this
   declInst.parameters = PushArray<Parameter>(globalPermanent,6);
 
-  declInst.parameters[0] = {"ADDR_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[1] = {"DATA_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[2] = {"DELAY_W",PushLiteral(globalPermanent,7)};
-  declInst.parameters[3] = {"AXI_ADDR_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[4] = {"AXI_DATA_W",PushLiteral(globalPermanent,32)};
-  declInst.parameters[5] = {"LEN_W",PushLiteral(globalPermanent,20)};
+  declInst.parameters[0] = {"ADDR_W",SYM_Lit(32)};
+  declInst.parameters[1] = {"DATA_W",SYM_Lit(32)};
+  declInst.parameters[2] = {"DELAY_W",SYM_Lit(7)};
+  declInst.parameters[3] = {"AXI_ADDR_W",SYM_Lit(32)};
+  declInst.parameters[4] = {"AXI_DATA_W",SYM_Lit(32)};
+  declInst.parameters[5] = {"LEN_W",SYM_Lit(20)};
 
   declInst.name = PushString(globalPermanent,name);
 
@@ -2880,39 +2919,6 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
         PortInstance n1 = mergedEdge.in;
         
         InsertNewUnit(merged,uniqueName,BasicDeclaration::variableBuffer,n0,n1,0,true);
-
-#if 0        
-        // TODO: We are inserting the units on both the merged and the recon graphs but we are not adding them to the mappings. This works because the units that are inserted will never appear in the future of this "delay fixing algorithm". But nevertheless this is poor code and will bite us in the future. Eventually fix this.
-
-        // Add to merged graph
-        {
-          PortInstance n0 = mergedEdge.out;
-          PortInstance n1 = mergedEdge.in;
-
-          FUInstance* buffer = CreateFUInstance(mergedGraph,BasicDeclaration::buffer,uniqueName);
-          SetStatic(buffer);
-          
-          InsertUnit(mergedGraph,n0,n1,MakePortOut(buffer,0),MakePortIn(buffer,0));
-        }
-        
-        // Add to recon
-        for(int i = 0; i < size; i++){
-          Opt<Edge> edge = MapMergedEdgeToRecon(merged,mergedEdge,i);
-
-          if(!edge.has_value()){
-            continue;
-          }
-
-          Edge reconEdge = edge.value();
-          Accelerator* recon = merged->recons[i];
-          FUInstance* buffer = CreateFUInstance(recon,BasicDeclaration::buffer,uniqueName);
-          SetStatic(buffer);
-          
-          // NOTE: We are inserting the unit, but where are we inserting the mapping on the recons?
-
-          InsertUnit(recon,reconEdge.units[0],reconEdge.units[1],MakePortOut(buffer,0),MakePortIn(buffer,0));
-        }
-#endif
       }
     }
 
@@ -3008,7 +3014,7 @@ FUDeclaration* Merge2(Array<FUDeclaration*> types,
       }
     }
   }
-  
+
   for(int i = 0; i < size; i++){
     decl->info.infos[i].baseType = types[i];
 

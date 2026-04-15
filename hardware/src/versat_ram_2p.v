@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module iob_ram_2p #(
+module versat_ram_2p #(
    parameter HEXFILE = "none",
    parameter DATA_W  = 0,
    parameter ADDR_W  = 0
@@ -15,7 +15,7 @@ module iob_ram_2p #(
    //read port
    input               r_en_i,
    input  [ADDR_W-1:0] r_addr_i,
-   output [DATA_W-1:0] r_data_o
+   output reg [DATA_W-1:0] r_data_o
 );
 
    //this allows ISE 14.7 to work; do not remove
@@ -42,13 +42,6 @@ module iob_ram_2p #(
     end
    end
 
-   //read port
-   always @(posedge clk_i) begin
-       if (r_en_i) begin
-           r_data <= mem[r_addr_i];
-       end
-   end
-
    //write port
    always @(posedge clk_i) begin
        if (w_en_i) begin
@@ -56,6 +49,16 @@ module iob_ram_2p #(
        end
    end
 
-   assign r_data_o = r_data;
+   //read port
+   always @(posedge clk_i) begin
+       if (r_en_i) begin
+           r_data <= mem[r_addr_i];
+       end
+   end
+   
+   // Extra register to improve timing.
+   always @(posedge clk_i) begin
+       r_data_o <= r_data;
+   end
 
 endmodule

@@ -4,8 +4,9 @@
 // Dependency order is utilsCore <- memory <- utils
 
 #include "utilsCore.hpp"
-#include "filesystem.hpp"
 #include "memory.hpp"
+
+//#include "filesystem.hpp"
 
 // TODO: There exists a bunch of enums that do not really have a good place to be and that are used throught the entier code base.
 //       Misc Enums that we probably want to stuff into a Defs.hpp file
@@ -17,8 +18,6 @@ enum Direction{
   Direction_WRITE = 1,
   Direction_READ = 2
 };
-
-FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose);
 
 Array<String> Split(String content,char sep,Arena* out); // For now only split over one char. 
 
@@ -38,49 +37,11 @@ String ReprMemorySize(size_t val,Arena* out);
 
 String JoinStrings(Array<String> strings,String separator,Arena* out);
 
-static inline bool Contains(String bigger,String smaller){
-  TEMP_REGION(temp,nullptr);
-  
-  String withNull = PushString(temp,bigger);
-  
-  void* ptr = (void*) strstr(withNull.data,StaticFormat("%.*s",UN(smaller)));
-  bool res = (ptr != nullptr);
-  
-  return res;
-}
+String PushBinaryRepr(Arena* out,int number);
 
-template<typename Value,typename Error>
-struct Result{
-  union{
-    Value value;
-    Error error;
-  };
-  bool isError;
-  
-  Result() = default;
-  Result(Value val){value = val; isError = false;};
-  Result(Error err){error = err; isError = true;};
-  
-  //operator bool(){return !isError;} // This was previously commented out. Do not know if this can cause any error 
-};
-#define CHECK(RESULT) if((RESULT).isError){return (RESULT).error;}
-
-// For cases where both Value and Error are the type
-template<typename T>
-struct Result<T,T>{
-  union{
-    T value;
-    T error;
-  };
-  bool isError;
-
-  Result() = default;
-};
-
-template<typename T>
-Result<T,T> MakeResultValue(T val){Result<T,T> res = {}; res.value = val; return res;};
-template<typename T>
-Result<T,T> MakeResultError(T val){Result<T,T> res = {}; res.error = val; res.isError = true; return res;};
+// nocheckin: Reorganize
+String PushPointingString(Arena* out,int startPos,int size);
+Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
 
 // A templated type for carrying the index in an array
 // A performant design would allocate a separate array because these functions copy data around.
@@ -209,7 +170,7 @@ template<typename T>
 Array<T> Reverse(Array<T> arr,Arena* out){
   Array<T> res = PushArray<T>(out,arr.size);
   
-  for(u32 i = 0; i < arr.size; i++){
+  for(int i = 0; i < arr.size; i++){
     res[arr.size - i - 1] = arr[i];
   }
 
@@ -293,6 +254,16 @@ Array<T> CopyArray(Array<T> arr,Arena* out){
     res[i] = arr[i];
   }
   return res;
+}
+
+template<typename T>
+void CopyArrayInPlace(Array<T> dst,Array<T> src){
+  // NOTE: Could also just copy the min size but we mostly only copy equal sized arrays.
+  Assert(dst.size == src.size);
+  
+  for(int i = 0; i < src.size; i++){
+    dst[i] = src[i];
+  }
 }
 
 template<typename T,typename D>
@@ -739,5 +710,18 @@ Array<Pair<T,Array<T>>> AssociateOneToOthers(Array<T> arr,Arena* out){
     }
   }
 
+  return res;
+}
+
+template<typename K,typename D>
+Array<D> Replace(Array<K> in,TrieMap<K,D>* map,Arena* out){
+  int size = in.size;
+  
+  Array<D> res = PushArray<D>(out,size);
+
+  for(int i = 0; i < size; i++){
+    res[i] = map->GetOrFail(in[i]);
+  }
+  
   return res;
 }

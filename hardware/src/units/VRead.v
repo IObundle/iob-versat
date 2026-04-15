@@ -2,7 +2,7 @@
 
 module VRead #(
    parameter DATA_W     = 32,
-   parameter ADDR_W     = 18,
+   parameter /* versat:order */ ADDR_W = 18,
    parameter PERIOD_W   = 16, // Must be 2 less than ADDR_W (boundary of 4) (for 32 bit DATA_W)
    parameter AXI_ADDR_W = 32,
    parameter AXI_DATA_W = 32,
@@ -27,7 +27,7 @@ module VRead #(
    input                         databus_last_0,
 
    // input / output data
-   (* versat_latency = 1 *) output [DATA_W-1:0] out0,
+   (* versat_latency = 3 *) output reg [DATA_W-1:0] out0,
 
    // External memory
    output [    ADDR_W-1:0] ext_2p_addr_out_0,
@@ -66,10 +66,6 @@ module VRead #(
 
    input [DELAY_W-1:0] delay0
 );
-
-   //assign databus_wdata_0 = 0;
-   //assign databus_wstrb_0 = 0;
-   //assign databus_len_0   = length;
 
    // output databus
    wire              transferDone;
@@ -288,6 +284,8 @@ assign data_data = databus_rdata_0;
    localparam DECISION_BIT_W = $clog2(DIFF);
    localparam DECISION_BIT_START = $clog2(DATA_W / 8);
 
+   reg [DATA_W-1:0] out0_temp;
+
    generate
       if (AXI_DATA_W > DATA_W) begin
          reg [DECISION_BIT_W-1:0] sel_0;  // Matches addr_0_port_0
@@ -299,19 +297,25 @@ assign data_data = databus_rdata_0;
             end
          end
 
-         WideAdapter #(
+         Versat_WideAdapter #(
             .INPUT_W (AXI_DATA_W),
             .OUTPUT_W(DATA_W),
             .SIZE_W  (DATA_W)
          ) adapter (
             .sel_i(sel_0),
             .in_i (ext_2p_data_in_0),
-            .out_o(out0)
+            .out_o(out0_temp)
          );
       end else begin
-         assign out0 = ext_2p_data_in_0;
+         always @* begin
+            out0_temp = ext_2p_data_in_0;
+         end
       end  // if(AXI_DATA_W > DATA_W)
    endgenerate
+
+   always @(posedge clk) begin
+      out0 <= out0_temp;
+   end
 
    assign ext_2p_write_0    = write_en;
    assign ext_2p_addr_out_0 = write_addr;

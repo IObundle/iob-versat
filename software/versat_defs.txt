@@ -1,28 +1,30 @@
-// This file is used as a repository of data.
-// A tool runs at compile time to extract all these data and to generate code files.
-// Stuff like enums, tables of data and the like are easier to define here.
-// Especially because we use certain structures that make it difficult to quickly define literal expressions
-// (Ex: hard in C to define a literal expression of Array<String>)
-// We can also use this data to generate other helpful code.
-// Unless specified otherwise, this file is the source of truth for large amounts of configurable Versat data.
-// It should be easy to change the way versat interprets different types of wires and such by changing stuff here.
+/*
+This file is used as a repository of data.
+A tool runs at compile time to extract all these data and to generate code files.
+Stuff like enums, tables of data and the like are easier to define here.
+Especially because we use certain structures that make it difficult to quickly define literal expressions
+(Ex: hard in C to define a literal expression of Array<String>)
+We can also use this data to generate other helpful code.
+Unless specified otherwise, this file is the source of truth for large amounts of configurable Versat data.
+It should be easy to change the way versat interprets different types of wires and such by changing stuff here.
 
-// Note: Currently everything is a string. Whether the output is the string or the name depends on the types given.
-//       Using "" to allow escaping values is currently not supported.
+Note: Currently everything is a string. Whether the output is the string or the name depends on the types given.
+    Using "" to allow escaping values is currently not supported.
 
-// Note: I do not want to spend much time trying to beef up the parser of these files. Most errors are just gonna 
-//       be asserts, segfaults and the likes so be careful changing stuff in here.
+Note: I do not want to spend much time trying to beef up the parser of these files. Most errors are just gonna 
+    be asserts, segfaults and the likes so be careful changing stuff in here.
 
-// Note: Some of these generate code that uses some predefined naming conventions.
-//       Ex: Tables generate an array of structs whose name is the name defined here with the first letter uppercase. 
-//           The name of the variable is the same except the first letter is downcase. 
-//           (Basically "table Test(...)" produces the code "Array<Test> test = ...")
+Note: Some of these generate code that uses some predefined naming conventions.
+    Ex: Tables generate an array of structs whose name is the name defined here with the first letter uppercase. 
+        The name of the variable is the same except the first letter is downcase. 
+        (Basically "table Test(...)" produces the code "Array<Test> test = ...")
 
-// Note: The data encoded here should be agnostic to the actual containers. I do not want to see an "Array<String>" even though it is basically what we produce in the final code
-//       Part of this approach is to abstract the actual containers used. String is fine, but Array,Hashmap and so on is not.
-//       At the same time, stuff like Set is also fine since we are not actually describing the container used but the fact that we are dealing with a list of unique values. (Where order does not matter for the matter of equality, for example)
+Note: The data encoded here should be agnostic to the actual containers. I do not want to see an "Array<String>" even though it is basically what we produce in the final code
+       Part of this approach is to abstract the actual containers used. String is fine, but Array,Hashmap and so on is not.
+       At the same time, stuff like Set is also fine since we are not actually describing the container used but the fact that we are dealing with a list of unique values. (Where order does not matter for the matter of equality, for example)
 
-// TODO: Map should be able to map multiple data into multiple data. Something like map M(A a,B b : C c,D d,E e) to describe a 2 to 3 map.
+ TODO: Map should be able to map multiple data into multiple data. Something like map M(A a,B b : C c,D d,E e) to describe a 2 to 3 map.
+*/
 
 enum AddressGenType{
    // NONE is not defined so that we do not have to implement full switch

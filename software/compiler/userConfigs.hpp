@@ -1,15 +1,13 @@
 #pragma once
 
-#include "parser.hpp"
 #include "addressGen.hpp"
+#include "hierName.hpp"
 
 // TODO: Remove this.
 #include "versatSpecificationParser.hpp"
 
 struct FUDeclaration;
-struct SymbolicExpression;
 struct AddressAccess;
-struct Parser;
 
 // Move user configuration functions here.
 
@@ -53,28 +51,21 @@ struct FunctionInvocation{
 
 enum ConfigStatementType{
   ConfigStatementType_FOR_LOOP,
-  ConfigStatementType_STATEMENT
+  ConfigStatementType_EQUALITY,
+  ConfigStatementType_FUNCTION_CALL
 };
+
+inline bool IsLeaf(ConfigStatementType type){ return (type == ConfigStatementType_EQUALITY || type == ConfigStatementType_FUNCTION_CALL);}
 
 struct ConfigStatement{
   ConfigStatementType type;
 
-  // TODO: Union
-  ConfigIdentifier* lhs; // We currently only support <name>.<wire> assignments. NOTE: But I think that we eventually need to support N names and one wire.
-  Array<Token> rhs;
+  // Why have a ConfigIdentifier and a SpecExpression?
 
   // TODO: Union
-#if 0
-  ConfigRHSType rhsType;
-  SymbolicExpression* expr;
-  ConfigIdentifier* rhsId;
-  FunctionInvocation* func;
-#endif
-
-  SpecExpression* trueRhs;
-
-  //AddressGenForDef def;
-  AddressGenForDef2 def2;
+  ConfigIdentifier* lhs;
+  MathExpression* rhs;
+  AddressGenForDef def;
   Array<ConfigStatement*> childs; // Only for loops contains these right now.
 };
 
@@ -105,9 +96,6 @@ struct ConfigFunctionDef{
   bool debug;
 };
 
-bool IsNextTokenConfigFunctionStart(Parser* parser);
-bool IsNextTokenConfigFunctionStart(Tokenizer* tok);
-
 // ============================================================================
 // Instantiation and manipulation
 
@@ -127,9 +115,9 @@ enum TransferDirection{
 struct FunctionMemoryTransfer{
   TransferDirection dir;
 
-  String sizeExpr;
+  SYM_Expr size;
   String variable;
-  String entityName;
+  HIER_Name name;
 };
 
 enum ConfigStuffType{
@@ -141,7 +129,7 @@ enum ConfigStuffType{
 // TODO: We probably want to remove this and just pass everything into ConfigStuff.
 struct ConfigAssignment{
   String lhs;
-  SymbolicExpression* rhs;
+  SYM_Expr rhs;
   String rhsId;
   
   String special;
@@ -151,9 +139,9 @@ struct ConfigStuff{
   ConfigStuffType type;
 
   // TODO: This lhs is only for access. Need to join stuff with assign and access if we eventually cleanup the code.
-  String lhs;
-  String accessVariableName;
+  HIER_Name lhs;
 
+  String accessVariableName;
   String nameOfLeftEntity;
 
   union{
@@ -172,16 +160,14 @@ struct ConfigVariable{
 struct ConfigFunction{
   ConfigFunctionType type;
 
-  FunctionMemoryTransfer transfer;
-
   String individualName;
   String fullName;
   FUDeclaration* decl; // Every config function is associated to one declaration only.
 
   Array<ConfigStuff> stuff;
   Array<ConfigVariable> variables;
-  Array<String> newStructs;
   String structToReturnName;
+  String stateStructContent;
 
   bool supportsSizeCalc;
 

@@ -1,5 +1,4 @@
-#include "filesystem.hpp"
-#include "parser.hpp"
+//#include "filesystem.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
@@ -113,6 +112,25 @@ const char* GetFilename(const char* fullpath){
   }
 
   return lastGood;
+}
+
+String GetFilename(String fullpath){
+  const char* lastGood = fullpath.data;
+  const char* ptr = fullpath.data;
+
+  int size = fullpath.size;
+
+  for(int index = 0; index < size; index += 1){
+    if(ptr[index] == '/'){
+      lastGood = &ptr[index] + 1;
+    }
+  }
+
+  String res = {};
+  res.data = lastGood;
+  res.size = fullpath.data + fullpath.size - lastGood;
+
+  return res;
 }
 
 void FlushStdout(){
@@ -640,6 +658,20 @@ void HexStringToHex(unsigned char* buffer,String str){
   }
 }
 
+int String_CommonPrefixSize(String first,String second){
+  int size = MIN(first.size,second.size);
+  int amount = 0;
+  for(int i = 0; i < size; i++){
+    if(first[i] == second[i]){
+      amount += 1;
+    } else {
+      break;
+    }
+  }
+
+  return amount;
+}
+
 static unsigned int randomSeed = 1;
 void SeedRandomNumber(unsigned int val){
   if(val == 0){
@@ -722,16 +754,221 @@ unsigned char* GetHexadecimal(const unsigned char* text, int str_size){
   return buffer;
 }
 
-bool IsAlpha(char ch){
-  if(ch >= 'a' && ch < 'z')
-    return true;
-
-  if(ch >= 'A' && ch <= 'Z')
-    return true;
-
-  if(ch >= '0' && ch <= '9')
-    return true;
-
-  return false;
+// The following two functions together will error if not decimal or hexadecimal
+static int CharToInt(char ch){
+  if(ch >= '0' && ch <= '9'){
+    return ch - '0';
+  } else if(ch >= 'A' && ch <= 'F'){
+    return 10 + (ch - 'A');
+  } else if(ch >= 'a' && ch <= 'f'){
+    return 10 + (ch - 'a');
+  } else {
+    NOT_POSSIBLE("Assuming that function is only called in places where we know char must be hex");
+  }
+  return 0;
 }
 
+bool Contains(String bigger,String smaller){
+  TEMP_REGION(temp,nullptr);
+  
+  String withNull = PushString(temp,bigger);
+  
+  void* ptr = (void*) strstr(withNull.data,StaticFormat("%.*s",UN(smaller)));
+  bool res = (ptr != nullptr);
+  
+  return res;
+}
+
+int ParseInt(String ss){
+  const char* str = ss.data;
+  int size = ss.size;
+
+  int sign = 1;
+  if(size >= 1 && str[0] == '-'){
+    sign = -1;
+    size -= 1;
+    str += 1;
+  }
+
+  if(size >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')){ // Hexadecimal
+      int res = 0;
+
+      for(int i = 2; i < size; i++){
+        res *= 16;
+        res += CharToInt(str[i]);
+      }
+
+      return (res * sign);
+  } else {
+    int res = 0;
+    for(int i = 0; i < size; i++){
+      Assert(str[i] >= '0' && str[i] <= '9');
+
+      res *= 10;
+      res += CharToInt(str[i]);
+    }
+    return (res * sign);
+  }
+}
+
+String PushPointingString(Arena* out,int startPos,int size){
+  TEMP_REGION(temp,out);
+  StringBuilder* builder = StartString(temp);
+
+  for(int i = 0; i < startPos; i++){
+    builder->PushString(" ");
+  }
+  for(int i = 0; i < size; i++){
+    builder->PushString("^");
+  }
+
+  return EndString(out,builder);
+}
+
+Array<Value> ExtractValues(const char* format,String tok,Arena* out){
+  // TODO: This is pretty much a copy of CheckFormat but with small modifications
+  // There should be a way to refactor into a single function, and probably less error prone
+  if(!CheckFormat(format,tok)){
+    return {};
+  }
+
+  TEMP_REGION(temp,out);
+
+  auto list = PushList<Value>(temp);
+
+  int tokenIndex = 0;
+  for(int formatIndex = 0; 1;){
+    char formatChar = format[formatIndex];
+
+    if(formatChar == '\0'){
+      break;
+    }
+
+    Assert(tokenIndex < tok.size);
+
+    if(formatChar == '%'){
+      char type = format[formatIndex + 1];
+      formatIndex += 2;
+
+      switch(type){
+      case 'd':{
+        String numberStr = {};
+        numberStr.data = &tok[tokenIndex];
+
+        for(tokenIndex += 1; tokenIndex < tok.size; tokenIndex++){
+          if(!IsNum(tok[tokenIndex])){
+            break;
+          }
+        }
+
+        numberStr.size = &tok.data[tokenIndex] - numberStr.data;
+        int number = ParseInt(numberStr);
+
+        Value* val = list->PushElem();
+        *val = {};
+        val->type = ValueType_NUMBER;
+        val->number = number;
+      }break;
+      case 's':{
+        char terminator = format[formatIndex];
+        String str = {};
+        str.data = &tok[tokenIndex];
+
+        for(;tokenIndex < tok.size; tokenIndex++){
+          if(tok[tokenIndex] == terminator){
+            break;
+          }
+        }
+
+        str.size = &tok.data[tokenIndex] - str.data;
+
+        Value* val = list->PushElem();
+        *val = {};
+        val->type = ValueType_STRING;
+        val->str = str;
+      }break;
+      case '\0':{
+        NOT_POSSIBLE("Format char not finished"); // TODO: Probably should be a error that reports 
+      }break;
+      default:{
+        NOT_IMPLEMENTED("Implement as needed");
+      }break;
+      }
+    } else {
+      Assert(formatChar == tok[tokenIndex]);
+      formatIndex += 1;
+      tokenIndex += 1;
+    }
+  }
+
+  Array<Value> values = PushArray(out,list);
+
+  return values;
+}
+
+
+bool IsNum(char ch){
+  bool res = (ch >= '0' && ch <= '9');
+
+  return res;
+}
+
+bool CheckFormat(const char* format,String tok){
+  int tokenIndex = 0;
+  for(int formatIndex = 0; 1;){
+    char formatChar = format[formatIndex];
+
+    if(formatChar == '\0'){
+      if(tok.size == tokenIndex){
+        return true;
+      } else {
+        return false;
+      }
+    }
+
+    if(tokenIndex >= tok.size){
+      return false;
+    }
+
+    if(formatChar == '%'){
+      char type = format[formatIndex + 1];
+      formatIndex += 2;
+
+      switch(type){
+      case 'd':{
+        if(!IsNum(tok[tokenIndex])){
+          return false;
+        }
+
+        for(tokenIndex += 1; tokenIndex < tok.size; tokenIndex++){
+          if(!IsNum(tok[tokenIndex])){
+            break;
+          }
+        }
+      }break;
+      case 's':{
+        char terminator = format[formatIndex];
+
+        for(;tokenIndex < tok.size; tokenIndex++){
+          if(tok[tokenIndex] == terminator){
+            break;
+          }
+        }
+      }break;
+      case '\0':{
+        NOT_POSSIBLE("Format char not finished"); // TODO: Probably should be a error that reports
+      }break;
+      default:{
+        NOT_IMPLEMENTED("Implement as needed");
+      }break;
+      }
+    } else if(formatChar != tok[tokenIndex]){
+      return false;
+    } else {
+      formatIndex += 1;
+      tokenIndex += 1;
+    }
+  }
+
+  return true;
+}

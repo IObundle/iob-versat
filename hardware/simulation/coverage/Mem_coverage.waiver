@@ -6,8 +6,8 @@
 
 // waiver structure:
 // waive filename:line[:line] [reason]
-waive my_iob_dp_ram.v:1:79 "Waive Memory Module"
-waive my_dp_asym_ram.v:1:178 "Waive Memory Module"
+waive versat_iob_dp_ram.v:1:79 "Waive Memory Module"
+waive versat_dp_asym_ram.v:1:178 "Waive Memory Module"
 
 waive SuperAddress.v:29 "ignore_first_i is always 0"
 waive SuperAddress.v:41:51 "inputs always 0"

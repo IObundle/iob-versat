@@ -149,6 +149,14 @@ inline bool operator==(StructInfo& l,StructInfo& r){
   return true;
 }
 
+// ============================================================================
+// Logic defining utilities (These functions are the source of truth
+// for how things should be done ex: how are instanc// e names and
+// wires "concatenated" to generate the final identifier and so on).
+//  TODO: Put more stuff in here.
+
+String GEN_GetStructMemberName(InstanceInfo* info,Wire wire,Arena* out);
+
 int GetIndex(VersatComputedValues val,VersatRegister reg);
 Opt<int> GetOptIndex(VersatComputedValues val,VersatRegister reg);
 

@@ -2,15 +2,12 @@
 
 #include "debug.hpp"
 #include "memory.hpp"
-#include "parser.hpp"
 #include "utils.hpp"
 #include "CEmitter.hpp"
+#include "parser.hpp"
+#include "utilsCore.hpp"
 
 #include <dirent.h>
-
-// TODO: We might wnat to be able to generate different source files in order to take advantage of the compilation of objects. No point recompiling stuff everytime we only want to change a single enum or something like that. This is only important if the time taken to compile the sources starts to become problematic.
-
-// TODO: We are trying to be "clever" with the fact that we only parse stuff and then let outside code act on it, but I think that I just want to make stuff as simple as possible. If the parser sees a enum it immediatly registers it and the parsing code can immediatly check if a type already exists or not. I do not see the need to make this code respect lexer/parser/compiler boundaries because we immediatly fail and force the programmer to change if any parsing problem occurs. No need to synchronize or keep parsing or anything like that, just make sure that we fail fast.
 
 // TODO: Support numbers inside tables. Support more levels of data hierarchies.
 //       More importantly, implement stuff as they are needed. No point in trying to push for anything complex right now.
@@ -24,92 +21,18 @@
 
 // TODO: We are currently doing everything manually in terms of instantiating C auxiliary arrays and that kinda sucks. I should be able to make it more automatic, I should be able to generalize it somewhat.
 
-void ReportError(String content,Token faultyToken,String error){
-  TEMP_REGION(temp,nullptr);
-
-  String loc = GetRichLocationError(content,faultyToken,temp);
-
-  printf("\n");
-  printf("%.*s\n",UN(faultyToken));
-  printf("%.*s\n",UN(error));
-  printf("%.*s\n",UN(loc));
-  printf("\n");
-
-  DEBUG_BREAK_OR_EXIT();
-}
-
-void ReportError(Tokenizer* tok,Token faultyToken,String error){
-  String content = tok->GetContent();
-  ReportError(content,faultyToken,error);
-}
-
-static bool IsValidIdentifier(String str){
-  auto CheckSingle = [](char ch){
-    return ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_');
-  };
-
-  if(str.size <= 0){
-    return false;
-  }
-
-  if(!CheckSingle(str.data[0])){
-    return false;
-  }
-
-  for(int i = 1; i < str.size; i++){
-    char ch = str.data[i];
-    if(!CheckSingle(ch) && !(ch >= '0' && ch <= '9')){
-      return false;
-    }
-  }
-
-  return true;
-}
-
-#define CheckIdentifier(ID) \
-  if(!IsValidIdentifier(ID)){ \
-    ReportError(tok,ID,StaticFormat("identifier '%.*s' is not a valid name",UN(ID))); \
-    return {}; \
-  }
-
-bool _ExpectError(Tokenizer* tok,String expected){
-  TEMP_REGION(temp,nullptr);
-
-  Token got = tok->NextToken();
-  if(!CompareString(got,expected)){
-    
-    auto builder = StartString(temp);
-    builder->PushString("Parser Error.\n Expected to find:  '");
-    builder->PushString(PushEscapedString(temp,expected,' '));
-    builder->PushString("'\n  Got:");
-    builder->PushString(PushEscapedString(temp,got,' '));
-    builder->PushString("\n");
-    String text = EndString(temp,builder);
-    ReportError(tok,got,StaticFormat("%*s",UN(text))); \
-    return true;
-  }
-  return false;
-}
-
-#define AssertToken(TOKENIZER,STR) \
-  do{ \
-    if(_ExpectError(TOKENIZER,STR)){ \
-      return {}; \
-    } \
-  } while(0)
-
 struct EnumDef{
-  Token name;
+  String name;
   Array<Pair<String,String>> valuesNamesWithValuesIfExist;
 };
 
 struct StructDef{
-  Token name;
+  String name;
   Array<Pair<String,String>> typeAndName;
 };
 
 struct TypeDef{
-  Token name;
+  String name;
   bool isArray;
 };
 
@@ -120,8 +43,8 @@ enum DataValueType{
 };
 
 struct FunctionValue{
-  Token name;
-  Array<Token> parameters;
+  String name;
+  Array<String> parameters;
 };
 
 struct DataValue{
@@ -134,14 +57,14 @@ struct DataValue{
 };
 
 struct ArrayDef{
-  Token name;
-  Token type;
+  String name;
+  String type;
   DataValue* val;
 };
 
 struct Parameter{
   TypeDef* type;
-  Token name;
+  String name;
 };
 
 struct TableDef{
@@ -205,42 +128,42 @@ struct FileGroupInfo{
   String contentRawArrayName;
 };
 
-Pool<EnumDef> enums = {};
-Pool<StructDef> structs = {};
-Pool<TableDef> tables = {};
-Pool<MapDef> maps = {};
-Pool<FileDef> files = {};
-Pool<FileGroupDef> fileGroups = {};
-Pool<ArrayDef> arrays = {};
+ArenaList<EnumDef>* enums = nullptr;
+ArenaList<StructDef>* structs = nullptr;
+ArenaList<TableDef>* tables = nullptr;
+ArenaList<MapDef>* maps = nullptr;
+ArenaList<FileDef>* files = nullptr;
+ArenaList<FileGroupDef>* fileGroups = nullptr;
+ArenaList<ArrayDef>* arrays = nullptr;
 
 // TODO: Weird way of doing things but works for now.
-GenericDef GetDefinition(Token name){
+GenericDef GetDefinition(String name){
   GenericDef res = {};
-  for(EnumDef* def : enums){
-    if(CompareString(def->name,name)){
+  for(EnumDef& def : enums){
+    if(CompareString(def.name,name)){
       res.type = DefType_ENUM;
-      res.asGenericPointer = def;
+      res.asGenericPointer = &def;
       return res;
     }
   }
-  for(StructDef* def : structs){
-    if(CompareString(def->name,name)){
+  for(StructDef& def : structs){
+    if(CompareString(def.name,name)){
       res.type = DefType_STRUCT;
-      res.asGenericPointer = def;
+      res.asGenericPointer = &def;
       return res;
     }
   }
-  for(TableDef* def : tables){
-    if(CompareString(def->structTypename,name)){
+  for(TableDef& def : tables){
+    if(CompareString(def.structTypename,name)){
       res.type = DefType_TABLE;
-      res.asGenericPointer = def;
+      res.asGenericPointer = &def;
       return res;
     }
   }
-  for(MapDef* def : maps){
-    if(CompareString(def->name,name)){
+  for(MapDef& def : maps){
+    if(CompareString(def.name,name)){
       res.type = DefType_MAP;
-      res.asGenericPointer = def;
+      res.asGenericPointer = &def;
       return res;
     }
   }
@@ -251,204 +174,176 @@ GenericDef GetDefinition(Token name){
 }
 
 static bool IsEnum(String name){
-  for(EnumDef* def : enums){
-    if(def->name == name){
+  for(EnumDef def : enums){
+    if(def.name == name){
       return true;
     }
   }
   return false;
 }
 
-EnumDef* ParseEnum(Tokenizer* tok,Arena* out){
+EnumDef* ParseEnum(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"enum");
+  
+  tok->ExpectIdentifier("enum");
 
-  Token enumTypeName = tok->NextToken();
-  CheckIdentifier(enumTypeName);
+  Token enumTypeName = tok->ExpectNext(TokenType_IDENTIFIER);
 
-  AssertToken(tok,"{");
-
+  tok->ExpectNext('{');
+  
   auto memberList = PushList<Pair<String,String>>(temp);
   while(!tok->Done()){
-    Token name = tok->NextToken();
-    CheckIdentifier(name);
+    Token name = tok->ExpectNext(TokenType_IDENTIFIER);
 
     String fullValue = {};
-    if(tok->IfNextToken("=")){
-      auto mark = tok->Mark();
-
-      // TODO: Proper enum parsing otherwise we are going to run into errors constantly.
-      //       But need to see what kinda of expressions we are expected to support as well.
-      while(!tok->Done() && !tok->IfPeekToken(",") && !tok->IfPeekToken("}")){
-        tok->AdvancePeek();
+    if(tok->IfNextToken('=')){
+      auto b = StartString(temp);
+      while(!tok->Done() && !tok->IfPeekToken(',') && !tok->IfPeekToken('}')){
+        Token t = tok->NextToken();
+        b->PushString(t.originalData);
       }
 
-      fullValue = tok->Point(mark);
-      fullValue = TrimWhitespaces(fullValue);
+      fullValue = EndString(out,b);
     }
-
-    *memberList->PushElem() = {name,fullValue};
-
-    tok->IfNextToken(",");
-
-    if(tok->IfPeekToken("}")){
+    
+    *memberList->PushElem() = {name.identifier,fullValue};
+    
+    tok->IfNextToken(',');
+    
+    if(tok->IfPeekToken('}')){
       break;
     }
   }
 
-  AssertToken(tok,"}");
-  AssertToken(tok,";");
+  tok->ExpectNext('}');
+  tok->ExpectNext(';');
 
-  EnumDef* res = enums.Alloc();
-  res->name = enumTypeName;
+  EnumDef* res = enums->PushElem();
+  res->name = enumTypeName.identifier;
   res->valuesNamesWithValuesIfExist = PushArray(out,memberList);
 
   return res;
 }
 
-StructDef* ParseStruct(Tokenizer* tok,Arena* out){
+StructDef* ParseStruct(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"struct");
 
-  Token structTypeName = tok->NextToken();
-  CheckIdentifier(structTypeName);
+  tok->ExpectIdentifier("struct");
 
-  AssertToken(tok,"{");
+  Token structTypeName = tok->ExpectNext(TokenType_IDENTIFIER);
+
+  tok->ExpectNext('{');
 
   auto memberList = PushList<Pair<String,String>>(temp);
   while(!tok->Done()){
-    Token type = tok->NextToken();
-    CheckIdentifier(type);
-    
-    Token name = tok->NextToken();
-    CheckIdentifier(name);
+    Token type = tok->ExpectNext(TokenType_IDENTIFIER);
+    Token name = tok->ExpectNext(TokenType_IDENTIFIER);
 
-    *memberList->PushElem() = {type,name};
+    *memberList->PushElem() = {type.identifier,name.identifier};
 
-    tok->IfNextToken(";");
+    tok->IfNextToken(';');
 
-    if(tok->IfPeekToken("}")){
+    if(tok->IfPeekToken('}')){
       break;
     }
   }
 
-  AssertToken(tok,"}");
-  AssertToken(tok,";");
+  tok->ExpectNext('}');
+  tok->ExpectNext(';');
 
-  StructDef* res = structs.Alloc();
-  res->name = structTypeName;
+  StructDef* res = structs->PushElem();
+  res->name = structTypeName.identifier;
   res->typeAndName = PushArray(out,memberList);
 
   return res;
 }
 
-TypeDef* ParseTypeDef(Tokenizer* tok,Arena* out){
-  Token name = tok->NextToken();
-  CheckIdentifier(name);
+TypeDef* ParseTypeDef(Parser* tok,Arena* out){
+  Token name = tok->ExpectNext(TokenType_IDENTIFIER);
 
   bool isArray = false;
-  if(tok->IfNextToken("[")){
-    AssertToken(tok,"]");
+  if(tok->IfNextToken('[')){
+    tok->ExpectNext(']');
     isArray = true;
   }
 
   TypeDef* def = PushStruct<TypeDef>(out);
-  def->name = name;
+  def->name = name.identifier;
   def->isArray = isArray;
 
   return def;
 }
 
-Array<Token> ParseList(Tokenizer* tok,Arena* out){
+Array<String> ParseList(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"(");
+  tok->ExpectNext('(');
 
-  auto typeList = PushList<Token>(temp);
+  auto typeList = PushList<String>(temp);
   while(!tok->Done()){
-    Token name = tok->NextToken();
-    CheckIdentifier(name);
+    Token name = tok->ExpectNext(TokenType_IDENTIFIER);
 
-    *typeList->PushElem() = name;
+    *typeList->PushElem() = name.identifier;
     
-    if(tok->IfPeekToken(")")){
+    if(tok->IfPeekToken(')')){
       break;
     }
 
-    tok->IfNextToken(",");
+    tok->IfNextToken(',');
   }
-  AssertToken(tok,")");
+  tok->ExpectNext(')');
 
-  Array<Token> defs = PushArray(out,typeList);
+  Array<String> defs = PushArray(out,typeList);
   return defs;
 }
 
-Array<Parameter> ParseParameterList(Tokenizer* tok,Arena* out){
+Array<Parameter> ParseParameterList(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"(");
+  tok->ExpectNext('(');
 
   auto typeList = PushList<Parameter>(temp);
   while(!tok->Done()){
     TypeDef* def = ParseTypeDef(tok,out);
     
-    Token name = tok->NextToken();
-    CheckIdentifier(name);
+    Token name = tok->ExpectNext(TokenType_IDENTIFIER);
 
-    *typeList->PushElem() = {def,name};
+    *typeList->PushElem() = {def,name.identifier};
     
-    if(tok->IfPeekToken(")")){
+    if(tok->IfPeekToken(')')){
       break;
     }
 
-    tok->IfNextToken(",");
+    tok->IfNextToken(',');
   }
-  AssertToken(tok,")");
+  tok->ExpectNext(')');
 
   Array<Parameter> defs = PushArray(out,typeList);
   return defs;
 }
 
-DataValue* ParseValue(Tokenizer* tok,Arena* out){
+DataValue* ParseValue(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
 
-  if(tok->IfNextToken("@")){
+  if(tok->IfNextToken('@')){
     Token functionName = tok->NextToken();
 
-    Array<Token> parameters = ParseList(tok,out);
+    Array<String> parameters = ParseList(tok,out);
 
     DataValue* val = PushStruct<DataValue>(out);
     val->type = DataValueType_FUNCTION;
-    val->asFunc.name = functionName;
+    val->asFunc.name = functionName.identifier;
     val->asFunc.parameters = parameters;
     return val;
   }
   
-  if(!tok->IfNextToken("{")){
+  if(!tok->IfNextToken('{')){
     // Parsing a simple value here
     DataValue* val = PushStruct<DataValue>(out);
     val->type = DataValueType_SINGLE;
 
-    Token peek = tok->PeekToken();
-    if(peek == "\""){
-      tok->AdvancePeek();
-      TokenizerMark mark = tok->Mark();
+    Token value = tok->NextToken();
 
-      while(true){
-        Token peek = tok->PeekToken();
-        if(peek == "\""){
-          break;
-        }
-        tok->AdvancePeek();
-      }
-
-      Token fullValue = tok->Point(mark);
-      tok->AdvancePeek();
-
-      val->asStr = fullValue;
-      return val;
-    } else {
-      val->asStr = tok->NextToken();
-      return val;
-    }
+    val->asStr = value.cString;
+    return val;
   }
 
   // Parsing an array here.
@@ -457,13 +352,13 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
     DataValue* val = ParseValue(tok,out);
     *valueList->PushElem() = val;
     
-    tok->IfNextToken(",");
+    tok->IfNextToken(',');
 
-    if(tok->IfPeekToken("}")){
+    if(tok->IfPeekToken('}')){
       break;
     }
   }
-  AssertToken(tok,"}");
+  tok->ExpectNext('}');
 
   DataValue* val = PushStruct<DataValue>(out);
   val->type = DataValueType_ARRAY;
@@ -471,7 +366,7 @@ DataValue* ParseValue(Tokenizer* tok,Arena* out){
   return val;
 }
 
-Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena* out){
+Array<Array<DataValue*>> ParseDataTable(Parser* tok,int expectedColumns,Arena* out){
   TEMP_REGION(temp,out);
 
   auto valueTableList = PushList<Array<DataValue*>>(temp);
@@ -482,16 +377,16 @@ Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena
       *valueList->PushElem() = val;
 
       if(i != expectedColumns - 1){
-        AssertToken(tok,":");
+        tok->ExpectNext(':');
       }
     }
 
     Array<DataValue*> array = PushArray(out,valueList);
     *valueTableList->PushElem() = array;    
     
-    tok->IfNextToken(",");
+    tok->IfNextToken(',');
 
-    if(tok->IfPeekToken("}")){
+    if(tok->IfPeekToken('}')){
       break;
     }
   }
@@ -499,130 +394,114 @@ Array<Array<DataValue*>> ParseDataTable(Tokenizer* tok,int expectedColumns,Arena
   return PushArray(out,valueTableList);
 }
 
-TableDef* ParseTable(Tokenizer* tok,Arena* out){
+TableDef* ParseTable(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"table");
 
-  Token tableStructName = tok->NextToken();
-  CheckIdentifier(tableStructName);
+  tok->ExpectIdentifier("table");
+  Token tableStructName = tok->ExpectNext(TokenType_IDENTIFIER);
 
   Array<Parameter> defs = ParseParameterList(tok,out);
   Assert(defs.size > 0);
   
-  AssertToken(tok,"{");
+  tok->ExpectNext('{');
 
   Array<Array<DataValue*>> table = ParseDataTable(tok,defs.size,out);
 
-  AssertToken(tok,"}");
-  AssertToken(tok,";");
+  tok->ExpectNext('}');
+  tok->ExpectNext(';');
   
-  TableDef* def = tables.Alloc();
-  def->structTypename = tableStructName;
+  TableDef* def = tables->PushElem();
+  def->structTypename = tableStructName.identifier;
   def->parameterList = defs;
   def->dataTable = table;
 
   return def;
 }
 
-FileDef* ParseFile(Tokenizer* tok,Arena* out){
+FileDef* ParseFile(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"file");
+  tok->ExpectIdentifier("file");
 
-  String fileName = tok->NextToken();
+  String fileName = tok->NextToken().identifier;
 
-  AssertToken(tok,"=");
+  tok->ExpectNext('=');
+  Token filepath = tok->ExpectNext(TokenType_FILEPATH);
+  tok->ExpectNext(';');
 
-  auto mark = tok->Mark();
-
-  while(!tok->Done()){
-    if(tok->IfPeekToken(";")){
-      break;
-    }
-    tok->NextToken();
-  }
-
-  String filepath = tok->Point(mark);
-  AssertToken(tok,";");
-
-  FileDef* def = files.Alloc();
+  FileDef* def = files->PushElem();
   def->name = fileName;
-  def->filepathFromRoot = TrimWhitespaces(filepath);
+  def->filepathFromRoot = TrimWhitespaces(filepath.filepath);
 
   return def;
 }
 
-FileGroupDef* ParseFileGroup(Tokenizer* tok,Arena* out){
+FileGroupDef* ParseFileGroup(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"fileGroup");
-
-  TokenizerTemplate* tmpl = CreateTokenizerTemplate(temp,"|=;()",{});
-  TOKENIZER_REGION(tok,tmpl);
+  tok->ExpectIdentifier("fileGroup");
   
-  String groupName = tok->NextToken();
+  Token groupName = tok->NextToken();
 
-  String commonFolder = {};
-  if(tok->IfNextToken("(")){
+  Token commonFolder = {};
+  if(tok->IfNextToken('(')){
     commonFolder = tok->NextToken();
     
-    AssertToken(tok,")");
+    tok->ExpectNext(')');
   }
   
-  AssertToken(tok,"=");
+  tok->ExpectNext('=');
 
   auto list = PushList<String>(temp);
   while(!tok->Done()){
-    if(tok->IfPeekToken(";")){
+    if(tok->IfPeekToken(';')){
       break;
     }
     
-    Token folderFilepath = tok->NextToken();
+    Token folderFilepath = tok->ExpectNext(TokenType_FILEPATH);
 
-    *list->PushElem() = TrimWhitespaces(folderFilepath);
-    tok->IfNextToken("|");
+    *list->PushElem() = TrimWhitespaces(folderFilepath.filepath);
+    tok->IfNextToken('|');
   }
 
-  AssertToken(tok,";");
+  tok->ExpectNext(';');
 
-  FileGroupDef* def = fileGroups.Alloc();
-  def->name = groupName;
-  def->commonFolder = commonFolder;
+  FileGroupDef* def = fileGroups->PushElem();
+  def->name = groupName.identifier;
+  def->commonFolder = commonFolder.identifier;
   def->foldersFromRoot = PushArray(out,list);
 
   return def;
 }
 
-MapDef* ParseMap(Tokenizer* tok,Arena* out){
+MapDef* ParseMap(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
 
-  Token type = tok->NextToken();
+  Token type = tok->ExpectNext(TokenType_IDENTIFIER);
   bool isDefineMap = false;
 
-  if(CompareString(type,"define_map")){
+  if(type.identifier == "define_map"){
     isDefineMap = true;
-  } else if(CompareString(type,"map")){
+  } else if(type.identifier == "map"){
     isDefineMap = false;
   } else {
-    printf("Should not be possible to reach this point\n");
-    DEBUG_BREAK_OR_EXIT();
+    tok->ReportError("Did not find either a define_map or a map");
   }
 
-  Token mapName = tok->NextToken();
-  CheckIdentifier(mapName);
+  Token mapName = tok->ExpectNext(TokenType_IDENTIFIER);
 
   if(!isDefineMap){
     Array<Parameter> parameters = ParseParameterList(tok,out);
     Assert(parameters.size > 0);
     
-    AssertToken(tok,"{");
+    tok->ExpectNext('{');
 
     Array<Array<DataValue*>> table = ParseDataTable(tok,parameters.size,out);
     
-    AssertToken(tok,"}");
-    AssertToken(tok,";");
+    tok->ExpectNext('}');
+    tok->ExpectNext(';');
 
-    MapDef* res = maps.Alloc();
+    MapDef* res = maps->PushElem();
     res->parameterList = parameters;
-    res->name = mapName;
+    res->name = mapName.identifier;
     res->dataTable = table;
     res->isDefineMap = isDefineMap;
 
@@ -638,15 +517,15 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
     
     return res;
   } else if(isDefineMap){
-    AssertToken(tok,"{");
+    tok->ExpectNext('{');
 
     Array<Array<DataValue*>> table = ParseDataTable(tok,2,out);
 
-    AssertToken(tok,"}");
-    AssertToken(tok,";");
+    tok->ExpectNext('}');
+    tok->ExpectNext(';');
 
-    MapDef* res = maps.Alloc();
-    res->name = mapName;
+    MapDef* res = maps->PushElem();
+    res->name = mapName.identifier;
     res->dataTable = table;
     res->isDefineMap = isDefineMap;
 
@@ -657,26 +536,23 @@ MapDef* ParseMap(Tokenizer* tok,Arena* out){
   return nullptr;
 }
 
-ArrayDef* ParseArray(Tokenizer* tok,Arena* out){
+ArrayDef* ParseArray(Parser* tok,Arena* out){
   TEMP_REGION(temp,out);
-  AssertToken(tok,"array");
+  tok->ExpectIdentifier("array");
 
-  Token arrayType = tok->NextToken();
-  CheckIdentifier(arrayType);
-
-  Token arrayName = tok->NextToken();
-  CheckIdentifier(arrayName);
+  Token arrayType = tok->ExpectNext(TokenType_IDENTIFIER);
+  Token arrayName = tok->ExpectNext(TokenType_IDENTIFIER);
   
-  AssertToken(tok,"=");
+  tok->ExpectNext('=');
 
   DataValue* val = ParseValue(tok,out);
   Assert2(val->type == DataValueType_ARRAY,"Array cannot handle single values. Pass an array of values using {}");
   
-  AssertToken(tok,";");
+  tok->ExpectNext(';');
 
-  ArrayDef* res = arrays.Alloc();
-  res->name = arrayName;
-  res->type = arrayType;
+  ArrayDef* res = arrays->PushElem();
+  res->name = arrayName.identifier;
+  res->type = arrayType.identifier;
   res->val = val;
 
   return res;
@@ -684,30 +560,78 @@ ArrayDef* ParseArray(Tokenizer* tok,Arena* out){
 
 void ParseContent(String content,Arena* out){
   TEMP_REGION(temp,out);
-  Tokenizer tokInst(content,"!@#$%^&*()-+={[}]\\|~`;:'\",./?",{"//","/*","*/"});
-  Tokenizer* tok = &tokInst;
-  
-  while(!tok->Done()){
-    Token peek = tok->PeekToken();
 
-    if(CompareString(peek,"enum")){
-      ParseEnum(tok,out);
-    } else if(CompareString(peek,"struct")){
-      ParseStruct(tok,out);
-    } else if(CompareString(peek,"array")){
-      ParseArray(tok,out);
-    } else if(CompareString(peek,"table")){
-      ParseTable(tok,out);
-    } else if(CompareString(peek,"file")){
-      ParseFile(tok,out);
-    } else if(CompareString(peek,"map") || CompareString(peek,"define_map")){
-      ParseMap(tok,out);
-    } else if(CompareString(peek,"fileGroup")){
-      ParseFileGroup(tok,out);
-    } else {
-      ReportError(tok,peek,"Unexpected token at global scope");
-      tok->AdvancePeek();
+  auto TokenizeFunction = [](void* tokenizerState) -> Token{
+    DefaultTokenizerState* state = (DefaultTokenizerState*) tokenizerState;
+    
+    const char* start = state->ptr;
+    const char* end = state->end;
+
+    if(start >= end){
+      Token token = {};
+      token.type = TokenType_EOF;
+      return token;
     }
+
+    TokenizeResult res = {};
+    if(res.token.type == TokenType_INVALID) res |= ParseWhitespace(start,end);
+    if(res.token.type == TokenType_INVALID) res |= ParseComments(start,end);
+    if(res.token.type == TokenType_INVALID) res |= ParseCString(start,end);
+    if(res.token.type == TokenType_INVALID) res |= ParseFilepath(start,end);
+    if(res.token.type == TokenType_INVALID) res |= ParseSymbols(start,end);
+    if(res.token.type == TokenType_INVALID) res |= ParseNumber(start,end);
+    if(res.token.type == TokenType_INVALID) res |= ParseIdentifier(start,end);
+
+    int size = res.bytesParsed;
+    if(size <= 0 && state->ptr != state->end){
+      size = 1;
+    }
+
+    state->ptr += size;
+
+    // NOTE: Something very bad must happen to the point where the file is 1 byte after the end.
+    //       We expect it to only reach file->end, not file->end + 1
+    Assert(state->ptr < state->end + 1);
+
+    return res.token;
+  };
+
+  FREE_ARENA(parseArena);
+  Parser* parser = StartParsing(TokenizeFunction,content,parseArena);
+  
+  while(!parser->Done()){
+    Token peek = parser->PeekToken();
+
+    if(peek.type != TokenType_IDENTIFIER){
+      parser->ReportError("Unexpected token at global scope");
+      parser->NextToken();
+      continue;
+    }
+
+    String val = peek.identifier;
+
+    if(val == "enum"){
+      ParseEnum(parser,out);
+    } else if(val == "struct"){
+      ParseStruct(parser,out);
+    } else if(val == "array"){
+      ParseArray(parser,out);
+    } else if(val == "table"){
+      ParseTable(parser,out);
+    } else if(val == "file"){
+      ParseFile(parser,out);
+    } else if(val ==  "map" || val == "define_map"){
+      ParseMap(parser,out);
+    } else if(val == "fileGroup"){
+      ParseFileGroup(parser,out);
+    } else {
+      parser->ReportError("Unexpected token at global scope");
+      parser->NextToken();
+    }
+  }
+
+  for(String err : parser->errors){
+    printf("%.*s\n",UN(err));
   }
 }
 
@@ -749,7 +673,7 @@ static DataValue* EvaluateFunction(FunctionValue func,Arena* out){
   TEMP_REGION(temp,out);
   
   if(CompareString(func.name,"Members")){
-    Token type = func.parameters[0];
+    String type = func.parameters[0];
     
     GenericDef def = GetDefinition(type);
 
@@ -801,6 +725,31 @@ String EscapeCString(String content,Arena* out){
   return EndString(out,b);
 }
 
+
+static String PushFile(Arena* arena,String path){
+  // Care since this is stored on a static buffer
+  const char* asCStr = StaticFormat("%.*s",UN(path));
+  FILE* file = fopen(asCStr,"r");
+
+  long int size = GetFileSize(file);
+
+  AlignArena(arena,alignof(void*));
+
+  Byte* mem = PushBytes(arena,size);
+  int amountRead = fread(mem,sizeof(Byte),size,file);
+
+  if(amountRead != size){
+    fprintf(stderr,"Memory PushFile failed to read entire file\n");
+    exit(-1);
+  }
+
+  String res = {};
+  res.size = size;
+  res.data = (const char*) mem;
+
+  return res;
+}
+
 // 0 - exe name
 // 1 - definition file
 // 2 - output name
@@ -830,6 +779,16 @@ int main(int argc,const char* argv[]){
     singleUseCasesArenas[i] = InitArena(Megabyte(1));
   }
 
+  FREE_ARENA(allData);
+
+  enums = PushList<EnumDef>(allData);
+  structs = PushList<StructDef>(allData);
+  tables = PushList<TableDef>(allData);
+  maps = PushList<MapDef>(allData);
+  files = PushList<FileDef>(allData);
+  fileGroups = PushList<FileGroupDef>(allData);
+  arrays = PushList<ArrayDef>(allData);
+
   String content = PushFile(temp,defFilePath);
 
   ParseContent(content,permanent);
@@ -851,14 +810,14 @@ int main(int argc,const char* argv[]){
 
       auto list = PushList<String>(temp);
 
-      for(FileDef* def : files){
-        String path = def->filepathFromRoot;
+      for(FileDef& def : files){
+        String path = def.filepathFromRoot;
         String absolute = GetAbsolutePath(path,temp);
         *list->PushElem() = absolute;
       }
       
-      for(FileGroupDef* def : fileGroups){
-        for(String folderPath : def->foldersFromRoot){
+      for(FileGroupDef& def : fileGroups){
+        for(String folderPath : def.foldersFromRoot){
           DIR* directory = opendir(SF("%.*s",UN(folderPath)));
           Assert(directory);
           
@@ -909,30 +868,31 @@ int main(int argc,const char* argv[]){
     h->Line();
     h->Comment("Structs definitions");
     
-    for(StructDef* def : structs){
-      h->Struct(def->name);
-      for(Pair<String,String> p : def->typeAndName){
+    for(StructDef& def : structs){
+      h->Struct(def.name);
+      for(Pair<String,String> p : def.typeAndName){
         h->Member(p.first,p.second);
       }
       h->EndBlock();
 
-      h->Extern("Array<String>",SF("META_%.*s_Members",UN(def->name)));
+      h->Extern("Array<String>",SF("META_%.*s_Members",UN(def.name)));
     }
 
     h->Comment("Enum definition");
-    for(EnumDef* def : enums){
-      h->Enum(def->name);
-      for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
+    for(EnumDef& def : enums){
+
+      h->Enum(def.name);
+      for(Pair<String,String> p : def.valuesNamesWithValuesIfExist){
         h->EnumMember(p.first,p.second);
       }
       h->EndEnum();
 
       h->FunctionDeclOnlyBlock("String","META_Repr");
-      h->Argument(def->name,"val");
+      h->Argument(def.name,"val");
       h->EndBlock();
       
-      h->ArrayDeclareBlock(SF("const %.*s",UN(def->name)),SF("%.*ss",UN(def->name)),true);
-      for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
+      h->ArrayDeclareBlock(SF("const %.*s",UN(def.name)),SF("%.*ss",UN(def.name)),true);
+      for(Pair<String,String> p : def.valuesNamesWithValuesIfExist){
         h->Elem(p.first);
       }
       h->EndBlock();
@@ -940,10 +900,10 @@ int main(int argc,const char* argv[]){
 
     h->Comment("Table definition");
 
-    for(TableDef* def : tables){
-      h->Struct(PushString(temp,"%.*s_GenType",UN(def->structTypename)));
+    for(TableDef& def : tables){
+      h->Struct(PushString(temp,"%.*s_GenType",UN(def.structTypename)));
 
-      for(Parameter p : def->parameterList){
+      for(Parameter p : def.parameterList){
         TypeDef* typeDef = p.type;
         String name = p.name;
 
@@ -958,36 +918,36 @@ int main(int argc,const char* argv[]){
     }
 
     h->Comment("Arrays");
-    for(ArrayDef* def : arrays){
-      h->Extern(SF("Array<%.*s>",UN(def->type)),def->name);
+    for(ArrayDef& def : arrays){
+      h->Extern(SF("Array<%.*s>",UN(def.type)),def.name);
     }
     
     h->Comment("Tables");
     
-    for(TableDef* def : tables){
-      h->Extern(SF("Array<%.*s_GenType>",UN(def->structTypename)),def->structTypename);
+    for(TableDef& def : tables){
+      h->Extern(SF("Array<%.*s_GenType>",UN(def.structTypename)),def.structTypename);
     }
     
     h->Comment("Define Maps (the arrays store the data, not the keys)");
     
-    for(MapDef* def : maps){
-      if(!def->isDefineMap){
+    for(MapDef& def : maps){
+      if(!def.isDefineMap){
         continue;
       }
 
-      for(Array<DataValue*> p : def->dataTable){
+      for(Array<DataValue*> p : def.dataTable){
         // TODO: Only implement for single type. What would an array define map look like?
         
         Assert(p[1]->type == DataValueType_SINGLE);
         h->RawLine(PushString(temp,"#define %.*s \"%.*s\"",UN(p[0]->asStr),UN(p[1]->asStr)));
       }
 
-      h->Extern("Array<String>",def->name);
+      h->Extern("Array<String>",def.name);
     }
 
     h->Comment("Normal Maps");
-    for(MapDef* def : maps){
-      if(def->isDefineMap || !def->isEnumMap || !def->isBijection){
+    for(MapDef& def : maps){
+      if(def.isDefineMap || !def.isEnumMap || !def.isBijection){
         continue;
       }
 
@@ -995,10 +955,10 @@ int main(int argc,const char* argv[]){
         int from = 0;
         int to = 1;
       
-        Parameter pFrom = def->parameterList[from];
-        Parameter pTo = def->parameterList[to];
+        Parameter pFrom = def.parameterList[from];
+        Parameter pTo = def.parameterList[to];
 
-        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_Map",UN(def->name)));
+        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_Map",UN(def.name)));
         h->Argument(pFrom.type->name,"val");
         h->EndBlock(); // Function
       }
@@ -1006,10 +966,10 @@ int main(int argc,const char* argv[]){
         int from = 1;
         int to = 0;
       
-        Parameter pFrom = def->parameterList[from];
-        Parameter pTo = def->parameterList[to];
+        Parameter pFrom = def.parameterList[from];
+        Parameter pTo = def.parameterList[to];
 
-        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UN(def->name)));
+        h->FunctionDeclOnlyBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UN(def.name)));
         h->Argument(pFrom.type->name,"val");
         h->EndBlock();
       }
@@ -1017,20 +977,13 @@ int main(int argc,const char* argv[]){
     
     h->Comment("File content");
     
-    for(FileDef* def : files){
-      h->Extern("String",SF("META_%.*s_Content",UN(def->name)));
+    for(FileDef& def : files){
+      h->Extern("String",SF("META_%.*s_Content",UN(def.name)));
     }
 
-    h->Struct("FileContent");
-    h->Member("String","fileName");
-    h->Comment("Without filename");
-    h->Member("String","originalRelativePath");
-    h->Member("String","commonFolder"); // TODO: We could push this outwards, since right now this is common to all the files.
-    h->Member("String","content");
-    h->EndStruct();
-
-    for(FileGroupDef* def : fileGroups){
-      h->Extern("Array<FileContent>",def->name);
+    for(FileGroupDef& def : fileGroups){
+      h->RawLine(SF("\n#define DEFINED_%.*s 1",UN(def.name)));
+      h->Extern("Array<FileContent>",def.name);
     }
     
     CAST* end = EndCCode(h);
@@ -1060,12 +1013,12 @@ int main(int argc,const char* argv[]){
 
     // Enum stuff
     c->Comment("Enum representation");
-    for(EnumDef* def : enums){
+    for(EnumDef& def : enums){
       c->FunctionBlock("String","META_Repr");
-      c->Argument(def->name,"val");
+      c->Argument(def.name,"val");
 
       c->SwitchBlock("val");
-      for(Pair<String,String> p : def->valuesNamesWithValuesIfExist){
+      for(Pair<String,String> p : def.valuesNamesWithValuesIfExist){
         String name = p.first;
         String val = PushString(temp,"String(\"%.*s\");",UN(name));
 
@@ -1082,30 +1035,30 @@ int main(int argc,const char* argv[]){
       
     // Declare auxiliary data arrays
     c->Comment("Raw c array auxiliary to Struct data");
-    for(StructDef* def : structs){
-      c->ArrayDeclareBlock("String",SF("%.*s_MemberNames",UN(def->name)),true);
-      for(auto p : def->typeAndName){
+    for(StructDef& def : structs){
+      c->ArrayDeclareBlock("String",SF("%.*s_MemberNames",UN(def.name)),true);
+      for(auto p : def.typeAndName){
         c->StringElem(p.second);
       }
       c->EndBlock();
     }
 
     c->Comment("Struct data");
-    for(StructDef* def : structs){
-      c->VarDeclareBlock("Array<String>",SF("META_%.*s_Members",UN(def->name)));
-      c->Elem(PushString(temp,"%.*s_MemberNames",UN(def->name)));
-      c->Elem(PushString(temp,"ARRAY_SIZE(%.*s_MemberNames)",UN(def->name)));
+    for(StructDef& def : structs){
+      c->VarDeclareBlock("Array<String>",SF("META_%.*s_Members",UN(def.name)));
+      c->Elem(PushString(temp,"%.*s_MemberNames",UN(def.name)));
+      c->Elem(PushString(temp,"ARRAY_SIZE(%.*s_MemberNames)",UN(def.name)));
       c->EndBlock();
     }    
     
     c->Comment("Raw C array auxiliary to tables");
-    for(TableDef* def : tables){
-      for(int i = 0; i <  def->dataTable.size; i++){
-        Array<DataValue*> row  =  def->dataTable[i];
+    for(TableDef& def : tables){
+      for(int i = 0; i <  def.dataTable.size; i++){
+        Array<DataValue*> row  =  def.dataTable[i];
 
         for(int ii = 0; ii <  row.size; ii++){
           DataValue* val  =  row[ii];
-          Parameter p =  def->parameterList[ii];
+          Parameter p =  def.parameterList[ii];
           TypeDef* typeDef = p.type;
           String name = p.name;
 
@@ -1115,7 +1068,7 @@ int main(int argc,const char* argv[]){
           }
           
           if(val->type == DataValueType_ARRAY){
-            c->ArrayDeclareBlock(typeDef->name,SF("%.*s_%.*s_aux%d",UN(def->structTypename),UN(name),i));
+            c->ArrayDeclareBlock(typeDef->name,SF("%.*s_%.*s_aux%d",UN(def.structTypename),UN(name),i));
             
             for(DataValue* child : val->asArray){
               c->StringElem(child->asStr);
@@ -1134,13 +1087,13 @@ int main(int argc,const char* argv[]){
       m->Elem(PushString(temp,"ARRAY_SIZE(%.*s_Raw)",UN(arrayName)));
     };
 
-    for(ArrayDef* def : arrays){
-      Assert(def->val->type == DataValueType_ARRAY);
+    for(ArrayDef& def : arrays){
+      Assert(def.val->type == DataValueType_ARRAY);
 
-      c->ArrayDeclareBlock(def->type,SF("%.*s_Raw",UN(def->name)),true);
+      c->ArrayDeclareBlock(def.type,SF("%.*s_Raw",UN(def.name)),true);
 
-      for(int i = 0; i < def->val->asArray.size; i++){
-        DataValue* val  = def->val->asArray[i];
+      for(int i = 0; i < def.val->asArray.size; i++){
+        DataValue* val  = def.val->asArray[i];
         Assert(val->type == DataValueType_SINGLE);
         
         c->Elem(DefaultRepr(val,nullptr,temp));
@@ -1148,23 +1101,23 @@ int main(int argc,const char* argv[]){
 
       c->EndBlock();
 
-      c->VarDeclareBlock(SF("Array<%.*s>",UN(def->type)),def->name);
-      EmitRawArray(c,def->name);
+      c->VarDeclareBlock(SF("Array<%.*s>",UN(def.type)),def.name);
+      EmitRawArray(c,def.name);
       c->EndBlock();
     }
       
     c->Comment("Raw C array Tables");
 
-    for(TableDef* def : tables){
-      c->ArrayDeclareBlock(SF("%.*s_GenType",UN(def->structTypename)),SF("%.*s_Raw",UN(def->structTypename)),true);
+    for(TableDef& def : tables){
+      c->ArrayDeclareBlock(SF("%.*s_GenType",UN(def.structTypename)),SF("%.*s_Raw",UN(def.structTypename)),true);
 
-      for(int i = 0; i <  def->dataTable.size; i++){
-        Array<DataValue*> row = def->dataTable[i];
+      for(int i = 0; i <  def.dataTable.size; i++){
+        Array<DataValue*> row = def.dataTable[i];
 
         c->VarBlock();
         for(int ii = 0; ii <  row.size; ii++){
           DataValue* val  =  row[ii];
-          Parameter p =  def->parameterList[ii];
+          Parameter p =  def.parameterList[ii];
           TypeDef* typeDef = p.type;
           String name = p.name;
 
@@ -1173,7 +1126,7 @@ int main(int argc,const char* argv[]){
           } else {
             c->VarBlock();
 
-            String arrayName = PushString(temp,"%.*s_%.*s_aux%d",UN(def->structTypename),UN(name),i);
+            String arrayName = PushString(temp,"%.*s_%.*s_aux%d",UN(def.structTypename),UN(name),i);
 
             // TODO: We can just create an Emit array function where we also provide the end to append to the string name.
             c->Elem(arrayName);
@@ -1191,8 +1144,8 @@ int main(int argc,const char* argv[]){
     
     c->Comment("Tables");
     
-    for(TableDef* def : tables){
-      String n = def->structTypename;
+    for(TableDef& def : tables){
+      String n = def.structTypename;
       c->VarDeclareBlock(SF("Array<%.*s_GenType>",UN(n)),n);
       EmitRawArray(c,n);
       c->EndBlock();
@@ -1200,30 +1153,30 @@ int main(int argc,const char* argv[]){
 
     c->Comment("Define Maps arrays");
 
-    for(MapDef* def : maps){
-      if(!def->isDefineMap){
+    for(MapDef& def : maps){
+      if(!def.isDefineMap){
         continue;
       }
 
-      c->ArrayDeclareBlock("String",SF("%.*s_Raw",UN(def->name)),true);
+      c->ArrayDeclareBlock("String",SF("%.*s_Raw",UN(def.name)),true);
 
-      for(Array<DataValue*> p : def->dataTable){
+      for(Array<DataValue*> p : def.dataTable){
         Assert(p[1]->type == DataValueType_SINGLE);
         c->Elem(p[0]->asStr);
       }
       
       c->EndBlock();
       
-      c->VarDeclareBlock("Array<String>",def->name);
-      EmitRawArray(c,def->name);
+      c->VarDeclareBlock("Array<String>",def.name);
+      EmitRawArray(c,def.name);
       c->EndBlock();
     }
 
     c->Comment("Normal Maps");
     
-    for(MapDef* def : maps){
+    for(MapDef& def : maps){
       // TODO: All these exist because we are just trying to implement something quickly right now, but when the time comes implement this.
-      if(def->isDefineMap || !def->isEnumMap || !def->isBijection){
+      if(def.isDefineMap || !def.isEnumMap || !def.isBijection){
         continue;
       }
       
@@ -1231,8 +1184,8 @@ int main(int argc,const char* argv[]){
         int from = 0;
         int to = 1;
       
-        Parameter pFrom = def->parameterList[from];
-        Parameter pTo = def->parameterList[to];
+        Parameter pFrom = def.parameterList[from];
+        Parameter pTo = def.parameterList[to];
 
         // TODO: Currently assuming that the first member is the enum.
         //       This is important because we are generating a switch statement based on the enum type
@@ -1240,11 +1193,11 @@ int main(int argc,const char* argv[]){
 
         // TODO: Check if the table members are actually values of the enum or not.
 
-        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_Map",UN(def->name)));
+        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_Map",UN(def.name)));
         c->Argument(pFrom.type->name,"val");
         
         c->SwitchBlock("val");
-        for(Array<DataValue*> rows : def->dataTable){
+        for(Array<DataValue*> rows : def.dataTable){
           DataValue* fFrom = rows[from];
           DataValue* fTo = rows[to];
         
@@ -1264,14 +1217,14 @@ int main(int argc,const char* argv[]){
         int from = 1;
         int to = 0;
       
-        Parameter pFrom = def->parameterList[from];
-        Parameter pTo = def->parameterList[to];
+        Parameter pFrom = def.parameterList[from];
+        Parameter pTo = def.parameterList[to];
 
-        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UN(def->name)));
+        c->FunctionBlock(PushString(temp,"Opt<%.*s>",UN(pTo.type->name)),PushString(temp,"META_%.*s_ReverseMap",UN(def.name)));
         c->Argument(pFrom.type->name,"val");
         
         //c->SwitchBlock(S8("val"));
-        for(Array<DataValue*> rows : def->dataTable){
+        for(Array<DataValue*> rows : def.dataTable){
           DataValue* fFrom = rows[from];
           DataValue* fTo = rows[to];
         
@@ -1290,23 +1243,23 @@ int main(int argc,const char* argv[]){
 
     c->Comment("Embedded Files");
 
-    for(FileDef* def : files){
-      String path = def->filepathFromRoot;
+    for(FileDef& def : files){
+      String path = def.filepathFromRoot;
       String absolute = GetAbsolutePath(path,temp);
       String content = PushFile(temp,absolute);
       String escapedString = EscapeCString(content,temp);
       
-      c->VarDeclareBlock("String",SF("META_%.*s_Content",UN(def->name)));
+      c->VarDeclareBlock("String",SF("META_%.*s_Content",UN(def.name)));
       c->StringElem(escapedString);
       c->EndBlock();
     }
 
     c->Comment("Embed File Groups");
 
-    for(FileGroupDef* def : fileGroups){
+    for(FileGroupDef& def : fileGroups){
       auto list = PushList<FileGroupInfo>(temp);
 
-      for(String folderPath : def->foldersFromRoot){
+      for(String folderPath : def.foldersFromRoot){
         DIR* directory = opendir(SF("%.*s",UN(folderPath)));
         Assert(directory);
         
@@ -1321,7 +1274,7 @@ int main(int argc,const char* argv[]){
           FileGroupInfo* info = list->PushElem();
           info->originalRelativePath = folderPath;
           info->filename = fileName;
-          info->commonFolder = def->commonFolder;
+          info->commonFolder = def.commonFolder;
         }
         
         closedir(directory);
@@ -1349,7 +1302,7 @@ int main(int argc,const char* argv[]){
       }
 
       // Emit raw array
-      c->ArrayDeclareBlock("FileContent",SF("%.*s_Raw",UN(def->name)));
+      c->ArrayDeclareBlock("FileContent",SF("%.*s_Raw",UN(def.name)));
       for(FileGroupInfo& info : allFilePaths){
         String dirPath = info.originalRelativePath;
         String fileName = info.filename;
@@ -1366,8 +1319,8 @@ int main(int argc,const char* argv[]){
       c->EndBlock();
 
       // Emit array
-      c->VarDeclareBlock("Array<FileContent>",def->name);
-      EmitRawArray(c,def->name);
+      c->VarDeclareBlock("Array<FileContent>",def.name);
+      EmitRawArray(c,def.name);
       c->EndBlock();
     }
     

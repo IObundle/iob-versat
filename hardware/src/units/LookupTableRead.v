@@ -58,6 +58,7 @@ module LookupTableRead #(
 
    assign ext_dp_out_0_port_0 = 0;
 
+   localparam OFFSET_W = $clog2(DATA_W / 8);
    localparam DIFF = AXI_DATA_W / DATA_W;
    localparam DECISION_BIT_W = $clog2(DIFF);
 
@@ -81,7 +82,7 @@ module LookupTableRead #(
 
    always @(posedge clk, posedge rst) begin
       if (rst) ext_dp_addr_0_port_0 <= 0;
-      else ext_dp_addr_0_port_0 <= addr_0;
+      else ext_dp_addr_0_port_0 <= addr_0 << OFFSET_W;
    end
 
    generate
@@ -99,7 +100,7 @@ module LookupTableRead #(
             end
          end
 
-         WideAdapter #(
+         Versat_WideAdapter #(
             .INPUT_W (AXI_DATA_W),
             .OUTPUT_W(DATA_W)
          ) adapter (

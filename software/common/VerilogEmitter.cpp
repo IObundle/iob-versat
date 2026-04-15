@@ -24,7 +24,7 @@ void VerilogModuleBuilder::EndGroup(bool preserveEmptyGroup){
   this->currentPorts = nullptr;
 }
 
-void VerilogModuleBuilder::AddPort(String name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props){
+void VerilogModuleBuilder::AddPort(String name,SYM_Expr expr,WireDir dir,SpecialPortProperties props){
   bool endGroup = false;
   if(!this->currentPorts){
     StartGroup(nullptr);
@@ -43,7 +43,7 @@ void VerilogModuleBuilder::AddPort(String name,SymbolicExpression* expr,WireDir 
   }
 }
 
-void VerilogModuleBuilder::AddPortIndexed(const char* name,int index,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props){
+void VerilogModuleBuilder::AddPortIndexed(const char* name,int index,SYM_Expr expr,WireDir dir,SpecialPortProperties props){
   bool endGroup = false;
   if(!this->currentPorts){
     StartGroup(nullptr);
@@ -95,7 +95,7 @@ VerilogModuleBuilder* StartVerilogModuleInterface(Arena* arena){
 VerilogPortSpec Copy(VerilogPortSpec in,Arena* out){
   VerilogPortSpec res = in;
   res.name = PushString(out,in.name);
-  res.size = SymbolicDeepCopy(in.size,out);
+  res.size = in.size;
   return res;
 }
 
@@ -140,7 +140,7 @@ Array<VerilogPortSpec>  AppendSuffix(Array<VerilogPortSpec> in,String suffix,Are
   for(int i = 0; i < in.size; i++){
     res[i] = in[i];
 
-    res[i].size = SymbolicDeepCopy(in[i].size,out);
+    res[i].size = in[i].size;
     res[i].name = PushString(out,"%.*s%.*s",UN(in[i].name),UN(suffix));
   }
 
@@ -168,7 +168,7 @@ Array<VerilogPortSpec> AddDirectionToName(Array<VerilogPortSpec> in,Arena* out){
       directionAsName = "o";
     }
     
-    res[i].size = SymbolicDeepCopy(in[i].size,out);
+    res[i].size = in[i].size;
     res[i].name = PushString(out,"%.*s_%.*s",UN(in[i].name),UN(directionAsName));
   }
 
@@ -316,7 +316,7 @@ void VEmitter::InsertDeclaration(VAST* declarationAST){
     case VASTType_TOP_LEVEL: {
       Assert(false);
     } break;
-    } END_SWITCH();
+    } 
   }
 }
 
@@ -369,7 +369,7 @@ void VEmitter::InsertPortDeclaration(VAST* portAST){
     case VASTType_TOP_LEVEL: {
       Assert(false);
     } break;
-    } END_SWITCH();
+    }
   }
 };
 
@@ -422,7 +422,7 @@ void VEmitter::InsertPortConnect(VAST* portAST){
     case VASTType_TOP_LEVEL: {
       Assert(false);
     } break;
-    } END_SWITCH();
+    }
   }
 };
 
@@ -485,6 +485,13 @@ void VEmitter::ModuleParam(String name,String value){
   p->second = PushString(arena,value);
 }
 
+void VEmitter::ModuleParam(String name,SYM_Expr expr){
+  TEMP_REGION(temp,arena);
+  String repr = SYM_Repr(expr,temp);
+
+  ModuleParam(name,repr);
+}
+
 void VEmitter::EndModule(){
   while(buffer[top-1]->type != VASTType_MODULE_DECL){
     PopLevel();
@@ -541,10 +548,10 @@ void VEmitter::Input(String name,String expr){
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::Input(String name,SymbolicExpression* expr){
+void VEmitter::Input(String name,SYM_Expr expr){
   TEMP_REGION(temp,arena);
 
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
   Input(name,repr);
 }
 
@@ -561,9 +568,9 @@ void VEmitter::InputIndexed(const char* format,int index,String expression){
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::InputIndexed(const char* format,int index,SymbolicExpression* expr){
+void VEmitter::InputIndexed(const char* format,int index,SYM_Expr expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
 
   InputIndexed(format,index,repr);
 }
@@ -586,9 +593,9 @@ void VEmitter::Output(String name,String expr){
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::Output(String name,SymbolicExpression* expr){
+void VEmitter::Output(String name,SYM_Expr expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
 
   Output(name,repr);
 }
@@ -606,9 +613,9 @@ void VEmitter::OutputIndexed(const char* format,int index,String expression){
   InsertPortDeclaration(decl);
 }
 
-void VEmitter::OutputIndexed(const char* format,int index,SymbolicExpression* expr){
+void VEmitter::OutputIndexed(const char* format,int index,SYM_Expr expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
 
   OutputIndexed(format,index,repr);
 }
@@ -635,9 +642,9 @@ void VEmitter::Wire(String name,String bitsizeExpr){
   InsertDeclaration(wireDecl);
 }
 
-void VEmitter::Wire(String name,SymbolicExpression* expr){
+void VEmitter::Wire(String name,SYM_Expr expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
 
   Wire(name,repr);
 }
@@ -664,9 +671,9 @@ void VEmitter::WireArray(String name,int count,String bitsizeExpr){
   InsertDeclaration(wireArray);
 }
 
-void VEmitter::WireArray(String name,int count,SymbolicExpression* expr){
+void VEmitter::WireArray(String name,int count,SYM_Expr expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
 
   WireArray(name,count,repr);
 }
@@ -715,9 +722,9 @@ void VEmitter::Reg(String name,String bitsize){
   InsertDeclaration(regDecl);
 }
 
-void VEmitter::Reg(String name,SymbolicExpression* expr){
+void VEmitter::Reg(String name,SYM_Expr expr){
   TEMP_REGION(temp,arena);
-  String repr = PushRepr(temp,expr);
+  String repr = SYM_Repr(expr,temp);
 
   Reg(name,repr);
 }
@@ -958,10 +965,10 @@ void VEmitter::InstanceParam(String paramName,String paramValue){
   p->second = PushString(arena,paramValue);
 }
 
-void VEmitter::InstanceParam(String paramName,SymbolicExpression* sym){
+void VEmitter::InstanceParam(String paramName,SYM_Expr sym){
   TEMP_REGION(temp,arena);
 
-  String repr = PushRepr(temp,sym);
+  String repr = SYM_Repr(sym,temp);
   InstanceParam(paramName,CS(repr));
 }
 
@@ -1290,7 +1297,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
       for(VerilogPortSpec spec : group.ports){
         b->PushSpaces(level * 2);
 
-        String repr = PushRepr(temp,spec.size);
+        String repr = SYM_Repr(spec.size,temp);
 
         if(spec.dir == WireDir_INPUT){
           b->PushString("reg ");
@@ -1484,7 +1491,7 @@ void Repr(VAST* top,StringBuilder* b,VState* state,int level){
     b->PushString("end\n");
   } break;
   
-  } END_SWITCH();
+  }
 }
 
 void Repr(VAST* top,StringBuilder* b){

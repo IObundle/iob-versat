@@ -6,7 +6,6 @@
 
 struct FUInstance;
 struct Edge;
-struct SymbolicExpression;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -34,7 +33,7 @@ enum FUDeclarationType{
 
 struct Parameter{
   String name;
-  SymbolicExpression* valueExpr;
+  SYM_Expr defaultVal;
   ParamFlags flags;
 };
 
@@ -53,8 +52,8 @@ struct FUDeclaration{
   
   // TODO: Need to calculate these for hierarchical and merge units. For now only works for base units.
   //       After solving this, check the TODO for the output of testbench
-  Array<SymbolicExpression*> inputSize;
-  Array<SymbolicExpression*> outputSize;
+  Array<SYM_Expr> inputSize;
+  Array<SYM_Expr> outputSize;
 
   AccelInfo info;
   
@@ -62,8 +61,7 @@ struct FUDeclaration{
   Array<Parameter> parameters;
 
   // TODO: Eventually remove external expression and external memory and only keep externalMemorySymbol
-  Array<ExternalMemoryInterfaceExpression> externalExpressionMemory;
-  Array<ExternalMemoryInterface> externalMemory;
+  //Array<ExternalMemoryInterface> externalMemory;
   Array<ExternalMemorySymbolic> externalMemorySymbol;
   
   // Stores different accelerators depending on properties we want. Mostly in relation to merge, because we want to use baseCircuit when doing a merge operation.

@@ -90,12 +90,6 @@ struct ArenaMark{
 ArenaMark MarkArena(Arena* arena);
 void PopMark(ArenaMark mark);
 
-// TODO: Maybe add Optional to indicate error opening file
-//       In general error handling is pretty lacking overall.
-String PushFile(Arena* arena,FILE* file);
-String PushFile(Arena* arena,String filepath);
-String PushFile(Arena* arena,const char* filepath);
-
 struct ArenaMarker{
   ArenaMark mark;
   const char* functionName;

@@ -94,7 +94,7 @@ module LookupTable_tb (
   end
   endtask
 
-  my_dp_asym_ram #(
+  versat_dp_asym_ram #(
     .A_DATA_W(DATA_W),
     .B_DATA_W(DATA_W),
     .ADDR_W(ADDR_W)

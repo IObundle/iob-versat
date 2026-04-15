@@ -7,8 +7,8 @@
 // waiver structure:
 // waive filename:line[:line] [reason]
 waive SimHelper_DatabusMem.v:1:94 "Waive Memory Module"
-waive my_dp_asym_ram.v:1:178 "Waive Memory Module"
-waive my_iob_dp_ram.v:1:79 "Waive Memory Module"
+waive versat_dp_asym_ram.v:1:178 "Waive Memory Module"
+waive versat_iob_dp_ram.v:1:79 "Waive Memory Module"
 
 waive LookupTableRead.v:23:24 "Databus is read only"
 waive LookupTableRead.v:35 "LSB of addr port is always 0"

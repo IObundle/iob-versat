@@ -9,34 +9,6 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
-FILE* OpenFileAndCreateDirectories(String path,const char* format,FilePurpose purpose){
-  char buffer[PATH_MAX];
-  memset(buffer,0,PATH_MAX);
-
-  for(int i = 0; i < path.size; i++){
-    buffer[i] = path[i];
-
-    if(path[i] == '/'){
-      DIR* dir = opendir(buffer);
-      if(!dir && errno == ENOENT){
-        MakeDirectory(buffer);
-      }
-      if(dir){
-        closedir(dir);
-      }
-    }
-  }
-
-  FILE* file = OpenFile(path,format,purpose);
-  if(file == nullptr){
-    printf("Failed to open file (%d): %.*s\n",errno,UN(path));
-    NOT_IMPLEMENTED("Probably better to return null and let code handle it");
-    exit(-1);
-  }
-  
-  return file;
-}
-
 String TrimWhitespaces(String in){
   if(in.data == nullptr || in.size == 0){
     return in;
@@ -236,6 +208,21 @@ String JoinStrings(Array<String> strings,String separator,Arena* out){
   return EndString(out,builder);
 }
 
+String PushBinaryRepr(Arena* out,int number){
+  char* buffer = (char*) PushBytes(out,33);
+  int index = 0;
+  for(int i = 31; i >= 0; i--){
+    buffer[index++] = (number & (1 << i)) ? '1' : '0';
+  }
+
+  buffer[32] = '0';
+  String res = {};
+  res.data = buffer;
+  res.size = 32;
+
+  return res;
+}
+
 String JoinStrings(ArenaList<String>* strings,String separator,Arena* out){
   TEMP_REGION(temp,out);
   bool first = true;
@@ -301,4 +288,42 @@ void* Next(GenericArenaDoubleListIterator& iter){
   iter.ptr = iter.ptr->next;
   
   return view;
+}
+
+
+Array<String> Split(String content,char sep,Arena* out){
+  TEMP_REGION(temp,out);
+  int index = 0;
+  int size = content.size;
+
+  auto list = PushList<String>(temp);
+  
+  while(1){
+    int start = index;
+    while(index < size && content[index] != sep){
+      index += 1;
+    }
+    int end = index; // content[end] is either sep or last character.
+    
+    String line = {};
+    if(start >= size){
+      break;
+    } else if(index >= size){
+      line = {&content[start],end - start};
+      *list->PushElem() = line;
+      break;
+    } else if(content[index] == sep){
+      line = {&content[start],end - start};
+    } else {
+      line = {&content[start],end - start + 1};
+      //Assert(false);
+    }
+
+    *list->PushElem() = line;
+
+    index += 1;
+  }
+  
+  Array<String> res = PushArray(out,list);
+  return res;
 }

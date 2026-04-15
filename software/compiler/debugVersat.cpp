@@ -1,6 +1,7 @@
 #include "debugVersat.hpp"
 #include "declaration.hpp"
 #include "globals.hpp"
+#include "filesystem.hpp"
 
 // Make sure that it matches the value of the corresponding enum
 static String graphPrintingColorTable[] = {

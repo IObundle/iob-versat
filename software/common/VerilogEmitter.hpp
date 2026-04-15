@@ -30,7 +30,7 @@ enum SpecialPortProperties{
 
 struct VerilogPortSpec{
   String name;
-  SymbolicExpression* size;
+  SYM_Expr size;
   WireDir dir;
   SpecialPortProperties props;
 };
@@ -60,8 +60,8 @@ struct VerilogModuleBuilder{
   void EndGroup(bool preserveEmptyGroup = false);
 
   // If called without group, creates a single wire group.
-  void AddPort(String name,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
-  void AddPortIndexed(const char* format,int index,SymbolicExpression* expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
+  void AddPort(String name,SYM_Expr expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
+  void AddPortIndexed(const char* format,int index,SYM_Expr expr,WireDir dir,SpecialPortProperties props = SpecialPortProperties_None);
 
   // Acts as a bunch of AddPort calls
   void AddInterface(Array<VerilogPortSpec> interface,String prefix);
@@ -292,6 +292,7 @@ struct VEmitter{
   void Module(String name);
   void ModuleParam(String name,int value); // A global param of a module
   void ModuleParam(String name,String value);
+  void ModuleParam(String name,SYM_Expr expr = SYM_One);
   void EndModule();
 
   void Task(String name);
@@ -304,31 +305,31 @@ struct VEmitter{
   // TODO: We also want to remove all the const char* and only use String
   void Input(String name,int bitsize);
   void Input(String name,String expr);
-  void Input(String name,SymbolicExpression* expr = SYM_one);
+  void Input(String name,SYM_Expr expr = SYM_One);
   void InputIndexed(const char* format,int index,int bitsize);
   void InputIndexed(const char* format,int index,String expr);
-  void InputIndexed(const char* format,int index,SymbolicExpression* expr = SYM_one);
+  void InputIndexed(const char* format,int index,SYM_Expr expr = SYM_One);
 
   void Output(String name,int bitsize);
   void Output(String name,String expr);
-  void Output(String name,SymbolicExpression* expr = SYM_one);
+  void Output(String name,SYM_Expr expr = SYM_One);
   void OutputIndexed(const char* format,int index,int bitsize);
   void OutputIndexed(const char* format,int index,String expr);
-  void OutputIndexed(const char* format,int index,SymbolicExpression* expr = SYM_one);
+  void OutputIndexed(const char* format,int index,SYM_Expr expr = SYM_One);
   
   // Module declarations
   void Wire(String name,int bitsize);
   void Wire(String name,String bitsizeExpr);
-  void Wire(String name,SymbolicExpression* expr = SYM_one);
+  void Wire(String name,SYM_Expr expr = SYM_One);
   void WireArray(String name,int count,int bitsize);
   void WireArray(String name,int count,String bitsizeExpr);
-  void WireArray(String name,int count,SymbolicExpression* expr = SYM_one);
+  void WireArray(String name,int count,SYM_Expr expr = SYM_One);
   void WireAndAssignJoinBlock(String name,String joinElem,int bitsize = 1);
   void WireAndAssignJoinBlock(String name,String joinElem,String bitsize);
   void Reg(String name,int bitsize);
   void Reg(String name,String expr);
-  void Reg(String name,SymbolicExpression* expr = SYM_one);
-  void Assign(String name,String expr);
+  void Reg(String name,SYM_Expr expr = SYM_One);
+  void Assign(String name,String expr); // Uses the actual "assign" operation. Do not use inside a comb/seq block.
   void Integer(String name);
   void LocalParam(String name,String defaultValue = {});
   
@@ -364,7 +365,7 @@ struct VEmitter{
   void StartInstance(String moduleName,String instanceName);
   void InstanceParam(String paramName,int paramValue);
   void InstanceParam(String paramName,String paramValue);
-  void InstanceParam(String paramName,SymbolicExpression* sym);
+  void InstanceParam(String paramName,SYM_Expr sym);
   void PortConnect(String portName,String connectionExpr);
   void PortConnectIndexed(const char* portFormat,int index,String connectionExpr);
   void PortConnectIndexed(const char* portFormat,int index,const char* connectFormat,int connectIndex);

@@ -156,6 +156,10 @@ void VersatLoadDelay(volatile const unsigned int* buffer){
   VersatMemoryCopy(delayBase,buffer,sizeof(int) * ARRAY_SIZE(delayBuffer));
 }
 
+void VERSAT_DisableReadsAndWrites(){
+@{disableReadsAndWrites}
+}
+
 @{debugStuff}
 
 @{profileStuff}

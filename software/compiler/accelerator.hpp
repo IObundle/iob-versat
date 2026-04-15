@@ -10,7 +10,6 @@ struct Edge;
 struct AccelInfo;
 struct ConfigFunction;
 struct InstanceInfo;
-struct SymbolicExpression;
 
 typedef Hashmap<FUInstance*,FUInstance*> InstanceMap;
 typedef Hashmap<Edge,Edge> EdgeMap;
@@ -143,8 +142,7 @@ enum NodeType{
 };
 
 struct ParameterValue{
-  SymbolicExpression* val;
-  //String val; // Mostly a placeholder for now. Eventually want a better way of handling parameters and expression of parameters
+  Opt<SYM_Expr> val;
 };
 
 struct FUInstance{
@@ -232,7 +230,7 @@ struct WireInformation{
   Wire wire;
   int addr;
   bool isStatic;
-  SymbolicExpression* startBitExpr;
+  SYM_Expr startBitExpr;
 };
 
 // NOTE: These values are specific to the top accelerator only. They differ because of stuff like DMA, the config interface for the accelerator and so on.
@@ -243,7 +241,7 @@ struct VersatComputedValues{
   
   Array<VersatRegister> registers; // The index of the register is the same index on the accelerator. registers[0] is associated to pos 0 on the accelerator, registers[1] to pos 1 and so on.
 
-  Array<ExternalMemoryInterface> externalMemoryInterfaces;
+  Array<ExternalMemorySymbolic> externalMemoryInterfaces;
   Hashmap<StaticId,StaticData>* staticUnits;
 
   // All configuration (including static and delays) wires
@@ -258,35 +256,30 @@ struct VersatComputedValues{
   int nStatics;
 
   int nDelays;
-  int delayBitsStart;
+  SYM_Expr delayBitsStart;
 
   int nUnits;
   int nDones;
   
   // Configurations = config + static + delays
-  int configurationBits;
+  SYM_Expr configurationBits;
   int configurationAddressBits;
 
   int nStates;
-  int stateBits;
+  SYM_Expr stateBits;
   int stateAddressBits;
 
   int unitsMapped;
-  int memoryMappedBytes;
 
   int nUnitsIO;
   int numberConnections;
 
-  int memoryAddressBits;
+  int memoryAddressBits; // Not equal to (memoryConfigDecisionBit - 1)
   int memoryConfigDecisionBit;
 
   // External memories, not memory mapped.
   //int externalMemoryInterfaces;
   int totalExternalMemory;  
-
-  SymbolicExpression* configSizeExpr;
-  SymbolicExpression* delayStart;
-  SymbolicExpression* configurationBitsExpr;
 };
 
 struct DAGOrderNodes{
@@ -415,8 +408,7 @@ FUInstance* GetOutputInstance(Pool<FUInstance>* nodes);
 // ======================================
 // Params
 
-bool SetParameter(FUInstance* inst,String parameterName,SymbolicExpression* val); // False if param does not exist
-SymbolicExpression* GetParameterValue(FUInstance* inst,String name);
+bool SetParameter(FUInstance* inst,String parameterName,SYM_Expr val); // False if param does not exist
 
 //
 // Graph fixes and operations

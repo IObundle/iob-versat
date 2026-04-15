@@ -33,12 +33,11 @@ struct FunctionAllocationInfo{
   size_t memoryUsed;
 };
 
+#if 0
 static Arena debugMemoryArena;
 static Array<ArenaInfo> debugArenaStack;
 static int debugArenaIndex;
-
-
-//static ArenaList<FunctionAllocationInfo>* debugInfo;
+#endif
 
 static void InitMemoryDebug(){
 #if 0
@@ -413,48 +412,6 @@ String EndString(Arena* out,StringBuilder* builder){
 
   *data = '\0';
   
-  return res;
-}
-
-String PushFile(Arena* out,FILE* file){
-  String res;
-  long int size = GetFileSize(file);
-
-  AlignArena(out,alignof(void*));
-
-  Byte* mem = PushBytes(out,size);
-  int amountRead = fread(mem,sizeof(Byte),size,file);
-
-  if(amountRead != size){
-    fprintf(stderr,"Memory PushFile failed to read entire file\n");
-    exit(-1);
-  }
-
-  res.size = size;
-  res.data = (const char*) mem;
-
-  return res;
-}
-
-String PushFile(Arena* out,String filepath){
-  return PushFile(out,StaticFormat("%.*s",UN(filepath)));
-}
-
-//TODO: Replace return with Optional. Handle errors
-String PushFile(Arena* out,const char* filepath){
-  FILE* file = OpenFile(filepath,"r",FilePurpose_READ_CONTENT);
-  DEFER_CLOSE_FILE(file);
-  
-  if(!file){
-    String res = {};
-    printf("Failed to open file: %s\n",filepath);
-    NOT_IMPLEMENTED("Need to return opt and let code handle this instead. TODO");
-    res.size = -1;
-    return res;
-  }
-
-  String res = PushFile(out,file);
-
   return res;
 }
 

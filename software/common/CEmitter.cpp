@@ -128,7 +128,7 @@ void CEmitter::InsertStatement(CAST* statementCAST){
       *cast->funcDecl.statements->PushElem() = statementCAST;
       return;
     } break;
-    } END_SWITCH();
+    }
   }
 }
 
@@ -233,13 +233,13 @@ String CEmitter::EndExpressionAsString(Arena* out){
       case CExprOp_EQUALITY:{
         builder->PushString(" == ");
       } break;
-      } END_SWITCH();
+      }
 
       // NOTE: Assuming we only care about binary operators, 
       Recurse(Recurse,top->children[1]);
       builder->PushString(")");
     } break;
-    } END_SWITCH();
+    }
   };
 
   Recurse(Recurse,top);
@@ -1027,6 +1027,6 @@ void Repr(CAST* top,StringBuilder* b,bool cppStyle,int level){
     b->PushSpaces(level * 2);
     b->PushString("%.*s = %.*s;",UN(top->assign.lhs),UN(top->assign.rhs));
   } break;
-  } END_SWITCH();
+  }
 }
 

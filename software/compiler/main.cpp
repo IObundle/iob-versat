@@ -10,8 +10,8 @@
 #include "filesystem.hpp"
 #include "globals.hpp"
 #include "memory.hpp"
+#include "symbolic.hpp"
 #include "utils.hpp"
-#include "parser.hpp"
 #include "utilsCore.hpp"
 #include "verilogParsing.hpp"
 #include "versatSpecificationParser.hpp"
@@ -19,7 +19,9 @@
 #include "templateEngine.hpp"
 #include "codeGeneration.hpp"
 #include "addressGen.hpp"
+#include "hierName.hpp"
 
+// TODO: See [0]
 #include <filesystem>
 namespace fs = std::filesystem;
 
@@ -43,13 +45,13 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
   
   toSee->Push(start);
 
-  auto arr = StartArray<int>(out);
+  auto list = PushList<int>(temp);
   while(toSee->Size()){
     int head = toSee->Pop();
 
     if(marked[head] == WAIT_CHILDREN){
       marked[head] = PERMANENT;
-      *arr.PushElem() = head;
+      *list->PushElem() = head;
       continue;
     }
     
@@ -76,10 +78,10 @@ Array<int> CalculateDAG(int maxNode,Array<Pair<int,int>> edges,int start,Arena* 
     // No sons
     if(firstSon == true){
       marked[head] = PERMANENT;
-      *arr.PushElem() = head;
+      *list->PushElem() = head;
     }
   }
-  return EndArray(arr);
+  return PushArray(out,list);
 }
 
 // This structure needs to represent the entire work that is required to perform 
@@ -91,7 +93,7 @@ struct Work{
 };
 
 void Print(Work* work){
-  printf("Name: %.*s\n",UN(work->definition.base.name));
+  printf("Name: %.*s\n",UN(work->definition.base.name.identifier));
   printf("calculateDelayFixedGraph: %d\n",work->calculateDelayFixedGraph ? 1 : 0);
   printf("flattenWithMapping: %d\n",work->flattenWithMapping ? 1 : 0);
 }
@@ -102,7 +104,7 @@ void GetSubWorkRequirement(Hashmap<String,Work>* typeToWork,ConstructDef type){
   Array<Token> subTypesUsed = TypesUsed(type,temp);
   
   for(Token tok : subTypesUsed){
-    Work* work = typeToWork->Get(tok);
+    Work* work = typeToWork->Get(tok.identifier);
     if(!work){
       continue;
     }
@@ -244,9 +246,6 @@ void ReportFileCreation(bool allFiles = false){
   }
 }
 
-// TODO: Remove this
-void InitializeUserConfigs();
-
 int main(int argc,char* argv[]){
 #ifdef VERSAT_DEBUG
   printf("Running in debug mode\n");
@@ -271,12 +270,15 @@ int main(int argc,char* argv[]){
   
   Arena* perm = globalPermanent;
   
-  InitializeDefaultData(perm);
+  // Init common stuff before compiler stuff.
+  SYM_Init();
   TE_Init();
+  HIER_Init();
+  FILE_Init();
+
+  InitializeDefaultData(perm);
   InitializeSimpleDeclarations();
-  InitializeUserConfigs();
-  InitParser(perm);
-  
+
   argp argp = { options, parse_opt, "SpecFile\n-T UnitName", "Dataflow to accelerator compiler. Check tutorial in https://github.com/IObundle/iob-versat to learn how to write a specification file"};
 
   OptionsGather gather = {};
@@ -316,16 +318,12 @@ int main(int argc,char* argv[]){
     exit(-1);
   }
 
-  FREE_ARENA(moduleAccum);
-  TrieMap<String,ModuleInfo>* allModules = PushTrieMap<String,ModuleInfo>(moduleAccum);
+  TrieMap<String,ModuleInfo>* allModules = PushTrieMap<String,ModuleInfo>(temp);
 
-  bool anyError = false;
   for(FileContent file : defaultVerilogUnits){
     String content = file.content;
-    
-    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp);
-    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp);
-    
+    Array<Module> modules = ParseVerilogFile(content,globalOptions.includePaths,temp);
+
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm);
       info.moduleSource = ModuleSource_DEFAULT_UNIT;
@@ -344,21 +342,14 @@ int main(int argc,char* argv[]){
     }
     
     for(String& path : globalOptions.unitFolderPaths){
-      String dirPaths = path;
-      Tokenizer pathSplitter(dirPaths,"",{});
-
-      while(!pathSplitter.Done()){
-        Token path = pathSplitter.NextToken();
-
-        Opt<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
-        if(!res){
-          error = true;
-          printf("\n\nCannot open dir: %.*s\n\n",UN(path));
-        } else {
-          for(String& str : res.value()){
-            String fullPath = PushString(perm,"%.*s/%.*s",UN(path),UN(str));
-            allVerilogFilesSet->Insert(fullPath);
-          }
+      Opt<Array<String>> res = GetAllFilesInsideDirectory(path,temp);
+      if(!res){
+        error = true;
+        printf("\n\nCannot open dir: %.*s\n\n",UN(path));
+      } else {
+        for(String& str : res.value()){
+          String fullPath = PushString(perm,"%.*s/%.*s",UN(path),UN(str));
+          allVerilogFilesSet->Insert(fullPath);
         }
       }
     }
@@ -375,9 +366,8 @@ int main(int argc,char* argv[]){
       exit(-1);
     }
 
-    String processed = PreprocessVerilogFile(content,globalOptions.includePaths,temp);
-    Array<Module> modules = ParseVerilogFile(processed,globalOptions.includePaths,temp);
-    
+    Array<Module> modules = ParseVerilogFile(content,globalOptions.includePaths,temp);
+
     for(Module& mod : modules){
       ModuleInfo info = ExtractModuleInfo(mod,perm);
       info.moduleSource = ModuleSource_USER_UNIT;
@@ -461,7 +451,7 @@ int main(int argc,char* argv[]){
     
     Hashmap<String,int>* typeToId = PushHashmap<String,int>(temp,size);
     for(int i = 0; i < size; i++){
-      typeToId->Insert(modules[i].base.name,i);
+      typeToId->Insert(modules[i].base.name.identifier,i);
     }
     
     if(!typeToId->Exists(topLevelTypeStr)){
@@ -473,8 +463,8 @@ int main(int argc,char* argv[]){
     for(int i = 0; i < size; i++){
       Array<Token> subTypesUsed = TypesUsed(modules[i],temp);
 
-      for(String str : subTypesUsed){
-        int* index = typeToId->Get(str);
+      for(Token str : subTypesUsed){
+        int* index = typeToId->Get(str.identifier);
         if(index){
           *arr.PushElem() = {i,*index};
         }
@@ -493,7 +483,7 @@ int main(int argc,char* argv[]){
       Token name = modules[i].base.name;
       work.definition = modules[i];
       
-      typeToWork->Insert(name,work);
+      typeToWork->Insert(name.identifier,work);
     }
     
     for(int i : order){
@@ -512,14 +502,15 @@ int main(int argc,char* argv[]){
         for(TypeAndInstance tp : merge.declarations){
           bool found = false;
           for(auto p : typeToWork){
-            if(CompareString(p.first,tp.typeName)){
+            if(p.first == tp.typeName.identifier){
               found = true;
               break;
             }
           }
 
           if(!found){
-            ReportError(content,tp.typeName,"Did not find type");
+            //tp.typeName
+            //ReportError(content,tp.typeName,"Did not find type");
             anyError = true;
           }
         }
@@ -662,12 +653,60 @@ int main(int argc,char* argv[]){
 #endif
   }
 
-
   AccelInfo info = CalculateAcceleratorInfo(accel,true,temp,true);
-  FillStaticInfo(&info);
-  
+
+  InstantiateParameters(&info,temp);
+  FillStaticInfo(&info,temp);
+
   VersatComputedValues val = ComputeVersatValues(accel,&info,temp);
-  Array<ExternalMemoryInterface> external = val.externalMemoryInterfaces;
+  Array<ExternalMemorySymbolic> external = val.externalMemoryInterfaces;
+
+  int maxMemoryBit = val.memoryConfigDecisionBit - 1;
+  for(int i = 0; i < info.infos.size; i++){
+    for(auto iter = StartIteration(&info,i); iter.IsValid(); iter = iter.Step()){
+      InstanceInfo* unit = iter.CurrentUnit();
+
+      if(unit->isComposite){
+        continue;
+      }
+    
+      if(SYM_IsZeroValue(unit->memMapSym)){
+        continue;
+      }
+
+      // This is after parameter instantiation which means that we can actually calculate this.
+      SYM_EvaluateResult eval = SYM_ConstantEvaluate(unit->memMapSym);
+      
+      // nocheckin
+      // TODO: Properly check the result 
+
+      Opt<int> memMapBits = eval.result;
+      Assert(memMapBits.has_value());
+      
+      int start = unit->memMapped.value();
+      int end = start + (1 << memMapBits.value()) - 1;
+
+      unit->memStart = start;
+      unit->memEnd = end;
+
+      String startBin = PushBinaryRepr(temp,start);
+      String endBin = PushBinaryRepr(temp,end);
+
+      int equalTo = String_CommonPrefixSize(startBin,endBin);
+
+      int sizeOfNonMask = 32 - equalTo;
+
+      startBin = Offset(startBin,32 - maxMemoryBit);
+      endBin = Offset(endBin,32 - maxMemoryBit);
+
+      int maskSize = maxMemoryBit - sizeOfNonMask;
+
+      String mask = startBin;
+      mask.size = maskSize;
+        
+      unit->globalMemDecisionMask = mask;
+    }
+  }
   
   OutputTopLevelFiles(accel,type,
                       globalOptions.hardwareOutputFilepath,
@@ -677,14 +716,24 @@ int main(int argc,char* argv[]){
   // NOTE: This data is printed so it can be captured by the IOB python setup.
   // TODO: Probably want a more robust way of doing this. Eventually want to printout some stats so we can
   //       actually visualize what we are producing in terms of resources/performance.
-  printf("Some stats\n");
-  printf("CONFIG_BITS: %d\n",val.configurationBits);
-  printf("STATE_BITS: %d\n",val.stateBits);
+  SYM_EvaluateResult eval = SYM_ConstantEvaluate(val.configurationBits);
+  SYM_EvaluateResult eval2 = SYM_ConstantEvaluate(val.stateBits);
 
-  printf("MEM_USED: ");
+  printf("Some stats\n");
+
+  if(!eval.Error()){
+    printf("CONFIG_BITS: %d\n",eval.result);
+  }
+  if(!eval2.Error()){
+    printf("STATE_BITS: %d\n",eval2.result);
+  }
+
+#if 0
+  // nocheckin: We might just remove the mem used otherwise need to reimplement all the stuff needed to calculate this  printf("MEM_USED: ");
   String content = ReprMemorySize(val.totalExternalMemory,temp);
   printf("%.*s",UN(content));
   printf("\n");
+#endif
 
   printf("UNITS: %d\n",val.nUnits);
   printf("ADDR_W:%d\n",val.memoryConfigDecisionBit + 1);
@@ -694,23 +743,23 @@ int main(int argc,char* argv[]){
   
   if(globalOptions.exportInternalMemories){
     int index = 0;
-    for(ExternalMemoryInterface inter : external){
+    for(ExternalMemorySymbolic inter : external){
       switch(inter.type){
       case ExternalMemoryType::ExternalMemoryType_DP:{
         printf("DP - %d",index++);
         for(int i = 0; i < 2; i++){
-          printf(",%d",inter.dp[i].bitSize);
-          printf(",%d",inter.dp[i].dataSizeOut);
-          printf(",%d",inter.dp[i].dataSizeIn);
+          printf(",%.*s",UN(SYM_Repr(inter.dp[i].bitSize,temp)));
+          printf(",%.*s",UN(SYM_Repr(inter.dp[i].dataSizeOut,temp)));
+          printf(",%.*s",UN(SYM_Repr(inter.dp[i].dataSizeIn,temp)));
         }
         printf("\n");
       }break;
       case ExternalMemoryType::ExternalMemoryType_2P:{
         printf("2P - %d",index++);
-        printf(",%d",inter.tp.bitSizeOut);
-        printf(",%d",inter.tp.bitSizeIn);
-        printf(",%d",inter.tp.dataSizeOut);
-        printf(",%d",inter.tp.dataSizeIn);
+        printf(",%.*s",UN(SYM_Repr(inter.tp.bitSizeOut,temp)));
+        printf(",%.*s",UN(SYM_Repr(inter.tp.bitSizeIn,temp)));
+        printf(",%.*s",UN(SYM_Repr(inter.tp.dataSizeOut,temp)));
+        printf(",%.*s",UN(SYM_Repr(inter.tp.dataSizeIn,temp)));
         printf("\n");
       }break;
       }
@@ -762,15 +811,10 @@ int main(int argc,char* argv[]){
 }
 
 /*
+We should move graph stuff to a separate file (or keep it in accelerator.hpp and make it the proper place for it).
+Remove the dynamic arena and just share memory between the nodes.
 
-GRAPH WEIRDNESS.
-
-I think I found the problem that we keep getting with the graphs that make them more difficult to use than normal.
-It is the same problem that we are having with the parser.
-
-We should have a GraphBuilder Environment (or maybe using the spec environment) so that everytime we end up in an Assert situation we just Report error.
-
-Now if I remember, the major problem that we actually have is than in situations like Merge and so on we are building a graph and also need to access it in order to compute stuff related to delays and such (which can cause more units to be added like buffers and so on).
+Memory mapped transfers do not check for sizes and report errors if too big.
 
 */
 
@@ -793,8 +837,6 @@ What I need to do is:
 
 -- Potentially remove the Pool from Accelerator. Make the accelerator a proper layer and everything is just stored on that side.
 
--- Potentially simplify Symbolic expresssion by allocating stuff on that side using an hashed based approach.
-
 After this "organizational" cleanup, finish cleaning up the code, mainly the parser part. I want to remove the old parser completely. The new parser is the way to go.
 
 This should be enough for a good workday.
@@ -804,12 +846,6 @@ This should be enough for a good workday.
 
 TODO:
 NOTE:
-
-- Need to add a proper test to API_Mem.
-
-Parameters are still mildly broken. The AccelInfo is not properly taking parameters into account, meaning that the accelInfo of modules is misleading. The only reason that stuff works fine right is because we are instantiating parameters when computing the configs and state wires of the modules. The actual data inside the AccelInfo is still "bad" and not properly responding to the parameters that we are putting.
-
-In fact, maybe the problem is that the FUDeclaration for modules is not using data from AccelInfo directly and instead it is doing computations over other data. This is "bad". We want AccelInfo to be the sole source of truth for all the Accelerator related data. If AccelInfo is properly calculated, then the rest of the code should work fine since all the data that is needed is already provided.
 
 Of course some data cannot come from AccelInfo since simple modules do not contain one. 
 

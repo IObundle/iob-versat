@@ -1,9 +1,9 @@
 #include <cstdio>
 
 #include "memory.hpp"
-#include "parser.hpp"
 #include "utils.hpp"
 #include "utilsCore.hpp"
+#include "parser.hpp"
 
 Arena arenaInst;
 Arena* arena = &arenaInst;
@@ -14,6 +14,30 @@ inline u64 HashString(String data,u64 hash){
   }
 
   return hash;
+}
+
+String PushFile(Arena* arena,String path){
+  // Care since this is stored on a static buffer
+  const char* asCStr = StaticFormat("%.*s",UN(path));
+  FILE* file = fopen(asCStr,"r");
+
+  long int size = GetFileSize(file);
+
+  AlignArena(arena,alignof(void*));
+
+  Byte* mem = PushBytes(arena,size);
+  int amountRead = fread(mem,sizeof(Byte),size,file);
+
+  if(amountRead != size){
+    fprintf(stderr,"Memory PushFile failed to read entire file\n");
+    exit(-1);
+  }
+
+  String res = {};
+  res.size = size;
+  res.data = (const char*) mem;
+
+  return res;
 }
 
 // 0 - exe name
@@ -30,6 +54,23 @@ int main(int argc,const char* argv[]){
   Arena inst2 = InitArena(Megabyte(64));
   contextArenas[1] = &inst2;
   
+  for(int i = 0; i < 8; i++){
+    singleUseCasesArenas[i] = InitArena(Megabyte(1));
+  }
+
+  TEMP_REGION(temp,nullptr);
+
+  FREE_ARENA(parsing);
+  auto TokenizeFunction = [](const char* start,const char* end) -> TokenizeResult{
+    TokenizeResult res = ParseWhitespace(start,end);
+    res |= ParseComments(start,end);
+    res |= ParseSymbols(start,end);
+    res |= ParseNumber(start,end);
+    res |= ParseIdentifier(start,end);
+
+    return res;
+  };
+  
   // djb2
   u64 hash = 5381;
   i32 amountOfTokens = 0;
@@ -40,19 +81,39 @@ int main(int argc,const char* argv[]){
 
     String content = PushFile(arena,filepath);
 
-    Tokenizer tok(content,"`~!@#$%^&*()_-+=[{]}\\|;:'\",<.>/?",{""});
+    const char* ptr = content.data;
+    const char* end = content.data + content.size;
 
-    while(!tok.Done()){
-      Token token = tok.NextToken();
+    printf("%p %p\n",ptr,end);
 
-      for(int i = 0; i < token.size; i++){
-        hash = ((hash << 5) + hash) + token.data[i];
+    while(ptr < end){
+      TokenizeResult res = TokenizeFunction(ptr,end);
+      TokenType type = res.token.type;
+
+      bool doHash = true;
+      if(type == TokenType_WHITESPACE || type == TokenType_COMMENT || type == TokenType_EOF){
+        doHash = false;
       }
-      amountOfTokens += 1;
+
+      int size = res.bytesParsed;
+      if(size == 0){
+        size = 1;
+      }
+
+      if(doHash){
+        String asStr = String(ptr,size);
+      
+        for(int i = 0; i < asStr.size; i++){
+          hash = ((hash << 5) + hash) + asStr[i];
+        }
+        amountOfTokens += 1;
+      }
+
+      ptr += size;
     }
   }
 
-  printf("%d:%lu\n",amountOfTokens,hash);
+  printf("HASH_RESULT:%d:%lu\n",amountOfTokens,hash);
 
   return 0;
 }

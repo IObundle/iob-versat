@@ -3,294 +3,292 @@
 #include "utils.hpp"
 #include "utilsCore.hpp"
 
-struct Tokenizer;
+enum TokenType : u16{
+  TokenType_INVALID = 0,
+  TokenType_EOF,
+  TokenType_NEWLINE,
+  TokenType_WHITESPACE,
+  TokenType_COMMENT,
+  TokenType_UNTERMINATED_MULTILINE_COMMENT,
 
-enum ValueType{
-  ValueType_NIL,
-  ValueType_NUMBER,
-  ValueType_STRING,
-  ValueType_BOOLEAN
+  // Single characters are equal to their ASCII value.
+  // { Start characters
+  TokenType_CHAR_GROUP_0_START = '!',
+  TokenType_CHAR_GROUP_0_LAST = '/',
+  TokenType_CHAR_GROUP_1_START = ':',
+  TokenType_CHAR_GROUP_1_LAST = '@',
+  TokenType_CHAR_GROUP_2_START = '[',
+  TokenType_CHAR_GROUP_2_LAST = '`',
+  TokenType_CHAR_GROUP_3_START = '{',
+  TokenType_CHAR_GROUP_3_LAST = '~',
+  // } End characters
+
+  // Normal types commonly used
+  TokenType_IDENTIFIER = 128,
+  TokenType_NUMBER,
+  TokenType_FILEPATH,
+  
+  // Double digit symbols
+  TokenType_DOUBLE_DOT,     // ..
+  TokenType_DOUBLE_HASHTAG, // ##
+  TokenType_ARROW,          // ->
+  TokenType_SHIFT_RIGHT,    // >>
+  TokenType_SHIFT_LEFT,     // <<
+  TokenType_XOR_EQUAL,      // ^=
+  
+  // Triple digit symbols
+  TokenType_ROTATE_RIGHT,   // >><
+  TokenType_ROTATE_LEFT,   // ><<
+
+  TokenType_VERILOG_ATTRIBUTE_START, // (*
+  TokenType_VERILOG_ATTRIBUTE_END,   // *)
+  
+  // Keywords
+  // { Start keywords
+  TokenType_KEYWORD_MODULE,
+  TokenType_KEYWORD_MERGE,
+  TokenType_KEYWORD_SHARE,
+  TokenType_KEYWORD_STATIC,
+  TokenType_KEYWORD_DEBUG,
+  TokenType_KEYWORD_CONFIG,
+  TokenType_KEYWORD_STATE,
+  TokenType_KEYWORD_MEM,
+  TokenType_KEYWORD_FOR,
+  // } End keywords
+
+  // Verilog preprocessing directives 
+  // { Start VERILOG_PREPROCESS
+  TokenType_VERILOG_DEFINE,
+  TokenType_VERILOG_UNDEF,
+  TokenType_VERILOG_TIMESCALE,
+  TokenType_VERILOG_INCLUDE,
+  // nocheckin: Missing (timescale, resetall, undefineall)
+  TokenType_VERILOG_IFDEF,
+  TokenType_VERILOG_IFNDEF,
+  TokenType_VERILOG_ELSE,
+  TokenType_VERILOG_ELSIF,
+  TokenType_VERILOG_ENDIF,
+  // Any token that starts with an ` but is not a define
+  TokenType_VERILOG_PREPROCESS, 
+  // } End VERILOG_PREPROCESS
+
+  // { Start Verilog Keywords
+  TokenType_VERILOG_KEYWORD_MODULE,
+  TokenType_VERILOG_KEYWORD_ENDMODULE,
+  TokenType_VERILOG_KEYWORD_PARAMETER,
+  TokenType_VERILOG_KEYWORD_SIGNED,
+  TokenType_VERILOG_KEYWORD_INPUT,
+  TokenType_VERILOG_KEYWORD_OUTPUT,
+  TokenType_VERILOG_KEYWORD_INOUT,
+  TokenType_VERILOG_KEYWORD_REG,
+  TokenType_VERILOG_KEYWORD_WIRE,
+  // } End Verilog Keywords
+
+  // TODO: While this is something that is kinda cool to have, it
+  //       might also be fundamentally wrong.  Because of arrays and
+  //       stuff like that, it is possible to have certain units have
+  //       the name of keywords and still cause no problems.  A
+  //       const[N] array will create units whose name is const_0,
+  //       const_1 and so on, which do not cause problems from c or
+  //       verilog POV.  We probably want to move this check to
+  //       someplace else instead of pushing this responsibility to
+  //       the parser itself. Just because we parse a C keyword does
+  //       not mean that we produce a C keyword.
+  // NOTE: We probably just want to check if any FU instance has a C
+  //       keyword name just before we finish registering the module.
+  //       It seems to be the better place to put this check.
+
+  // We do not really care which keyword it is. We just want to make
+  // sure that the generated C code is syntatically
+  // correct since the user might use a C keyword in place of
+  // a name and cause problems later on (Ex: 'const' is a valid name
+  // from the POV of Versat but its a keyword in C which causes
+  // problems when generating the C structs and so on).
+  TokenType_C_KEYWORD,
+
+  TokenType_C_STRING,
+
+  // We solve this by adding a number at the end of every instance
+  // so for now this is mostly unused
+  TokenType_VERILOG_KEYWORD
 };
 
-struct Value{
-  ValueType type;
+#define TokenType_START_OF_KEYWORDS   (TokenType_KEYWORD_MODULE)
+#define TokenType_END_OF_KEYWORDS     (TokenType_KEYWORD_FOR + 1)
+
+#define TokenType_START_OF_VERILOG_PREPROCESS   (TokenType_VERILOG_DEFINE)
+#define TokenType_END_OF_VERILOG_PREPROCESS     (TokenType_VERILOG_PREPROCESS + 1)
+
+#define TokenType_START_OF_VERILOG_KEYWORDS   (TokenType_VERILOG_KEYWORD_MODULE)
+#define TokenType_END_OF_VERILOG_KEYWORDS   (TokenType_VERILOG_KEYWORD_WIRE + 1)
+
+#define TOK_TYPE(IN) ((TokenType) IN)
+
+struct TokenLocation{
+  //FileContent content;
+  int bytePos;
+  int line;
+  int column;
+};
+
+struct Token{
+  TokenType type;
+
+  String originalData;
+  FileContent originalFile;
 
   union{
-    bool boolean;
-    char ch;
+    String identifier;
+    String whitespace;
+    String comment;
+    String cString;
+    String filepath;
     i64 number;
-    String str;
   };
 };
 
-// TODO: Expression is now mostly a Verilog type thing. We can remove it from here and make it fully Verilog specific.
-struct Expression{
-  const char* op;
-  String id;
-  Array<Expression*> expressions;
-  Value val;
-  String text;
-  int approximateLine;
-  
-  enum {UNDEFINED,OPERATION,IDENTIFIER,FUNCTION,LITERAL} type;
+String PARSE_PushDebugRepr(Arena* out,Token token);
+
+struct TokenizeResult{
+  Token token;
+  u32 bytesParsed;
 };
 
-void PrintExpression(Expression* exp);
-
-typedef int (*CharFunction) (const char* ptr,int size);
-
-struct Cursor{
-  int line;
-  int column;
-};
-
-struct Token : public String{
-  Range<Cursor> loc;
-  
-  Token& operator=(String str){
-    this->data = str.data;
-    this->size = str.size;
-    return *this;
+inline TokenizeResult& operator|=(TokenizeResult& lhs,TokenizeResult rhs){
+  if(lhs.token.type == TokenType_INVALID){
+    lhs = rhs;
   }
-};
 
-struct FindFirstResult{
-  String foundFirst;
-  Token peekFindNotIncluded;
-};
+  return lhs;
+}
 
-struct Trie{
-  u16 array[128];
-};
-
-struct TokenizerTemplate{
-  Array<Trie> subTries;
-};
-
-struct TokenizerMark{
-  const char* ptr;
-  Cursor pos;
-};
-
-#define MAX_STORED_TOKENS 4
-
-/*
-  TODO: The parser code is breaking in multiple places and currently only works because some hacks are being made.
-        The biggest problem is the way templates are "defined". Having to tell the tokenizer all the combinations of symbols that we care about is kinda stupid, because if the parser looks at a symbol and does not recognize it then we probably want to return from wathever we are trying to parse and let the upper code try to make sense of it. Instead, the only thing that the template stuff does is tell us whether we want to treat something as a symbol (and return it immediatly) or if we want to treat it as an identifier (and consume as many non whitespace characters as possible).
-        Ex: It is stupid that the parser looks at "3{" and treats this as a token, unless we tell it that '{' is a symbol so that the parser actually outputs a "3" and a "{" seperatly. It is also stupid how we are approaching this anyway. We know full well that the languages we are trying to parse follow basically the same set of rules. The only major difference is which set of multicharacter symbols the language supports ( "<<" might mean something in one language while in the other we want to parse each "<" individually).
-        The second stupid thing that we are trying to do is not handling comments properly. Because Verilog does not support attributes in the places that we want it to, we have no choice than to use comments to pass Versat specific info. There is no other choice, comments are the only thing that allow us to put wathever information we want in wathever place we want. Because the tokenizer was not built with this in mind, there are a lot of places where the code is kinda uglier than it needs to be.
-*/
-
-struct Tokenizer{
+struct DefaultTokenizerState{
   const char* start;
   const char* ptr;
   const char* end;
-  TokenizerTemplate* tmpl;
-  Arena leaky;
-  
-  // Currently a FIFO implemented by copying from i+1 to i to remove it.
+  FileContent content;
+};
+
+typedef Token (*TokenizeFunction)(void* tokenizerState);
+
+#define MAX_STORED_TOKENS 4
+
+enum ParsingOptions{
+  ParsingOptions_NONE = 0,
+
+  ParsingOptions_SKIP_WHITESPACE = (1 << 0),
+  ParsingOptions_SKIP_COMMENTS   = (1 << 1),
+
+  ParsingOptions_ERROR_ON_C_KEYWORDS = (1 << 2),
+  ParsingOptions_ERROR_ON_VERILOG_KEYWORDS = (1 << 3),
+
+  ParsingOptions_ERROR_ON_C_VERILOG_KEYWORDS = (ParsingOptions_ERROR_ON_C_KEYWORDS | ParsingOptions_ERROR_ON_VERILOG_KEYWORDS),
+
+  ParsingOptions_DEFAULT = (ParsingOptions_SKIP_WHITESPACE | ParsingOptions_SKIP_COMMENTS)
+};
+
+inline ParsingOptions operator|(ParsingOptions lhs,ParsingOptions rhs){
+  ParsingOptions res = (ParsingOptions) ((int) lhs | (int) rhs);
+  return res;
+}
+
+struct Parser{
+  void* tokenizerState;
+  Arena* arena;
+
+  u8 amountStored;
   Token storedTokens[MAX_STORED_TOKENS];
 
-  // Line and column start at one. Subtract one to get zero based indexes
+  TokenizeFunction tokenizer;
+
+  ArenaList<String>* errors;
+
+  ParsingOptions options;
+  const char* currentFile; // Optional, gives better error messages
+
+  // Helpers
+  void EnsureTokens(int amount);
+  void ReportError(String error);
+  
+  void ReportUnexpectedToken(Token token,BracketList<TokenType> expectedList);
+
+  // NOTE: Options does not currently reset the stored tokens. This means that if we peek a bunch of tokens ahead
+  //       and then change options it might be possible that we ignore or return more tokens than we expected.
+  //       Regardless, the parsing process never peeks ahead more than it needs so it might be fine.
+  //       If calling Next and such then we can change options easily. If we are peeking then need to be careful.
+  ParsingOptions SetOptions(ParsingOptions options);
+
+  Token NextToken();
+  Token PeekToken(int lookahead = 0);
+
+  bool IfNextToken(TokenType type);
+  bool IfNextToken(char singleChar);
+
+  bool IfPeekToken(TokenType type);
+  bool IfPeekToken(char singleChar);
+  
+  Token ExpectNext(TokenType type);
+  Token ExpectNext(char singleChar);
+
+  void ExpectIdentifier(String expectedContent);
+
+  void Synch(BracketList<TokenType> possibleTypes);
+
+  bool Done();
+};
+
+Parser* StartParsing(TokenizeFunction tokenizer,String content,Arena* freeArena,ParsingOptions = ParsingOptions_DEFAULT);
+Parser* StartParsing(TokenizeFunction tokenizer,void* tokenizerState,Arena* freeArena,ParsingOptions = ParsingOptions_DEFAULT);
+
+// ============================================================================
+// Tokenizer function helpers
+
+enum ParseWhitespaceOptions{
+  ParseWhitespaceOptions_NONE = 0,
+  ParseWhitespaceOptions_INCLUDE_NEWLINES = (1 << 1),
+
+  ParseWhitespaceOptions_DEFAULT = ParseWhitespaceOptions_INCLUDE_NEWLINES
+};
+
+TokenizeResult ParseWhitespace(const char* start,const char* end,ParseWhitespaceOptions options = ParseWhitespaceOptions_DEFAULT);
+TokenizeResult ParseNewline(const char* start,const char* end);
+TokenizeResult ParseComments(const char* start,const char* end);
+TokenizeResult ParseSymbols(const char* start,const char* end);
+TokenizeResult ParseNumber(const char* start,const char* end);
+TokenizeResult ParseIdentifier(const char* start,const char* end);
+TokenizeResult ParseMultiSymbol(const char* start,const char* end,String format,TokenType result);
+
+TokenizeResult ParseVerilogPreprocess(const char* start,const char* end);
+
+TokenizeResult ParseCString(const char* start,const char* end);
+
+// Since this is only for helper code, we define that all filepaths must begin with an '.'
+// This separates them from other normal identifiers 
+TokenizeResult ParseFilepath(const char* start,const char* end);
+
+//TODO: Create a parse remaining so that any other symbol does not cause problems further down the line.
+
+// ======================================
+// Check if identifier is a keyword in another language.
+// The intent was to prevent Versat from generating an invalid software or hardware file 
+// by using a keyword in a place that is not allowed, but so far it might be better to put this logic
+// after the parsing is done since there is no guarantee that we generate a keyword from the input.
+
+bool PARSE_IsCKeyword(String identifier);
+bool PARSE_IsVerilogKeyword(String identifier);
+
+// ======================================
+// Location
+
+struct LocInfo{
   int line;
   int column;
-  char amountStoredTokens;
-  
-  // TODO: This should technically be part of the Tokenizer template
-  bool keepWhitespaces;
-  bool keepComments;
 
-  // Mostly implementation stuff, generally use the functions below unless you know what you are doing.
-  void ConsumeWhitespace();
-  Token ParseToken();
-  void AdvanceOneToken();
-  Token PopOneToken();
-  const char* GetCurrentPtr();
-  
-  // TODO: Need to make a function that returns a location for a given token, so that I can return a good error message for the token not being the expected on. The function accepts a token and either returns a string or returns some structure that contains all the info needed to output such text.
-  
-  // TODO: Make some asserts. Special chars should not contain empty chars
-  Tokenizer(String content,String singleChars,BracketList<String> specialChars); // Content must remain valid through the entire parsing process
-  Tokenizer(String content,TokenizerTemplate* tmpl); // Content must remain valid. Tokenizer makes no copies
-  ~Tokenizer();
+  Array<String> allLines;
 
-  Token PeekToken(int index = 0);
-  Token NextToken();
-
-  Token AssertNextToken(String str);
-
-  String PeekCurrentLine(); // Get full line (goes backwards until start of line and peeks until newline).
-  Token PeekRemainingLine(); // Does not go back. 
-
-  void AdvanceComments();
-
-  void FlushStoredTokens();
-  
-  bool IfPeekToken(String str);
-  bool IfNextToken(String str); // Only does "next" if token matches str
-
-  // All these calls are not very good. No point having a tokenizer if we just skip the tokenization process
-  Opt<Token> PeekFindUntil(String str);
-  Opt<Token> PeekFindIncluding(String str);
-  Opt<Token> PeekFindIncludingLast(String str);
-  Opt<Token> NextFindUntil(String str);
-  
-  Opt<FindFirstResult> FindFirst(BracketList<String> strings);
-
-  Token PeekWhitespace();
-
-  Token Finish(); // Acts like a Next, puts Tokenizer at the end
-
-  TokenizerMark Mark();
-  Token Point(TokenizerMark mark);
-  void Rollback(TokenizerMark mark);
-  String GetContent();
-  
-  void AdvancePeek(int amount = 1);
-  void AdvancePeekBad(Token token);
-
-  void AdvanceRemainingLine();
-  
-  bool Done(); // If more tokens, returns false. Can return true even if it contains more text (but no more tokens)
-
-  bool IsSpecialOrSingle(String toTest);
-
-  TokenizerTemplate* SetTemplate(TokenizerTemplate* tmpl); // Returns old template
+  Array<String> linesBefore;
+  String lineContent;
+  Array<String> linesAfter;
 };
 
-void InitParser(Arena* perm);
-
-bool IsIdentifier(String str); // Default identifier rules (starts with alpha or '_' and can contain numbers after)
-bool IsOnlyWhitespace(String tok);
-bool Contains(String str,String toCheck);
-bool StartsWith(String toSearch,String starter);
-
-Token ParseComment(Tokenizer* tok,Arena* out);
-
-bool CheckFormat(const char* format,String tok);
-Array<Value> ExtractValues(const char* format,String tok,Arena* arena);
-
-String PushPointingString(Arena* out,int startPos,int size);
-
-int GetTokenPositionInside(String text,Token token); // Does not compare strings, just uses pointer arithmetic
-
-int CountSubstring(String str,String substr);
-
-String GetFullLineForGivenToken(String content,Token token);
-String GetRichLocationError(String content,Token got,Arena* out);
-
-// This functions should check for errors. Also these functions should return an error if they do not parse everything. Something like "3a" should flag an error for ParseInt, instead of just returning 3. Either they consume everything or it's an error
-int ParseInt(String str);
-double ParseDouble(String str);
-float ParseFloat(String str);
-bool IsNum(char ch);
-
-// TODO: This is BROKEN. The main problem is that we do not want to have to indicate symbols that we do not care about. The default way of handling stuff is that every single single symbol should be parsed individually EXPECT unless specialChars contains a multi line symbol at which point the tokenizer attemps to parse bigger. (Basically, we want identifier, numbers and single symbol rules by default and the only difference between templates is which symbols are grouped into a bigger symbol [basically wether stuff like == gets parsed into two symbols or just one]).
-
-TokenizerTemplate* CreateTokenizerTemplate(Arena* out,String singleChars,BracketList<String> specialChars);
-
-struct TemplateMarker{
-  TokenizerTemplate* previousTemplate;
-  Tokenizer* tok;
-
-  TemplateMarker(Tokenizer* tok,TokenizerTemplate* newTemplate){this->tok = tok; previousTemplate = tok->SetTemplate(newTemplate);};
-  ~TemplateMarker(){tok->SetTemplate(previousTemplate);};
-}; 
-
-#define TOKENIZER_REGION(TOK,TMPL) TemplateMarker _marker(__LINE__)(TOK,TMPL)
-
-
-
-// TODO: We want to remove this. Trying to make a generic parser for this kind of stuff is more trouble than it is worth. It is easier to copy code and make changes than it is trying to force everything into a single interface. It also makes it easier to make changes later on which we probably need to do since different languages have different ways of handling this kind of stuff.
-
-/* Generic expression parser. The ExpressionType struct needs to have the following members with the following types:
-     Array<ExpressionType> expressions;
-     const char* op;
-     enum {OPERATION} type;
-     Token text;
-*/
-
-template<typename Exp>
-using ParsingFunction = Exp* (*)(Tokenizer* tok,Arena* out);
-
-struct OperationList{
-  const char** op;
-  int nOperations;
-  OperationList* next;
-};
-
-template<typename ExpressionType>
-ExpressionType* ParseOperationType_(Tokenizer* tok,OperationList* operators,ParsingFunction<ExpressionType> finalFunction,Arena* out){
-  auto start = tok->Mark();
-
-  if(operators == nullptr){
-    ExpressionType* expr = finalFunction(tok,out);
-
-    expr->text = tok->Point(start);
-    return expr;
-  }
-
-  OperationList* nextOperators = operators->next;
-  ExpressionType* current = ParseOperationType_(tok,nextOperators,finalFunction,out);
-
-  while(1){
-    Token peek = tok->PeekToken();
-
-    bool foundOne = false;
-    for(int i = 0; i < operators->nOperations; i++){
-      const char* elem = operators->op[i];
-
-      if(CompareString(peek,elem)){
-        tok->AdvancePeek();
-        ExpressionType* expr = PushStruct<ExpressionType>(out);
-        *expr = {};
-        expr->expressions = PushArray<ExpressionType*>(out,2);
-
-        expr->type = ExpressionType::OPERATION;
-        expr->op = elem;
-        expr->expressions[0] = current;
-        expr->expressions[1] = ParseOperationType_(tok,nextOperators,finalFunction,out);
-
-        current = expr;
-        foundOne = true;
-      }
-    }
-
-    if(!foundOne){
-      break;
-    }
-  }
-
-  current->text = tok->Point(start);
-  return current;
-}
-
-template<typename ExpressionType>
-ExpressionType* ParseOperationType(Tokenizer* tok,BracketList<BracketList<const char*>> operators,ParsingFunction<ExpressionType> finalFunction,Arena* out){
-  auto mark = tok->Mark();
-
-  OperationList head = {};
-  OperationList* ptr = nullptr;
-
-  for(BracketList<const char*> outerList : operators){
-    if(ptr){
-      ptr->next = PushStruct<OperationList>(out);
-      ptr = ptr->next;
-      *ptr = {};
-    } else {
-      ptr = &head;
-    }
-
-    ptr->op = PushArray<const char*>(out,outerList.size()).data;
-
-    for(const char* str : outerList){
-      ptr->op[ptr->nOperations++] = str;
-    }
-  }
-
-  ExpressionType* expr = ParseOperationType_<ExpressionType>(tok,&head,finalFunction,out);
-  expr->text = tok->Point(mark);
-
-  return expr;
-}
-
+LocInfo PARSE_GetLinesAroundLocation(const char* pos,String content, int linesBefore, int linesAfter,Arena* out);

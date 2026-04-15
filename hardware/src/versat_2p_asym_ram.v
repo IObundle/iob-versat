@@ -7,7 +7,7 @@
 // The total size in bits is given by multiplying 2^ADDR_W * min(A_DATA_W,B_DATA_W)
 // The number of blocks used is equal to max([A|B]_DATA_W) / min([A|B]_DATA_W)
 
-module my_2p_asym_ram #(
+module versat_2p_asym_ram #(
    parameter W_DATA_W = 0,
    parameter R_DATA_W = 0,
    parameter ADDR_W   = 0
@@ -44,7 +44,7 @@ module my_2p_asym_ram #(
    generate
    genvar i;
       for (i = 0; i < N; i = i + 1) begin : ramInst
-         iob_ram_2p #(
+         versat_ram_2p #(
             .DATA_W(MINDATA_W),
             .ADDR_W(ADDR_W - (N_W + SYMBOL_W))
          ) iob_2p_ram_inst (
@@ -112,12 +112,12 @@ module my_2p_asym_ram #(
             data_wr[0] = w_data_i;
          end
          //read parallel
-         always @(data_rd[0]) begin
+         always @* begin
             r_data_o = data_rd[0];
          end
       end
    endgenerate
-endmodule  // my_2p_asym_ram
+endmodule  // versat_2p_asym_ram
 
 `undef max
 `undef min
