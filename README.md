@@ -2,6 +2,9 @@
 
 At its core, Versat is a compiler that transforms a high-level specification into a custom Coarse-Grained Reconfigurable Array (CGRA) hardware accelerator. Versat is written in the C++ language.
 
+An AI generated wiki for iob-versat is available [here](https://deepwiki.com/IObundle/iob-versat)
+
+
 ## Table of Contents
 
 - [Dependencies](#dependencies)
