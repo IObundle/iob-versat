@@ -1,6 +1,13 @@
 # What is Versat
 
-At its core, Versat is a compiler that transforms a high-level specification into a custom Coarse-Grained Reconfigurable Array (CGRA) hardware accelerator. Versat is written in the C++ language.
+Versat is a high-level hardware compiler that automates the generation of custom Coarse-Grained Reconfigurable Array (CGRA) accelerators.
+
+Written in C++, Versat bridges the gap between software-defined logic and silicon efficiency. It ingests a high-level graph specification of your algorithm and completely automates the heavy lifting of hardware creation:
+
+- Hardware Generation: Generates production-ready, synthesizable Verilog RTL source files for the CGRA fabric.
+
+- Software Ecosystem: Automatically generates the corresponding C/C++ runtime drivers, configuration headers, and memory-mapped APIs so your host CPU can seamlessly control, configure, and execute the generated accelerator.
+
 
 An AI generated wiki for iob-versat is available [here](https://deepwiki.com/IObundle/iob-versat)
 
