@@ -1,0 +1,58 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Versat supports two ways of sharing the Config interface (Section~\ref{sec:if_config_state})
+between units, to make it easier to design SIMD portions of a design. In
+both cases, only the Config interface is shared: the units keep their own
+inputs, outputs, and internal state, and only Config sharing is currently
+supported.
+
+The simplest way is to group a set of units of the same type inside a
+\texttt{share config} block. Shared units have their configuration merged,
+inside the generated structures, using a \texttt{union} instead of a
+\texttt{struct}: the generated struct's layout is the definitive reference
+for how the accelerator actually shares configuration internally.
+
+The second way uses the \texttt{static} keyword before an instance
+declaration, borrowing the idea of a static member from object-oriented
+languages: every instance of the enclosing module shares the same
+configuration for that unit, regardless of where in the hierarchy the
+module is instantiated. Unlike shared units, static units get their own,
+separate configuration structure.
+
+\begin{lstlisting}[language=VersatSpec,caption={\texttt{static} versus \texttt{share config}.},label={lst:share_example}]
+module StaticExample(){
+  static Const const;
+#
+  constant -> out:0;
+}
+
+module ShareExample(){
+  share config Const {
+    shared_0;
+    shared_1;
+  }
+  StaticExample static_0;
+  StaticExample static_1;
+#
+  {unit[0..1], static[0..1]} -> out:0..3;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=C,caption={Generated configuration structures for \texttt{ShareExample}: a \texttt{union} for shared units versus a separate structure for static ones.},label={lst:share_generated}]
+// Shared units: writing unit_0's config also changes unit_1's, since
+// they occupy the same memory inside the accelerator's config register.
+typedef struct {
+  union {
+    ConstConfig unit_0;
+    ConstConfig unit_1;
+  };
+} ShareExampleConfig;
+
+// Static: extracted into its own structure. There is only one value,
+// shared by every instance of StaticExample.
+typedef struct {
+  int StaticExample_const_constant;
+} ShareExampleStatic;
+\end{lstlisting}

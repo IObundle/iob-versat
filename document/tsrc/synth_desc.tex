@@ -1,0 +1,48 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Like the rest of this core's build system, the synthesis script is not
+Versat-specific: it is the generic Genus flow shared by every
+\href{https://github.com/IObundle/py2hwsw}{py2hwsw}-managed core,
+instantiated with this core's own sources, design name, and constraints.
+Its four phases match the description above one to one: elaborate the
+design against a technology library selected by node (out of the box,
+py2hwsw ships setups for UMC 130nm and three TSMC nodes), synthesize it
+in three effort-graded passes (generic, technology-mapped, then
+optimized), report the results, and write out the mapped netlist:
+
+\begin{lstlisting}[language=tcl,caption={py2hwsw's \texttt{hardware/syn/genus/build.tcl}: the Cadence Genus flow underlying this core's ASIC synthesis script (condensed).},label={lst:genus_flow}]
+# Load the technology library for the selected node.
+source $NODE/genus.setup.tcl
+
+# Read the Verilog sources and elaborate the top-level design.
+read_hdl -v2001 $VSRC
+elaborate $DESIGN
+check_design -unresolved
+
+# Read timing constraints (SDC).
+read_sdc -stop_on_error ../src/$NAME.sdc
+
+# Synthesize: generic, then technology-mapped, then optimized.
+set_db syn_generic_effort medium
+syn_generic
+set_db syn_map_effort medium
+syn_map
+set_db syn_opt_effort medium
+syn_opt
+
+# Reports: area, timing, and power.
+report_area          > $OUTPUTS_DIR/${DESIGN}_area.rpt
+report_timing -max_paths 30 > $OUTPUTS_DIR/${DESIGN}_timing.rpt
+report_power -by_hierarchy -unit uW > $OUTPUTS_DIR/${DESIGN}_power.rpt
+
+# Post-synthesis, technology-mapped netlist.
+write_hdl -mapped -v2001 > $OUTPUTS_DIR/${DESIGN}_synth.v
+\end{lstlisting}
+
+Because the FIFO and RAM subblocks are left as black boxes (technology
+memories being, by nature, technology-dependent), \texttt{check\_design}
+and the area/timing reports above only account for Versat's logic; the
+memories' own area, timing, and power must be added from the memory
+compiler's own datasheet once they are generated for the target node.

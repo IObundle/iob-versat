@@ -1,0 +1,14 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Versat is based on the dataflow paradigm of computation: an accelerator is
+described as data moving across units that perform operations on it as it
+passes through them, rather than as a sequence of instructions. The
+designer describes the dataflow graph of the algorithm to implement by
+declaring its units (the nodes of the graph) and the connections between
+them (the edges).
+
+The dataflow graph may contain a single global loop enclosing the whole
+graph, but it may not contain any other, internal loops; Versat reports an
+error when the graph it is given is not supported.

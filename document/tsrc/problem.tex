@@ -1,0 +1,16 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Designing a custom hardware accelerator by hand is slow and error-prone: it
+requires deep RTL expertise, and every change to the accelerated algorithm
+means re-deriving the hardware datapath and, separately, the software
+driver that configures and runs it. Keeping those two artifacts consistent
+as the design evolves is itself a recurring source of bugs.
+
+Versat removes this burden by raising the level of abstraction at which the
+designer works. Instead of writing RTL and a driver by hand, the designer
+describes the algorithm once, as a dataflow graph of interconnected units,
+in the Versat specification language. Versat then automatically derives
+both the synthesizable hardware and the software needed to control it from
+that single source of truth, so the two can never drift apart.

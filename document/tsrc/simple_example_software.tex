@@ -1,0 +1,28 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Section~\ref{sec:simple_example_outputs} generated \texttt{versat\_accel.h}, the API \texttt{SimpleExample} exposes to software. This section provides \texttt{main.cpp}, a small program written against that API, to actually run the accelerator and read back the sum it computes.
+
+\lstinputlisting[caption={main.cpp}]{../examples/simple_example/main.cpp}
+
+\texttt{versat\_init} must be called once, before anything else. On hardware, its argument is the base address at which the SoC maps the accelerator. In PC emulation there is no address space to map, so any value works. The program then writes both constants through \texttt{accelConfig}, calls \texttt{RunAccelerator(1)}, which starts one run and returns once it finishes, and reads \texttt{result} back through \texttt{accelState}.
+
+Section~\ref{sec:simple_example_run} already built and ran this program, as the last step of \texttt{make -C examples/simple\_example run}. It prints:
+
+\begin{lstlisting}
+After 1 run:  0
+After 2 runs: 15
+\end{lstlisting}
+
+The first run reads back 0 because configuration reaches the datapath one run late. Software writes land in a shadow copy of the configuration (see also Section~\ref{sec:if_config_state}), and the pulse that starts each run advances the configuration through two register stages at once: the shadow copy moves into a staging register, while the staging register's previous contents move into the configuration the datapath actually uses. The \texttt{Reg} unit captures its input on the last cycle of each run, so run 1 adds the reset values of \texttt{a} and \texttt{b}, and run 2 adds the values written before run 1. In general, each run computes with the configuration software had written before the previous run started, which is why the program reads the result after the second run. Likewise, writing a new value to \texttt{a} and running once still reads the old sum, and only a further run reflects the new value.
+
+That covers Versat used standalone. The \href{https://github.com/IObundle/iob-soc-versat}{iob-soc-versat} repository runs the same accelerator, under the name \texttt{EXAMPLE\_Simple}, inside a complete RISC-V SoC. From that repository's root, the following commands emulate it on the host PC, simulate the whole SoC at the RTL level, and build the SoC's FPGA firmware. Each target enters its own \texttt{nix-shell} environment before building:
+
+\begin{lstlisting}
+make pc-emul-run TEST=EXAMPLE_Simple
+make sim-run TEST=EXAMPLE_Simple
+make fpga-run TEST=EXAMPLE_Simple
+\end{lstlisting}
+
+Section~\ref{sec:soc_integration} explains how that SoC integrates the generated accelerator.

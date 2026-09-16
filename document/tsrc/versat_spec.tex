@@ -1,0 +1,58 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Complex units are described in the Versat specification language. Inspired
+by Verilog and C, it describes a unit hierarchically, by instantiating and
+connecting simpler, previously defined units; a unit can never instantiate
+itself, directly or indirectly, since recursive instantiation is not
+allowed in a dataflow design.
+
+Versat currently supports three kinds of complex units: \texttt{module}, a
+plain grouping of subunits and their connections with no other special
+meaning; \texttt{merge}, described in Section~\ref{sec:merging_units}; and
+\texttt{iterative}. A module definition is split into two parts: the first
+instantiates the subunits, and the second describes the connections between
+them; binary operations, such as additions and shifts, can be written
+directly in the second part using assignment-like syntax.
+
+\begin{lstlisting}[language=VersatSpec,caption={A minimal Versat specification module.},label={lst:simple_example}]
+module SimpleExample(){ // Module definition with zero inputs.
+  // This part instantiates units. Here, two Const units and one Reg unit.
+  Const a; // Const outputs a constant, software-configurable value.
+  Const b;
+  Reg result; // Reg behaves like a hardware register, but is a full unit.
+#
+  // This separates instance declarations from connection statements.
+  addition = a + b; // Assignment: one of the two connection statement kinds.
+  addition -> result; // Connection: the other kind, output wired to input.
+}
+\end{lstlisting}
+
+The CPU must instruct the accelerator to perform a \emph{run}; for this
+example, a run takes one cycle, at the end of which \texttt{result} holds
+the sum of \texttt{a} and \texttt{b}. Any module defined this way can be
+used as the top-level module for hardware generation: Versat is invoked
+with the specification file and the name of the top-level module to
+generate.
+
+By default, a connection or an instance array uses port or index zero;
+ranges let a single statement describe several connections at once:
+
+\begin{lstlisting}[language=VersatSpec,caption={Ports, ranges, and instance arrays.},label={lst:port_example}]
+module PortExample(x, y){ // Module with two inputs.
+  Mem mem; // Mem has two input and two output ports.
+#
+  {x, y} -> mem:0..1; // Connect x to port 0 and y to port 1 of mem.
+  mem:0..1 -> out:0..1; // 'out' names the module's own outputs.
+}
+
+module ModuleUsage(){
+  PortExample example;
+  Const constants[2]; // Array of units, as in C.
+  Reg result[2];
+#
+  constants[0..1] -> example:0..1;
+  example:0..1 -> result[0..1];
+}
+\end{lstlisting}

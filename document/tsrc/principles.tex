@@ -1,0 +1,27 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item \textbf{Dataflow computation}: an accelerator is described as data
+    moving across units that operate on it as it passes through; units are
+    sources, compute units, or sinks, depending on whether they only
+    produce, transform, or consume data.
+  \item \textbf{Composability}: complex units are built by instantiating
+    and interconnecting simpler, previously defined units. A unit can never
+    instantiate itself, directly or indirectly, since recursive
+    instantiation is not permitted in a dataflow design.
+  \item \textbf{Bounded-latency units}: Versat only supports units that
+    take a fixed amount of time to process their input, which is what
+    allows it to reason about data validity and timing across the whole
+    accelerator automatically.
+  \item \textbf{Hardware/software co-generation}: hardware and software are
+    never designed separately; both are derived from the same
+    specification, so the generated driver is always in sync with the
+    generated accelerator.
+  \item \textbf{Extensibility}: designers can supply their own custom basic
+    units, written directly in Verilog, as long as they implement the
+    interfaces Versat requires to integrate them with the rest of the
+    generated accelerator.
+\end{itemize}

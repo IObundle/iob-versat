@@ -1,0 +1,36 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Every accelerator Versat generates is built exclusively out of \emph{units},
+connected to one another to form a dataflow graph. Units are classified by
+the role they play in that graph:
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item \textbf{Sources} only have outputs; they produce a stream of data
+    (for example, a unit that outputs a configurable constant, or one that
+    reads a stream of values out of memory).
+  \item \textbf{Compute units} have both inputs and outputs; they consume
+    one or more input streams and produce an output stream from them (for
+    example, adders, shifters, and other bare Verilog operations).
+  \item \textbf{Sinks} only have inputs; they consume a stream and
+    typically store the result in memory or in a register for software to
+    read later.
+\end{itemize}
+
+Versat only supports units that take a fixed, statically known number of
+cycles to process their input; this constraint is what lets Versat
+automatically reason about data validity and timing across the whole
+accelerator (see Section~\ref{sec:if_config_state}).
+
+A library of basic units, covering every operation natively supported by
+Verilog plus a set of ready-made units such as \texttt{VRead} and
+\texttt{VWrite} (Section~\ref{sec:if_databus}), ships with Versat under
+\texttt{hardware/src/units}. Complex units are then built purely by
+instantiating and interconnecting these basic units, or other, previously
+defined complex units; recursive instantiation is not permitted, since a
+dataflow graph cannot contain a unit that (directly or indirectly)
+instantiates itself. When the built-in units are not enough, designers can
+supply their own basic units directly in Verilog, as long as they
+implement the interfaces described in Section~\ref{sec:ifsig}.

@@ -1,0 +1,43 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+As with ASIC synthesis (Section~\ref{sec:synth}), the FPGA build script is
+the generic Vivado flow shared by every
+\href{https://github.com/IObundle/py2hwsw}{py2hwsw}-managed core,
+parameterized per target board by a \texttt{board.tcl}/\texttt{board.mk}
+pair (for example, \texttt{iob\_aes\_ku040\_db\_g} for a Xilinx KU040
+board); adding a new board means adding a new pair, not changing the flow
+itself. That flow reads the sources and board constraints, runs synthesis
+followed by place and route, and reports utilization, timing, and
+clock-domain-crossing results before writing out the bitstream:
+
+\begin{lstlisting}[language=tcl,caption={py2hwsw's \texttt{hardware/fpga/vivado/build.tcl}: the Xilinx Vivado flow underlying this core's FPGA build script (condensed).},label={lst:vivado_flow}]
+# Read the design's Verilog/SystemVerilog sources.
+foreach file [split $VSRC \ ] {
+    read_verilog -sv $file
+}
+
+# Read board-specific properties and design constraints (XDC).
+source vivado/$BOARD/board.tcl
+read_xdc vivado/$BOARD/$NAME\_dev.sdc
+
+# Synthesize, then implement: optimize, place, and route.
+synth_design -include_dirs ../src -part $PART -top $FPGA_TOP
+opt_design
+place_design
+route_design -timing
+
+# Reports: utilization, timing, and clock-domain-crossing checks.
+report_utilization    -file reports/$FPGA_TOP\_$PART\_utilization.rpt
+report_timing_summary -file reports/$FPGA_TOP\_$PART\_timing_summary.rpt
+report_cdc -details   -file reports/$FPGA_TOP\_$PART\_cdc.rpt
+
+# Final bitstream (or, for out-of-context synthesis, a netlist and stub).
+write_bitstream -force $FPGA_TOP.bit
+\end{lstlisting}
+
+Unlike ASIC synthesis, FIFO and RAM subblocks are not black-boxed here:
+Versat's own two-port and dual-port memories (Section~\ref{sec:ifsig}) map
+directly onto the target FPGA's block RAMs, so the utilization report
+above already accounts for them.

@@ -1,0 +1,16 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Before using Versat, or even the example that runs through the rest of this section, the following tools are required:
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item GNU Bash >= 5.1.16
+  \item GNU Make >= 4.3
+  \item GCC with C++17 support
+  \item libbfd, part of GNU Binutils (\texttt{binutils-dev} on Debian and Ubuntu), which Versat links against
+  \item Verilator >= 5 and Python 3, needed only to emulate the generated accelerator on a PC, not to build or run Versat itself
+\end{itemize}
+
+Build systems that use \texttt{nix-shell} can instead add Versat as a package. In that case, Versat is built automatically whenever it is needed, without installing the dependencies above manually. The \texttt{versat.nix} file at the repository root declares what building Versat needs, including libbfd, but not Verilator or Python. Running \texttt{nix-shell -p libbfd verilator python3} provides every tool this section uses in a single environment.

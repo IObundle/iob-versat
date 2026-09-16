@@ -1,0 +1,19 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// SimpleExample: adds two software-configurable constants together and
+// stores the result in a register, using the Versat specification language.
+
+module SimpleExample(){
+  // Instance declarations.
+  Const a; // Const outputs a single, software-configurable constant value.
+  Const b;
+  Reg result; // Reg stores a value and outputs it constantly, like a hardware register.
+
+# // Separates instance declarations from interconnection statements.
+
+  addition = a + b; // Binary operations need no separate instance declaration.
+
+  addition -> result; // Connects the output of addition to the input of result.
+}

@@ -1,0 +1,51 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+A common way to implement an algorithm made of several distinct steps is
+to define one module per step and group them under a top-level module.
+This works, but each step's module then sits idle, still occupying silicon,
+whenever a different step is running.
+
+Versat automates sharing the hardware between such mutually-exclusive
+modules through the \texttt{merge} operation, which, like \texttt{module},
+defines a new unit type that can be instantiated, merged again, or used as
+the top-level module for code generation:
+
+\begin{lstlisting}[language=VersatSpec,caption={Merging two mutually-exclusive module types into one unit type.},label={lst:merge_example}]
+module Child1(){ Const a; Const b; # ... }
+module Child2(){ Const x; # ... }
+
+merge Merged = Child1 | Child2;
+\end{lstlisting}
+
+To merge units, Versat flattens the dataflow graphs of every merged type
+down to their most basic units, so hierarchy information is lost; Versat
+still tries to preserve the original hierarchy as much as possible when
+generating software.
+
+Deciding exactly which units to share is a compatibility problem, not a simple textual overlap: for every pair of units between the two flattened graphs, Versat checks whether adopting that pairing would conflict with the graph's structure, and if not, records it as a node in a compatibility graph, connecting two such candidate pairings with an edge whenever both can be adopted together. The largest set of mutually compatible pairings is then the largest clique in that graph, which Versat searches for with a time-bounded (ten-second) branch-and-bound algorithm implemented in \texttt{software/compiler/merge.cpp}; the timeout exists to bound compilation time on large or highly interconnected merges, at the cost of a possibly smaller (but never incorrect) set of shared units. Merging more than two types repeats this search incrementally, folding one additional type into the merged graph at a time.
+
+Since the merged accelerator's configuration register
+is shared between the merged types, the generated structures use a
+\texttt{union}, and may need padding (\texttt{unused} members) to align
+each type's fields to the position they occupy in that shared register:
+
+\begin{lstlisting}[language=C,caption={Generated configuration structures and activation function for \texttt{Merged}.},label={lst:merge_generated}]
+typedef struct { ConstConfig a; ConstConfig b; } Child1Config;
+
+// x was merged with Child1.a, so it occupies the first slot; if it had
+// instead merged with Child1.b, Child2Config would need the padding
+// (unused) to appear *before* x rather than after it.
+typedef struct { ConstConfig x; int unused; } Child2Config;
+
+typedef struct {
+  union { Child1Config Child1; Child2Config Child2; };
+} MergedConfig;
+
+typedef enum { MergeType_Child1 = 0, MergeType_Child2 = 1 } MergeType;
+
+// Software must call this to tell the accelerator which merged type is
+// currently active, before running it.
+void ActivateMergedAccelerator(MergeType type);
+\end{lstlisting}

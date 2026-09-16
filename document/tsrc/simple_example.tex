@@ -1,0 +1,30 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+This is \texttt{simple\_example.versat}, the specification artifact introduced above. It instantiates two \texttt{Const} units, each of which outputs a single, software-configurable constant, and one \texttt{Reg} unit, which behaves like a hardware register: it stores a value and outputs it constantly. The specification connects the sum of the two constants directly to the register's input, so that running the accelerator stores their sum in the register, where software can read it.
+
+Every statement after the \texttt{\#} separator is a connection rather than an instance declaration. The \texttt{addition = a + b} statement both declares an implicit adder and wires the outputs of \texttt{a} and \texttt{b} into it, while \texttt{addition -> result} wires the adder's output into \texttt{result}'s input. Section~\ref{sec:versat_spec} describes this syntax in full. Figure~\ref{fig:simple_example_graph} shows the dataflow graph the specification describes, and Section~\ref{sec:simple_example_run} compiles it into a complete accelerator.
+
+\lstinputlisting[caption={simple\_example.versat}]{../examples/simple_example/simple_example.versat}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  block/.style={draw, rectangle, minimum width=1.8cm, minimum height=0.9cm, align=center},
+  op/.style={draw, circle, minimum size=0.7cm},
+  >=Stealth,
+  node distance=0.9cm and 1.6cm
+]
+\node[block] (a) {Const\\a};
+\node[block, below=of a] (b) {Const\\b};
+\node[op, right=of $(a)!0.5!(b)$] (add) {+};
+\node[block, right=of add] (result) {Reg\\result};
+
+\draw[->] (a) -- (add);
+\draw[->] (b) -- (add);
+\draw[->] (add) -- (result);
+\end{tikzpicture}
+\caption{Dataflow graph of the SimpleExample accelerator.}
+\label{fig:simple_example_graph}
+\end{figure}

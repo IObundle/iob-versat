@@ -1,0 +1,33 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Versat uses Verilator to compile the generated accelerator into a
+C++-simulable model. The same model backs PC emulation, which lets the
+generated accelerator be exercised together with the rest of an IOb-SoC
+system without running a full RTL simulation; the only part of the design
+that PC emulation does not exercise faithfully is the interface between
+the accelerator and the surrounding system, which is emulated by a wrapper
+that Versat generates rather than by the real interconnect. Because of
+this, some bugs only manifest in RTL simulation and not in PC emulation.
+
+Both modes of execution share the same generated API
+(Section~\ref{sec:inst}); test code is written once and runs, unmodified,
+against PC emulation, RTL simulation, or real hardware. What changes
+between them is only the precision of \texttt{GetAcceleratorCyclesElapsed}
+(Listing~\ref{lst:versat_header}): PC emulation gives a coarse lower bound
+on the cycle count, RTL simulation refines it but still omits memory
+delays that only exist in a real circuit, and only real hardware gives the
+true figure.
+
+Below unit-level (as opposed to whole-accelerator) RTL simulation, the
+\texttt{-T} option of the Versat compiler
+(\texttt{software/\allowbreak compiler/\allowbreak main.cpp}) generates a
+testbench, \texttt{<Unit>\_tb.v}, that exercises a single unit as if it
+were being driven by an accelerator; this is how the built-in unit
+library itself is tested. The provided
+\texttt{hardware/\allowbreak simulation/\allowbreak coverage/\allowbreak Makefile}
+runs any such testbench under Verilator and reports the functional
+coverage it reaches:
+
+\lstinputlisting[language=make,firstline=41,lastline=53,caption={\texttt{hardware/simulation/coverage/Makefile} (lines 41--53): Verilating and running a unit testbench for coverage.},label={lst:coverage_makefile}]{../hardware/simulation/coverage/Makefile}

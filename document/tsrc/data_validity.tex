@@ -1,0 +1,60 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Versat precalculates, for every path in the dataflow graph, how many cycles
+it takes for data to travel from one unit to another, and automatically
+delays faster paths to match slower ones. This guarantees that whenever
+multiple paths converge on a single unit, every one of its inputs carries
+valid data on the same cycle; units never need to wait for one another, and
+the end user does not need to reason about these delays.
+
+\begin{lstlisting}[language=VersatSpec,caption={Versat automatically balances the two paths reaching \texttt{sum}.},label={lst:validity_example}]
+module ValidityExample(){
+  Mem slow;
+  Mem fast;
+  PipelineRegister pipe; // Delays its input by one cycle.
+  Reg result;
+#
+  slow -> pipe; // pipe delays slow by one cycle.
+  sum = pipe + fast; // Versat delays 'fast' by one cycle to compensate,
+                      // so both operands of the sum arrive together.
+  sum -> result;
+}
+\end{lstlisting}
+
+This default behaviour is correct whenever a computation only concerns
+values that arrive on the same cycle. When a computation must combine
+values from different cycles, the designer can request an explicit delay
+using the \texttt{\{N\}} operator, which shifts a unit's output stream by
+$N$ cycles:
+
+\begin{lstlisting}[language=VersatSpec,caption={Explicit delay operator \texttt{\{N\}} combining values from different cycles.},label={lst:delay_example}]
+module DelayExample(){
+  Mem mem;
+#
+  // The first valid value of mem{3} is the fourth value output by mem.
+  sum = mem{0} + mem{1} + mem{2} + mem{3};
+  sum -> out;
+}
+\end{lstlisting}
+
+Assuming \texttt{mem} is configured to output the natural numbers starting
+at zero, the accelerator computes:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\rowcolor{iob-green}
+\textbf{Cycle} & \texttt{mem\{0\}} & \texttt{mem\{1\}} & \texttt{mem\{2\}} & \texttt{mem\{3\}} & \textbf{sum} \\
+\hline
+0 & 0 & 1 & 2 & 3 & 6 \\
+1 & 1 & 2 & 3 & 4 & 10 \\
+2 & 2 & 3 & 4 & 5 & 14 \\
+3 & 3 & 4 & 5 & 6 & 18 \\
+\hline
+\end{tabular}
+\caption{Values computed by \texttt{DelayExample} over four cycles.}
+\label{tab:data_validity}
+\end{table}

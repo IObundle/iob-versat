@@ -1,0 +1,14 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Now that the required tools are installed, this section walks through a complete example, from a short specification file to a result printed by a program running against generated hardware. That is the point of Versat: describe a computation once, as a dataflow graph, and receive synthesizable Verilog for an accelerator together with the C/C++ API needed to configure it, run it, and read its results, all generated automatically.
+
+The example built here, \texttt{SimpleExample}, is deliberately small: it adds two software-configurable constants and stores the result in a register. It needs three artifacts beyond the tools listed above, all bundled in this repository under \texttt{examples/simple\_example}:
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item \texttt{simple\_example.versat} -- the specification we provide. Versat compiles it into the accelerator's hardware and software.
+  \item \texttt{main.cpp} -- the host program we provide, written against the generated software, to configure the accelerator, run it, and print the result.
+  \item \texttt{Makefile} -- builds Versat's generated PC emulation of the accelerator, links it with \texttt{main.cpp}, and runs the resulting program.
+\end{itemize}

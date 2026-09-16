@@ -1,0 +1,28 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Every accelerator Versat generates is instantiated the same way, through the IOb native interface and the clock/enable/reset ports described in Section~\ref{sec:ifsig}. For \texttt{SimpleExample} (Section~\ref{sec:simple_example}), whose specification uses no databus unit, the generated top-level module's ports reduce to exactly this:
+
+\begin{lstlisting}
+module iob_versat #(
+  parameter ADDR_W  = 7,
+  parameter DATA_W  = 32
+) (
+  input                   iob_valid_i,
+  input  [    ADDR_W-1:0] iob_addr_i,
+  input  [    DATA_W-1:0] iob_wdata_i,
+  input  [(DATA_W/8)-1:0] iob_wstrb_i,
+  output                  iob_rvalid_o,
+  output [    DATA_W-1:0] iob_rdata_o,
+  output                  iob_ready_o,
+
+  input cke_i,
+  input clk_i,
+  input arst_i
+);
+\end{lstlisting}
+
+An accelerator whose specification does use a databus unit (Section~\ref{sec:if_databus}) additionally exposes an AXI master interface, conditionally compiled in through \texttt{`ifdef VERSAT\_IO}; Section~\ref{sec:py2hwsw_example} instantiates this exact module as a Py2HWSW core.
+
+\input{inst_desc}

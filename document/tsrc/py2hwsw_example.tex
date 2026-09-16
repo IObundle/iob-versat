@@ -1,0 +1,51 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Section~\ref{sec:soc_integration} explained that \texttt{CreateVersatClass} targets the older IOb-SoC Python setup, not Py2HWSW's current core interface, and that no working Py2HWSW integration exists yet. \texttt{examples/py2hwsw\_example/iob\_versat/iob\_versat.py} is that integration: a minimal Py2HWSW core that wraps the same \texttt{SimpleExample} accelerator directly, with real FPGA build support. It does not depend on \texttt{CreateVersatClass} or on IOb-SoC at all; the only thing it reuses from the old flow is the idea of calling \texttt{versat} as a subprocess, this time from Py2HWSW's own \texttt{setup(py\_params\_dict)} entry point instead of a class method.
+
+A Py2HWSW core normally describes its own hardware, which Py2HWSW then generates. This one instead sets \texttt{generate\_hw: False} and, when actually invoked to set up a build (as opposed to Py2HWSW's own dry-run introspection targets), calls \texttt{versat} exactly as Section~\ref{sec:simple_example_run} did by hand, writing its output directly into this core's own \texttt{hardware/src} and \texttt{software} folders:
+
+\begin{lstlisting}[caption={iob\_versat.py (excerpt)}]
+if py_params_dict.get("py2hwsw_target", "") == "setup":
+    ...
+    subprocess.run(
+        [versat_bin, versat_spec, "-t", VERSAT_TOP, "-o", hw_dir, "-O", sw_dir],
+        check=True,
+    )
+
+attributes_dict = {
+    # iob_versat.v, the file Versat generates, is the module name;
+    # generate_hw:False tells py2hwsw to use it instead of generating
+    # a top Verilog file from this dictionary's ports/confs itself.
+    "name": "iob_versat",
+    "generate_hw": False,
+    "board_list": ["iob_basys3"],
+    "confs": [
+        {"name": "ADDR_W", "type": "P", "val": "7", ...},
+        {"name": "DATA_W", "type": "P", "val": "32", ...},
+        ...
+    ],
+    "ports": [
+        {
+            "name": "iob_s",
+            "signals": {"type": "iob", "ADDR_W": "ADDR_W", "DATA_W": "DATA_W"},
+        },
+        {"name": "clk_en_rst_s", "signals": {"type": "iob_clk"}},
+    ],
+}
+\end{lstlisting}
+
+\texttt{board\_list} names \texttt{iob\_basys3}, a generic, low-cost board Py2HWSW already knows how to target, so no board-specific files of this example's own are needed to get FPGA build support. The \texttt{ports} declaration matches \texttt{iob\_versat.v}'s real port list for this accelerator's configuration exactly: Py2HWSW's built-in \texttt{iob} and \texttt{iob\_clk} interfaces generate the same signal names Versat itself generates on a subordinate (\texttt{\_s}) port, \texttt{iob\_valid\_i}, \texttt{iob\_addr\_i}, \texttt{iob\_wdata\_i}, \texttt{iob\_wstrb\_i}, \texttt{iob\_rvalid\_o}, \texttt{iob\_rdata\_o}, \texttt{iob\_ready\_o}, \texttt{cke\_i}, \texttt{clk\_i}, \texttt{arst\_i}, so no manual signal renaming is needed to connect this core into a larger Py2HWSW design later.
+
+Setting this up follows the same convention as any standalone Py2HWSW core repository (see, for example, \texttt{iob-hyperram-controller}): a \texttt{default.nix} that packages Py2HWSW itself, pinned to a specific commit, or taken from a local checkout instead via the \texttt{PY2HWSW\_ROOT} environment variable, so that \texttt{py2hwsw} becomes a plain command inside \texttt{nix-shell}; and a \texttt{Makefile} that wraps it. Both live in \texttt{examples/py2hwsw\_example} alongside \texttt{iob\_versat}. Build \texttt{versat} first, as in Section~\ref{sec:dependencies}, then run:
+
+\begin{lstlisting}
+make -j versat
+cd examples/py2hwsw_example
+make setup
+\end{lstlisting}
+
+\texttt{make setup} runs \texttt{nix-shell --run "py2hwsw iob\_versat setup --no\_verilog\_lint"}; the \texttt{nix-shell} environment, defined entirely by this example's own \texttt{default.nix}, already provides everything that command needs, including the Verilog and Python formatters Py2HWSW's setup runs automatically. It produces a complete build directory as a sibling of \texttt{examples/py2hwsw\_example}, named \texttt{iob\_versat\_V<version>}, including \texttt{hardware/fpga/vivado/iob\_basys3} with the generic Basys3 board's build scripts already wired in, \texttt{hardware/syn} for ASIC synthesis, \texttt{hardware/simulation}, and the same \texttt{software/versat\_accel.h} PC-emulation driver from Section~\ref{sec:simple_example_outputs}.
+
+\texttt{make fpga-build BOARD=iob\_basys3}, run from \texttt{examples/py2hwsw\_example}, re-runs setup and then hands the design to Vivado to synthesize and implement it. This section confirms that \texttt{make setup} and the hand-off into Vivado's own generated Makefile both complete successfully; it does not confirm the FPGA build itself completes, since Vivado was not available to verify that step.

@@ -1,0 +1,25 @@
+// SPDX-FileCopyrightText: 2025 IObundle
+//
+// SPDX-License-Identifier: MIT
+
+// A real, compilable version of the illustrative Child1/Child2 example in
+// the Design Specification's Merging Units section: two mutually exclusive
+// accelerators sharing hardware through Versat's merge construct.
+
+module Child1(){
+  Const a;
+  Const b;
+  Reg result;
+#
+  addition = a + b;
+  addition -> result;
+}
+
+module Child2(){
+  Const x;
+  Reg result;
+#
+  x -> result;
+}
+
+merge Merged = Child1 | Child2;

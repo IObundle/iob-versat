@@ -1,0 +1,98 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Before anything else, software must call \texttt{versat\_init}, passing the
+accelerator's base address, to initialize the generated driver. Once
+initialized, a run is started and stopped through the generated API
+described in Section~\ref{sec:if_config_state}.
+
+This API is declared in a generated \texttt{versat\_accel.h}, produced by
+instantiating the template \texttt{software/\allowbreak templates/\allowbreak versat\_header.tpl}
+(via \texttt{software/\allowbreak common/\allowbreak templateEngine.cpp}): every \texttt{@\{...\}}
+placeholder below is substituted at code-generation time, for example
+\texttt{@\{typeName\}} with the top-level module's name.
+
+\lstinputlisting[language=C,firstline=49,lastline=70,caption={\texttt{software/templates/versat\_header.tpl} (lines 49--70): run-control API declared in every generated \texttt{versat\_accel.h}.},label={lst:versat_header}]{../software/templates/versat_header.tpl}
+
+Each generated header also declares two pointers, substituting \texttt{@\{typeName\}} for the top-level module's name:
+
+\lstinputlisting[language=C,firstline=147,lastline=148,caption={\texttt{software/templates/versat\_header.tpl} (lines 147--148): the per-accelerator Config and State accessors.}]{../software/templates/versat_header.tpl}
+
+Putting this together with the \texttt{SimpleExample} module of
+Listing~\ref{lst:simple_example} (Section~\ref{sec:versat_spec}): its
+generated \texttt{Config} struct has one member per instance (\texttt{a}
+and \texttt{b}, each a \texttt{ConstConfig} exposing the \texttt{constant}
+Config wire of Listing~\ref{lst:const_unit}), and its \texttt{State} struct
+exposes \texttt{result.currentValue}, the State wire that \texttt{Reg}
+(\texttt{hardware/src/units/Reg.v}) derives directly from its output
+register:
+
+\begin{lstlisting}[language=C,caption={Illustrative instantiation and run sequence for \texttt{SimpleExample}.},label={lst:inst_example}]
+#include "versat_accel.h"
+
+int main(){
+  int base = ...; // Accelerator's memory-mapped base address, provided by
+                   // the surrounding IOb-SoC integration (Section 2.4).
+  versat_init(base);
+
+  accelConfig->a.constant = 3;
+  accelConfig->b.constant = 4;
+
+  RunAccelerator(1); // Configuration reaches the datapath one run late
+                      // (Section~\ref{sec:if_config_state}), so this first
+                      // run still computes with the reset configuration.
+
+  int stale = accelState->result.currentValue; // stale == 0
+
+  RunAccelerator(1); // Second run: now computes with the values written above.
+
+  int sum = accelState->result.currentValue; // sum == 7
+
+  return 0;
+}
+\end{lstlisting}
+
+The first run above reads back \texttt{0}, not the sum, because of the
+shadow-register pipeline explained in Section~\ref{sec:if_config_state}:
+software's write only reaches the datapath at the start of the
+\emph{next} run. Section~\ref{sec:simple_example_software} walks through
+this same accelerator's actual output, run by run.
+
+\texttt{StartAccelerator}/\texttt{EndAccelerator} let software overlap the
+CPU's own work with the accelerator's, as described in
+Section~\ref{sec:if_config_state}. \texttt{RunAccelerator} above is simply
+a convenience wrapper: \texttt{StartAccelerator} immediately followed by
+\texttt{EndAccelerator}, for callers with nothing else to do while the
+accelerator runs.
+
+\subsubsection*{Config and State Addresses}
+
+On the embedded target, where \texttt{iptr} is 4 bytes wide, \texttt{accelConfig} and \texttt{accelState} resolve to real, fixed byte addresses relative to \texttt{versat\_base}. Table~\ref{tab:simple_example_addrs} gives them for \texttt{SimpleExample}, read directly from the address decode logic Versat generated in \texttt{versat\_configurations.v} and \texttt{versat\_instance.v}. PC emulation does not use this address map at all: there, \texttt{accelConfig} and \texttt{accelState} point at plain host memory buffers instead, since there is no real memory-mapped interface to decode addresses against.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{|c|c|l|X|}
+\hline
+\rowcolor{iob-green}
+\textbf{Address} & \textbf{Direction} & \textbf{Field} & \textbf{Notes} \\
+\hline
+\hline
+0x00 & Read/Write & control register & write byte 0 to start a run; write byte 3, bit 31 for soft reset, bit 30 for signal loop; read bit 0 for \texttt{done} \\
+\hline
+0x04 & Write & \texttt{a.constant} & Config \\
+\hline
+0x04 & Read & \texttt{result.currentValue} & State; same address as \texttt{a.constant}, opposite direction \\
+\hline
+0x08 & Write & \texttt{b.constant} & Config \\
+\hline
+0x0C & Write & \texttt{result.disabled} & Config \\
+\hline
+0x10 & Write & \texttt{Delay0} & Config; internal, not exposed in \texttt{SimpleExampleConfig} \\
+\hline
+\end{tabularx}
+\caption{Config and State byte addresses for \texttt{SimpleExample}, relative to \texttt{versat\_base}.}
+\label{tab:simple_example_addrs}
+\end{table}
+
+Address \texttt{0x04} is read and written for two different purposes: a write there lands in the shadow copy of \texttt{a.constant}, subject to the one-run delay explained above, while a read there returns \texttt{result.currentValue} directly and combinationally, with no such delay on the read side; only when a Config write takes effect is delayed, never how promptly a State read reflects the accelerator's current output. Section~\ref{sec:if_mem_mapped} covers the separate, optional memory-mapped path into a unit's own native interface (reachable here at \texttt{versat\_base + 0x40}), which this example does not use.

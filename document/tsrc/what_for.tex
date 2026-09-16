@@ -1,0 +1,26 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Versat bridges the gap between software-defined logic and silicon
+efficiency. Given a dataflow-graph description of an algorithm, it
+completely automates the heavy lifting of turning that description into
+hardware:
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item \textbf{Hardware Generation}: it generates production-ready,
+    synthesizable Verilog RTL source files that implement the CGRA fabric
+    for the specified accelerator.
+  \item \textbf{Software Ecosystem}: it automatically generates the
+    corresponding C/C++ runtime drivers, configuration headers, and
+    memory-mapped APIs so that a host CPU can seamlessly configure and run
+    the generated accelerator.
+\end{itemize}
+
+Versat is meant to be used whenever a compute-heavy, data-parallel kernel
+needs to be offloaded from software into a dedicated hardware accelerator,
+without requiring the designer to hand-write and maintain both the RTL and
+its matching software driver. It integrates directly into IObundle's
+IOb-SoC systems, where it acts as just another peripheral generated as
+part of the SoC build.

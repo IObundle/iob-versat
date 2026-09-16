@@ -1,0 +1,143 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Compiling the specification from Section~\ref{sec:simple_example} generated the files below in \texttt{./versatOutput/hardware}. Most of them are common infrastructure shared by every accelerator, such as address generators and memory wrappers. The five listed here are specific to \texttt{SimpleExample}:
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item \texttt{iob\_versat.v} -- the top-level module, which exposes the IOb native interface the CPU uses to access the accelerator.
+  \item \texttt{versat\_instance.v} -- the run control logic, which instantiates the configuration registers and the datapath.
+  \item \texttt{versat\_configurations.v} -- the configuration registers software writes to, including the shadow copy explained in Section~\ref{sec:simple_example_software}.
+  \item \texttt{SimpleExample.v} -- the datapath itself, wiring the two \texttt{Const} units, the adder, and the \texttt{Reg} unit exactly as described in the specification.
+  \item \texttt{versat\_defs.vh} -- macros describing this accelerator, such as the widths of its configuration and state.
+\end{itemize}
+
+The one that matters most, \texttt{SimpleExample.v}, is the direct hardware counterpart of \texttt{simple\_example.versat} from Section~\ref{sec:simple_example}:
+
+\begin{lstlisting}[caption={SimpleExample.v}]
+`timescale 1ns / 1ps
+
+module SimpleExample #(
+  parameter ADDR_W = 32,
+  parameter DATA_W = 32,
+  parameter DELAY_W = 7,
+  parameter AXI_ADDR_W = 32,
+  parameter AXI_DATA_W = 32,
+  parameter LEN_W = 20
+) (
+  input [1-1:0] run,
+  input [1-1:0] running,
+  input [1-1:0] clk,
+  input [1-1:0] rst,
+  output [1-1:0] done,
+  input [1-1:0] signal_loop,
+  input [DATA_W-1:0] a_constant,
+  input [DATA_W-1:0] b_constant,
+  input [1-1:0] result_disabled,
+  output [DATA_W-1:0] currentValue_00,
+  input [DELAY_W-1:0] delay0,
+  input [1-1:0] unit_valid_0,
+  input [2-1:0] addr,
+  input [DATA_W/8-1:0] wstrb,
+  input [DATA_W-1:0] wdata,
+  output [1-1:0] rvalid,
+  output [DATA_W-1:0] rdata
+);
+
+  wire [1-1:0] unitRValid;
+  assign rvalid = (|unitRValid);
+  wire [DATA_W-1:0] unitRData[1];
+  wire [DATA_W-1:0] unitRDataFinal = (unitRData[0]);
+  assign rdata = unitRDataFinal;
+  wire [1-1:0] unitDone;
+  assign done = &unitDone;
+  wire [DATA_W-1:0] output_0_0;
+  wire [DATA_W-1:0] output_1_0;
+  wire [DATA_W-1:0] output_3_0;
+  reg [DATA_W-1:0] comb_addition_3;
+  always @* begin
+    comb_addition_3 = output_0_0 + output_1_0;
+  end
+
+  Const #(
+    .DATA_W(DATA_W)
+  ) a_0 (
+    .out0(output_0_0),
+    .constant(a_constant)
+  );
+
+  Const #(
+    .DATA_W(DATA_W)
+  ) b_1 (
+    .out0(output_1_0),
+    .constant(b_constant)
+  );
+
+  Reg #(
+    .DELAY_W(DELAY_W),
+    .DATA_W(DATA_W)
+  ) result_2 (
+    .out0(),
+    .in0(comb_addition_3),
+    .disabled(result_disabled),
+    .currentValue(currentValue_00),
+    .delay0(delay0),
+    .wstrb(wstrb),
+    .addr(addr[2-1:0]),
+    .rdata(unitRData[0]),
+    .rvalid(unitRValid[0]),
+    .wdata(wdata),
+    .valid(unit_valid_0),
+    .running(running),
+    .run(run),
+    .done(unitDone[0]),
+    .clk(clk),
+    .rst(rst)
+  );
+
+endmodule
+\end{lstlisting}
+
+The \texttt{a\_0} and \texttt{b\_1} instances are the two \texttt{Const} units, the \texttt{comb\_addition\_3} signal is the adder the \texttt{addition = a + b} statement declared implicitly, and \texttt{result\_2} is the \texttt{Reg} unit. Its \texttt{in0} port receives the adder's output, exactly as the specification's \texttt{addition -> result} statement requested.
+
+Compiling the specification also generated its software counterpart in \texttt{./versatOutput/software}: two implementations of the same API, one per target:
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item \texttt{src/iob-versat.c} -- the embedded runtime, which reads and writes the accelerator's memory-mapped registers on real hardware.
+  \item \texttt{wrapper.cpp}, \texttt{Versat\_verilator\_wrapper.v}, and \texttt{VerilatorMake.mk} -- the PC-emulation runtime, which implements the same API on top of a Verilator model of the accelerator, as built in Section~\ref{sec:simple_example_run}.
+\end{itemize}
+
+Both implement the API declared in \texttt{versat\_accel.h}, generated directly from the specification's structure: every unit that exposes configuration gets a matching \texttt{Config} struct, every unit that exposes readable state gets a matching \texttt{State} struct, and both are nested to mirror the specification's own hierarchy. This is that file, abridged to the parts generated specifically for \texttt{SimpleExample}. The full file also declares debug, profiling, and address-generation helpers that Versat provides regardless of the accelerator being compiled.
+
+\begin{lstlisting}[caption={versat\_accel.h}]
+// Config
+typedef struct{
+  iptr constant;
+} ConstConfig;
+
+typedef struct{
+  iptr disabled;
+} RegConfig;
+
+typedef struct{
+  ConstConfig a;
+  ConstConfig b;
+  RegConfig result;
+} SimpleExampleConfig;
+
+// State
+typedef struct{
+  int currentValue;
+} RegState;
+
+typedef struct{
+  RegState result;
+} SimpleExampleState;
+
+extern volatile SimpleExampleConfig* accelConfig;
+extern volatile SimpleExampleState* accelState;
+\end{lstlisting}
+
+On hardware, \texttt{accelConfig} and \texttt{accelState} point directly at the accelerator's memory-mapped configuration and state, so writing or reading one of their members needs no function call. In PC emulation, they point at buffers inside the emulation runtime, which drives the Verilator model from the configuration buffer and fills the state buffer from it. Section~\ref{sec:simple_example_software} writes a program against this API and explains what it prints.

@@ -1,0 +1,43 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+The \texttt{VRead} and \texttt{VWrite} units (Section~\ref{sec:if_databus})
+are configured with the addresses they must transfer. To avoid forcing
+software to compute these addresses by hand, Versat lets the designer
+describe an address-generation expression, using \texttt{for} loops and
+arithmetic, that Versat turns into a generated C configuration function:
+
+\begin{lstlisting}[language=VersatSpec,caption={An address-generation expression, and its use on \texttt{VRead}/\texttt{Mem} instances.},label={lst:addrgen_example}]
+addressGen Read Simple(a){
+  for x 0..a
+  addr = 2 * x;
+}
+
+module AddressGenUserExample(){
+  using(Simple) VRead v;
+  using(Simple) Mem m;
+#
+  v -> m;
+}
+\end{lstlisting}
+
+The \texttt{for} loop's bound (\texttt{a} above) is a runtime input to the
+generated function, not a compile-time constant, so firmware can choose how
+many values to transfer at run time:
+
+\begin{lstlisting}[language=C,caption={Firmware calling the generated address-generation functions.},label={lst:addrgen_generated}]
+int* input = ...;
+Simple_VRead(&accelConfig->v, input, 2);
+Simple_Mem(&accelConfig->m, 2);
+\end{lstlisting}
+
+As with any \texttt{for} loop in the specification language, the range
+includes its start and excludes its end, so calling the generated function
+with \texttt{a = 0} performs no transfer at all. This compilation step is
+implemented in \texttt{software/compiler/addressGen.cpp}: each
+\texttt{addressGen} definition is compiled once, at Versat compile time,
+into a C function that firmware calls at run time to fill in the
+associated unit's Config addresses -- so the cost of expanding the loops
+into concrete addresses is paid by the CPU only when the transfer size
+actually changes, not on every access.

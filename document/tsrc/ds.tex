@@ -1,0 +1,272 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+% Design Specification document type: the sole document type used to
+% describe this core in depth, for both internal (design-oriented) and
+% external (end-user) audiences. Structure inspired by py2hwsw's own
+% py2hwsw_document/document/tsrc/ug.tex (see py2hwsw PR #448), which splits
+% its Introduction into "What Is X?" / "What Is X For?" / "What Problem
+% Does X Solve?" / "What Design Principles Underlie X?" and adds a
+% dedicated "Getting Started" chapter.
+
+\documentclass{ug}
+
+\input{ug_title}
+\date{\today}
+\category{Design Specification}
+
+\input{color}
+\input{listings_setup}
+
+\begin{document}
+
+\maketitle
+\pagenumbering{gobble}
+
+% Remove blank newline before version and shorthash strings of included file.
+\CatchFileDef{\version}{\NAME_version.tex}{\endlinechar=-1\relax}
+\CatchFileDef{\shortHash}{shortHash.tex}{\endlinechar=-1\relax}
+\vspace*{\fill}
+Design Specification, V\version, Build \shortHash
+\hspace*{\fill}\raisebox{-\height}{\includegraphics[keepaspectratio,scale=.7]{Logo.png}}
+
+\cleardoublepage
+\pagenumbering{roman}
+\setcounter{page}{1}
+\tableofcontents
+\clearpage
+\listoftables
+\clearpage
+\listoffigures
+\clearpage
+\lstlistoflistings
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\section{Introduction}
+\label{sec:intro}
+
+\subsection{What Is Versat?}
+\label{sec:what_is}
+\input{intro}
+
+\subsection{What Is Versat For?}
+\label{sec:what_for}
+\input{what_for}
+
+\subsection{What Problem Does Versat Solve?}
+\label{sec:problem}
+\input{problem}
+
+\subsection{What Design Principles Underlie Versat?}
+\label{sec:principles}
+\input{principles}
+
+\subsection{Features}
+\label{sec:feat}
+\input{features}
+
+\subsection{Deliverables}
+\label{sec:deliv}
+\input{deliverables}
+
+\subsection{Publications}
+\label{sec:publications}
+\input{publications}
+
+\subsection{Lineage}
+\label{sec:lineage}
+\input{lineage}
+
+\ifdefined\SECTIONCLEARPAGE
+\clearpage
+\fi
+\section{Getting Started}
+\label{sec:getting_started}
+
+This section covers the tools Versat needs, the artifacts a first example needs, a complete walkthrough of that example, from its specification file to a running accelerator, how to integrate the generated accelerator into a SoC, and a second, working example that integrates it with Py2HWSW directly.
+
+\subsection{Tool Dependencies}
+\label{sec:dependencies}
+\input{dependencies}
+
+\subsection{Example Dependencies}
+\label{sec:example_dependencies}
+\input{example_dependencies}
+
+\subsection{Simple Example}
+\label{sec:simple_example}
+\input{simple_example}
+
+\subsubsection{Compilation and Run}
+\label{sec:simple_example_run}
+\input{simple_example_run}
+
+\subsubsection{Outputs}
+\label{sec:simple_example_outputs}
+\input{simple_example_outputs}
+
+\subsubsection{Configuring and Running the Accelerator}
+\label{sec:simple_example_software}
+\input{simple_example_software}
+
+\subsection{Integrating the Generated Accelerator in a SoC}
+\label{sec:soc_integration}
+\input{integration}
+
+\subsection{A Working Py2HWSW Integration Example}
+\label{sec:py2hwsw_example}
+\input{py2hwsw_example}
+
+\ifdefined\SECTIONCLEARPAGE
+\clearpage
+\fi
+\section{Description}
+
+This section gives a detailed description of the IP core. Since Versat is a
+generator rather than a single fixed core, this description is split into
+two levels: Section~\ref{sec:architecture} describes the generator itself
+(the dataflow paradigm it implements, the specification language used to
+drive it, and the compiler passes that turn a specification into hardware
+and software), while Section~\ref{sec:bdd} and Section~\ref{sec:ifsig}
+describe the building blocks -- units and interfaces -- out of which every
+individual accelerator Versat produces is assembled. Code listings
+throughout this section either illustrate the specification language with
+short, self-contained examples, or are excerpted directly from the Versat
+source tree (paths are given in each listing's caption) so that the
+description stays traceable to the implementation. If timing diagrams are
+needed, they are shown after the interface signals. Finally the Control and
+Status Registers (CSR) are outlined and explained.
+
+
+\ifdefined\PYPARAMS
+\subsection{Python Parameters}
+\label{sec:py_params}
+\input{py_params}
+\fi
+
+\subsection{Architecture}
+\label{sec:architecture}
+
+Turning a specification file into an accelerator is a compiler pipeline,
+implemented under \texttt{software/compiler/}: the specification is parsed
+(\texttt{versatSpecificationParser.cpp}) into a dataflow graph; delays are
+computed and balanced across the graph (\texttt{delayCalculation.cpp}, see
+Section~\ref{sec:data_validity}); \texttt{merge} constructs are flattened
+and their mutually-exclusive units combined (\texttt{merge.cpp}, see
+Section~\ref{sec:merging_units}); address-generation expressions are
+compiled into C functions (\texttt{addressGen.cpp}, see
+Section~\ref{sec:address_gen}); and finally the Verilog and C/C++ sources
+are emitted together (\texttt{codeGeneration.cpp} and
+\texttt{accelerator.cpp}), so that hardware and software can never drift
+apart. The following subsections describe each of these stages, from the
+model of computation they implement down to the language constructs a
+designer writes to drive them.
+
+\subsubsection{Dataflow Paradigm}
+\label{sec:dataflow}
+\input{dataflow}
+
+\subsubsection{Versat Specification Language}
+\label{sec:versat_spec}
+\input{versat_spec}
+
+\subsubsection{Data Validity and Delays}
+\label{sec:data_validity}
+\input{data_validity}
+
+\subsubsection{Configuration Sharing}
+\label{sec:config_sharing}
+\input{config_sharing}
+
+\subsubsection{Merging Units}
+\label{sec:merging_units}
+\input{merging_units}
+
+\subsubsection{Address Generation}
+\label{sec:address_gen}
+\input{address_gen}
+
+\subsection{Block Diagram}
+\label{sec:bdd}
+\input{bdd}
+
+\ifdefined\CONFS
+\subsection{Configuration}
+\label{sec:ipconfig}
+\input{config}
+\fi
+
+\subsection{Interface Signals}
+\label{sec:ifsig}
+\input{if}
+
+%timing diagrams
+\ifdefined\TD
+\subsection{Timing Diagrams}
+\label{sec:td}
+\input{td}
+\fi
+
+%software components
+\ifdefined\CSRS
+\subsection{Control and Status Registers}
+\label{sec:csrs}
+\input{csrs}
+\fi
+
+%memories
+\ifdefined\MEMS
+\subsection{Memories}
+\label{sec:mems}
+\input{mems}
+\fi
+
+\ifdefined\SECTIONCLEARPAGE
+\clearpage
+\fi
+\section{Usage}
+
+\subsection{Instantiation}
+\label{sec:inst}
+\input{inst}
+
+\subsection{Simulation}
+\label{sec:tbbd}
+\input{sim}
+
+\subsection{ASIC Synthesis}
+\label{sec:synth}
+\input{synth}
+
+\subsection{FPGA Compilation}
+\label{sec:fpga}
+\input{fpga}
+
+\ifdefined\RESULTS
+\ifdefined\SECTIONCLEARPAGE
+\clearpage
+\fi
+\section{Implementation Results}
+\label{sec:results}
+\input{results}
+\fi
+
+\ifdefined\DOXYGEN
+\section{Baremetal Drivers}
+\label{sec:baremetal}
+\input{doxygen}
+\fi
+
+\ifdefined\LINUX
+\section{Linux Software}
+\label{sec:linux}
+\input{linux}
+\fi
+
+\ifdefined\CUSTOM
+\input{custom}
+\fi
+
+\end{document}

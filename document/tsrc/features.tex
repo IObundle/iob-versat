@@ -1,0 +1,37 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item Hardware/software co-generation: synthesizable Verilog RTL and the
+    matching C/C++ driver are derived together from a single specification,
+    so they can never drift apart.
+  \item Concise, hierarchical specification language for describing an
+    accelerator as a dataflow graph of instantiated and interconnected
+    units (Section~\ref{sec:versat_spec}).
+  \item Automatic data-validity and delay balancing: paths through the
+    dataflow graph are analyzed statically and matched in latency, without
+    requiring the designer to reason about timing (Section~\ref{sec:data_validity}).
+  \item Automatic hardware merging of structurally compatible,
+    mutually-exclusive units into shared physical instances, reducing area
+    without manual sharing logic (Section~\ref{sec:merging_units}).
+  \item Configuration sharing (\texttt{share config} and \texttt{static})
+    for compactly describing SIMD-style designs (Section~\ref{sec:config_sharing}).
+  \item Configuration shadow register: software can reconfigure the
+    accelerator for the next run while the current run is still executing
+    (Section~\ref{sec:if_config_state}).
+  \item Address-generation language for the built-in \texttt{VRead}/\texttt{VWrite}
+    units, compiled into generated C configuration functions
+    (Section~\ref{sec:address_gen}).
+  \item Extensible unit library: built-in units cover every native Verilog
+    operation plus ready-made units such as \texttt{VRead}, \texttt{VWrite},
+    \texttt{Mem}, and \texttt{Reg}; designers can add their own custom
+    units directly in Verilog (Section~\ref{sec:ifsig}).
+  \item Fast software/hardware co-verification through Verilator-based PC
+    emulation of the generated accelerator, without needing a full RTL
+    simulation (Section~\ref{sec:tbbd}).
+  \item Native integration into IObundle's IOb-SoC systems as a generated
+    peripheral (Section~\ref{sec:soc_integration}), and a working, minimal
+    integration path into Py2HWSW directly (Section~\ref{sec:py2hwsw_example}).
+\end{itemize}

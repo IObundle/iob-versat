@@ -1,0 +1,48 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+Versat's hardware-merge strategy, and much of the runtime-reconfiguration
+machinery described throughout this document, did not appear all at once;
+it is the result of a lineage of accelerator designs, most recently
+surveyed in the Versat-AI paper (Section~\ref{sec:publications}).
+
+Versat's direct precursor, \emph{SideWorks}, was a DSP coprocessor that
+merged structurally compatible operators from different algorithm modules
+into a single, shared physical instance through a partial read/write
+crossbar; an independent 2009 BDTI benchmark comparison found it achieved
+the smallest silicon footprint of the designs compared, by more than a
+factor of two. Versat generalized this idea into a general-purpose
+mini-CGRA: fifteen heterogeneous functional units connected through an
+implicit, full crossbar interconnect, which sidesteps
+placement-and-routing complexity entirely at a measured cost of only
+around 4\% area overhead. A compact, sixteen-instruction controller drives
+runtime self-reconfiguration of that crossbar, backed by the
+configuration shadow register described in Section~\ref{sec:if_config_state},
+which hides reconfiguration latency behind the previous run.
+
+Two accelerators built directly on Versat pushed this architecture in
+different directions. \emph{DeepVersat} turned it into a linear pipeline
+of identical stages, mapping one convolutional network layer per stage and
+forwarding intermediate features directly from stage to stage without
+round-tripping through external memory. \emph{YOLO Versat}, a
+hand-crafted accelerator for Tiny-YOLO object detection with 832 to 1248
+MAC units fed by a 256-bit DMA interface, established the principle,
+still central to Versat's design, that memory bandwidth rather than
+arithmetic throughput is usually the binding constraint on inference
+performance; it is also where the VRead/VWrite ping-pong buffering scheme
+described in Section~\ref{sec:if_databus} originates.
+
+\emph{Versat-AI}, the most recent system in this lineage, is an ONNX-to-SoC
+compiler built on top of this core: it applies the same hardware-merge
+strategy directly to neural network operators, collapsing structurally
+compatible operators drawn from an arbitrary ONNX graph into a single
+generated CGRA configuration, so that accelerator area tracks the model's
+operator vocabulary rather than its depth or width. Combined with
+Py2HWSW-based SoC integration, it turns an unmodified ONNX model into a
+complete, synthesizable RISC-V SoC with matching firmware and application
+software. On a Xilinx Kintex UltraScale XCKU040, running four MLPerf Tiny
+edge-inference benchmarks, the generated accelerator used a fixed 8763
+LUTs and 4 DSPs regardless of which model it ran, while delivering a
+$2.3\times$ to $9\times$ speedup and a $1.6\times$ to $6.4\times$ energy
+reduction per inference over the same flow's software-only baseline.

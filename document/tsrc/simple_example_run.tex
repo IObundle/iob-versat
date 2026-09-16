@@ -1,0 +1,17 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+With \texttt{simple\_example.versat} written, this section turns it into a running accelerator, in three steps: build the Versat compiler, run it on the specification, and build and run the generated software. Run the following commands from the repository root:
+
+\begin{lstlisting}
+make -j versat
+./versat examples/simple_example/simple_example.versat -t SimpleExample
+make -C examples/simple_example run
+\end{lstlisting}
+
+\texttt{make -j versat} compiles the \texttt{versat} binary. The unit library under \texttt{hardware/src/units}, which provides \texttt{Const} and \texttt{Reg}, is embedded into the binary at this point, so changes to those files only take effect after rebuilding Versat. The \texttt{-u} option adds further unit folders when generating an accelerator. Pointing it at \texttt{hardware/src/units} itself is unnecessary and only produces warnings about overriding the built-in units.
+
+\texttt{./versat} then parses the specification file, elaborates the dataflow graph of the \texttt{SimpleExample} module named with \texttt{-t}, and writes the generated Verilog to \texttt{./versatOutput/hardware} and the generated software to \texttt{./versatOutput/software}. Section~\ref{sec:simple_example_outputs} examines both. Run \texttt{./versat -{}-help} for the full option list, including \texttt{-o} and \texttt{-O} to redirect either output directory.
+
+Finally, \texttt{make -C examples/simple\_example run} turns that generated software into a runnable emulation. The generated \texttt{VerilatorMake.mk} is meant to be included from a Makefile in its own directory, so the example's \texttt{Makefile} first adds a one-line \texttt{Makefile} to \texttt{./versatOutput/software} that does exactly that, and then builds it: Verilator translates the generated Verilog into a C++ model, and the generated \texttt{wrapper.cpp} implements Versat's software API on top of that model, both packaged into \texttt{libaccel.a}. The example's \texttt{Makefile} then links \texttt{main.cpp} against \texttt{libaccel.a} and runs the resulting program. Section~\ref{sec:simple_example_software} explains what \texttt{main.cpp} does and what it prints.

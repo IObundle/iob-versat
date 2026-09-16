@@ -1,0 +1,42 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+% Shared \lstlisting setup for Section~3 (Description): a custom language
+% definition for the Versat specification language, plus a common visual
+% style applied to every listing (Versat spec, generated C, and Verilog)
+% so that code appears consistently formatted, numbered, and captioned
+% throughout the document.
+
+\lstdefinelanguage{VersatSpec}{
+  morekeywords={module,merge,addressGen,iterative,share,config,static,using,for,Read,Write},
+  morecomment=[l]{//},
+  morestring=[b]",
+  sensitive=true,
+}
+
+\definecolor{listing-bg}{rgb}{0.97,0.97,0.97}
+\definecolor{listing-keyword}{RGB}{0,110,90}
+\definecolor{listing-comment}{RGB}{110,110,110}
+\definecolor{listing-string}{RGB}{140,30,30}
+\definecolor{listing-rule}{gray}{0.7}
+
+\lstset{
+  backgroundcolor=\color{listing-bg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{listing-keyword}\bfseries,
+  commentstyle=\color{listing-comment}\itshape,
+  stringstyle=\color{listing-string},
+  numbers=left,
+  numberstyle=\tiny\color{listing-comment},
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{listing-rule},
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  tabsize=2,
+  captionpos=b,
+  xleftmargin=1em,
+  framexleftmargin=0.8em,
+}

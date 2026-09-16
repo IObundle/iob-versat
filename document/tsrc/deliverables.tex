@@ -1,0 +1,27 @@
+% SPDX-FileCopyrightText: 2025 IObundle
+%
+% SPDX-License-Identifier: MIT
+
+\begin{itemize}
+  \itemsep-0.5em
+  \item Versat compiler source code (C++), which reads a specification
+    file and generates the accelerator's hardware and software.
+  \item Library of lint-clean, synthesizable Verilog basic units
+    (\texttt{hardware/src/units}) used to build any generated accelerator.
+  \item Verilator-based simulation and PC-emulation flow for generated
+    accelerators.
+  \item ASIC synthesis script and timing constraints for the Cadence Genus
+    synthesis tool.
+  \item FPGA synthesis scripts and timing constraints for the Quartus and
+    Vivado toolchains.
+  \item Generated bare-metal C/C++ software driver, configuration headers,
+    and memory-mapped API, specific to each generated accelerator.
+  \item Python integration class generator (\texttt{CreateVersatClass}) for
+    embedding a generated accelerator as an IOb-SoC peripheral.
+  \item A working, minimal Py2HWSW core wrapping a generated accelerator
+    directly, with FPGA build support (\texttt{examples/py2hwsw\_example},
+    Section~\ref{sec:py2hwsw_example}).
+  \item Nix package definition for building Versat and its dependencies
+    automatically.
+  \item This document.
+\end{itemize}
